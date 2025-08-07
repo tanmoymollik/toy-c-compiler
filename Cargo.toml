@@ -1,0 +1,18 @@
+[package]
+name = "c_compiler"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "driver"
+path = "src/bin/driver_main.rs"
+
+[[bin]]
+name = "compiler"
+path = "src/bin/compiler_main.rs"
+
+[dependencies]
