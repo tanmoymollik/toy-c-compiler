@@ -32,7 +32,7 @@ cargo build
 
 This repository entirely depends on the tests provided by [writing-a-c-compiler-tests](https://github.com/nlsandler/writing-a-c-compiler-tests/tree/main) for validation. I might add some tests of my own later.
 
-This compiler support development on both macos and linux. Currently I am working on macos, so by default the compiler emits assembly code suitable for macos. For linux development, use linux as default in the feature section in [Cargo.toml](src/Cargo.toml).
+This compiler support development on both macos and linux. Currently I am working on macos, so by default the compiler emits assembly code suitable for macos. For linux development, use linux as default in the feature section in [Cargo.toml](Cargo.toml).
 
 ## Notes ##
 
