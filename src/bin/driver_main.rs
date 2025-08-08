@@ -2,23 +2,26 @@ use std::env;
 use std::path::Path;
 use std::process::Command;
 
-use lib::compile;
+use lib;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
-    let stage = &args[1];
-    let file_name = &args[2];
-    let file_path = Path::new(file_name).with_extension("");
-    let file_base_name = file_path.to_str().unwrap();
+    let stage = if args.len() > 2 { &args[1] } else { "" };
+    let file_name = if args.len() > 2 { &args[2] } else { &args[1] };
+    let file_base_name: String = Path::new(file_name)
+        .with_extension("")
+        .to_str()
+        .unwrap()
+        .into();
 
-    // Preprocessing step
+    // Preprocessing step.
     Command::new("sh")
         .arg("-c")
         .arg(format!("gcc -E -P {file_name} -o {file_base_name}.i"))
         .output()?;
 
-    // Compilation step
-    let result = compile(
+    // Compilation step.
+    lib::compile(
         Path::new(file_name),
         Path::new(&format!("{file_base_name}.s")),
         stage.into(),
@@ -27,11 +30,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .arg("-c")
         .arg(format!("rm {file_base_name}.i"))
         .output()?;
+    if stage == "-S" {
+        return Ok(());
+    }
 
-    // Code emission step
+    // Assembly and link step.
     Command::new("sh")
         .arg("-c")
-        .arg(format!("gcc {file_base_name}.s -o {file_base_name}.o"))
+        .arg(format!(
+            "gcc -masm=intel {file_base_name}.s -o {file_base_name}"
+        ))
         .output()?;
     Command::new("sh")
         .arg("-c")

@@ -1,21 +1,21 @@
-use crate::types::c_ast::*;
-use crate::types::c_token::{CToken, CTokenType};
+use crate::types::c::ast::*;
+use crate::types::c::token::{Token, TokenType};
 use crate::types::compile_error::CompileError;
 
 pub struct Buffer {
-    container: Vec<CToken>,
+    container: Vec<Token>,
     cur_idx: usize,
 }
 
 impl Buffer {
-    pub fn new(tokens: Vec<CToken>) -> Self {
+    pub fn new(tokens: Vec<Token>) -> Self {
         Buffer {
             container: tokens,
             cur_idx: 0,
         }
     }
 
-    fn peek(&self, idx: usize) -> Option<&CToken> {
+    fn peek(&self, idx: usize) -> Option<&Token> {
         let idx = self.cur_idx + idx;
         if idx >= self.container.len() {
             None
@@ -46,7 +46,7 @@ type ParseResult<T> = Result<T, CompileError>;
 
 pub fn parse_program(buf: &mut Buffer) -> Result<Program, CompileError> {
     let function = parse_function(buf)?;
-    if let Some(CToken {
+    if let Some(Token {
         line_num, col_num, ..
     }) = buf.peek(0)
     {
@@ -59,16 +59,16 @@ pub fn parse_program(buf: &mut Buffer) -> Result<Program, CompileError> {
     Ok(Program::Function(function))
 }
 
-fn parse_function(buf: &mut Buffer) -> ParseResult<FunctionDef> {
-    expect_ctoken_type(buf, CTokenType::Int)?;
+fn parse_function(buf: &mut Buffer) -> ParseResult<Function> {
+    expect_ctoken_type(buf, TokenType::Int)?;
     let name = parse_identifier(buf)?;
-    expect_ctoken_type(buf, CTokenType::OpenParen)?;
-    expect_ctoken_type(buf, CTokenType::Void)?;
-    expect_ctoken_type(buf, CTokenType::CloseParen)?;
-    expect_ctoken_type(buf, CTokenType::OpenBrace)?;
+    expect_ctoken_type(buf, TokenType::OpenParen)?;
+    expect_ctoken_type(buf, TokenType::Void)?;
+    expect_ctoken_type(buf, TokenType::CloseParen)?;
+    expect_ctoken_type(buf, TokenType::OpenBrace)?;
     let body = parse_statement(buf)?;
-    expect_ctoken_type(buf, CTokenType::CloseBrace)?;
-    Ok(FunctionDef { name, body })
+    expect_ctoken_type(buf, TokenType::CloseBrace)?;
+    Ok(Function { name, body })
 }
 
 fn parse_statement(buf: &mut Buffer) -> ParseResult<Statement> {
@@ -77,19 +77,19 @@ fn parse_statement(buf: &mut Buffer) -> ParseResult<Statement> {
 }
 
 fn parse_return(buf: &mut Buffer) -> ParseResult<Expression> {
-    expect_ctoken_type(buf, CTokenType::Return)?;
+    expect_ctoken_type(buf, TokenType::Return)?;
     let exp = parse_expression(buf)?;
-    expect_ctoken_type(buf, CTokenType::Semicolon)?;
+    expect_ctoken_type(buf, TokenType::Semicolon)?;
     Ok(exp)
 }
 
 fn parse_expression(buf: &mut Buffer) -> ParseResult<Expression> {
-    if let CToken {
+    if let Token {
         line_num,
         col_num,
         val: Some(val),
         ..
-    } = expect_ctoken_type(buf, CTokenType::Constant)?
+    } = expect_ctoken_type(buf, TokenType::Constant)?
     {
         return val
             .parse::<i32>()
@@ -104,9 +104,9 @@ fn parse_expression(buf: &mut Buffer) -> ParseResult<Expression> {
 }
 
 fn parse_identifier(buf: &mut Buffer) -> ParseResult<Identifier> {
-    if let CToken {
+    if let Token {
         val: Some(iden), ..
-    } = expect_ctoken_type(buf, CTokenType::Identitifer)?
+    } = expect_ctoken_type(buf, TokenType::Identitifer)?
     {
         return Ok(Identifier(iden.into()));
     }
@@ -114,8 +114,8 @@ fn parse_identifier(buf: &mut Buffer) -> ParseResult<Identifier> {
 }
 
 // Returns CToken::val if the next token matches token_type.
-fn expect_ctoken_type(buf: &mut Buffer, token_type: CTokenType) -> ParseResult<CToken> {
-    if let Some(CToken {
+fn expect_ctoken_type(buf: &mut Buffer, token_type: TokenType) -> ParseResult<Token> {
+    if let Some(Token {
         line_num,
         col_num,
         tp,
@@ -124,7 +124,7 @@ fn expect_ctoken_type(buf: &mut Buffer, token_type: CTokenType) -> ParseResult<C
     {
         return if *tp == token_type {
             // Create return token out of reference.
-            let token = CToken::new(*tp, val.clone(), *line_num, *col_num);
+            let token = Token::new(*tp, val.clone(), *line_num, *col_num);
             buf.advance(1);
             Ok(token)
         } else {

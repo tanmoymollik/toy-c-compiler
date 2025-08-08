@@ -15,4 +15,9 @@ path = "src/bin/driver_main.rs"
 name = "compiler"
 path = "src/bin/compiler_main.rs"
 
+[features]
+defaule = ["macos"]
+macos = []
+linux = []
+
 [dependencies]

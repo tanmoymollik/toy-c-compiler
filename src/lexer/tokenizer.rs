@@ -1,8 +1,8 @@
 use super::buffer::Buffer;
-use crate::types::c_token::{CToken, CTokenType};
+use crate::types::c::token::{Token, TokenType};
 use crate::types::compile_error::CompileError;
 
-type LexResult = Result<Option<CToken>, CompileError>;
+type LexResult = Result<Option<Token>, CompileError>;
 
 pub fn next_token(buf: &mut Buffer) -> LexResult {
     // Keep looping until we find the first token.
@@ -62,15 +62,15 @@ const HANDLERS: [fn(&mut Buffer) -> LexResult; 7] = [
 
 fn match_identifier_or_keyword(buf: &mut Buffer) -> LexResult {
     let identifier = match_identifier(buf)?;
-    if let Some(CToken {
+    if let Some(Token {
         line_num,
         col_num,
-        tp: CTokenType::Identitifer,
+        tp: TokenType::Identitifer,
         val: Some(iden),
     }) = &identifier
         && let Some(token_type) = match_keyword(iden)
     {
-        return Ok(Some(CToken::new(token_type, None, *line_num, *col_num)));
+        return Ok(Some(Token::new(token_type, None, *line_num, *col_num)));
     }
     Ok(identifier)
 }
@@ -94,8 +94,8 @@ fn match_identifier(buf: &mut Buffer) -> LexResult {
     }
     let (line_num, col_num) = (buf.line_num, buf.col_num);
     Ok(buf.consume(r_idx).and_then(|iden| {
-        Some(CToken::new(
-            CTokenType::Identitifer,
+        Some(Token::new(
+            TokenType::Identitifer,
             Some(iden),
             line_num,
             col_num,
@@ -103,11 +103,11 @@ fn match_identifier(buf: &mut Buffer) -> LexResult {
     }))
 }
 
-fn match_keyword(iden: &str) -> Option<CTokenType> {
+fn match_keyword(iden: &str) -> Option<TokenType> {
     match iden {
-        "int" => Some(CTokenType::Int),
-        "void" => Some(CTokenType::Void),
-        "return" => Some(CTokenType::Return),
+        "int" => Some(TokenType::Int),
+        "void" => Some(TokenType::Void),
+        "return" => Some(TokenType::Return),
         _ => None,
     }
 }
@@ -138,8 +138,8 @@ fn match_constant(buf: &mut Buffer) -> LexResult {
 
     let (line_num, col_num) = (buf.line_num, buf.col_num);
     Ok(buf.consume(r_idx).and_then(|iden| {
-        Some(CToken::new(
-            CTokenType::Constant,
+        Some(Token::new(
+            TokenType::Constant,
             Some(iden),
             line_num,
             col_num,
@@ -153,8 +153,8 @@ fn match_open_parenthesis(buf: &mut Buffer) -> LexResult {
     {
         let (line_num, col_num) = (buf.line_num, buf.col_num);
         buf.advance();
-        Ok(Some(CToken::new(
-            CTokenType::OpenParen,
+        Ok(Some(Token::new(
+            TokenType::OpenParen,
             None,
             line_num,
             col_num,
@@ -170,8 +170,8 @@ fn match_close_parenthesis(buf: &mut Buffer) -> LexResult {
     {
         let (line_num, col_num) = (buf.line_num, buf.col_num);
         buf.advance();
-        Ok(Some(CToken::new(
-            CTokenType::CloseParen,
+        Ok(Some(Token::new(
+            TokenType::CloseParen,
             None,
             line_num,
             col_num,
@@ -187,8 +187,8 @@ fn match_open_brace(buf: &mut Buffer) -> LexResult {
     {
         let (line_num, col_num) = (buf.line_num, buf.col_num);
         buf.advance();
-        Ok(Some(CToken::new(
-            CTokenType::OpenBrace,
+        Ok(Some(Token::new(
+            TokenType::OpenBrace,
             None,
             line_num,
             col_num,
@@ -204,8 +204,8 @@ fn match_close_brace(buf: &mut Buffer) -> LexResult {
     {
         let (line_num, col_num) = (buf.line_num, buf.col_num);
         buf.advance();
-        Ok(Some(CToken::new(
-            CTokenType::CloseBrace,
+        Ok(Some(Token::new(
+            TokenType::CloseBrace,
             None,
             line_num,
             col_num,
@@ -221,8 +221,8 @@ fn match_semicolon(buf: &mut Buffer) -> LexResult {
     {
         let (line_num, col_num) = (buf.line_num, buf.col_num);
         buf.advance();
-        Ok(Some(CToken::new(
-            CTokenType::Semicolon,
+        Ok(Some(Token::new(
+            TokenType::Semicolon,
             None,
             line_num,
             col_num,
