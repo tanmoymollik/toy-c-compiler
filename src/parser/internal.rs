@@ -84,6 +84,41 @@ fn parse_return(buf: &mut Buffer) -> ParseResult<Expression> {
 }
 
 fn parse_expression(buf: &mut Buffer) -> ParseResult<Expression> {
+    match buf.peek(0) {
+        Some(token) if token.tp == TokenType::Constant => token
+            .val
+            .as_ref()
+            .and_then(|s| s.parse::<i32>().ok())
+            .and_then(|val| Some(Expression::Constant(val)))
+            .ok_or(CompileError::new(
+                token.line_num,
+                token.col_num,
+                "integer out of range or invalid",
+            )),
+        Some(token) if token.tp == TokenType::Tilde || token.tp == TokenType::Hyphen => {
+            let op = parse_unary_op(buf)?;
+            let exp = parse_expression(buf)?;
+            Ok(Expression::Unary {
+                op,
+                exp: Box::new(exp),
+            })
+        }
+        Some(token) if token.tp == TokenType::OpenParen => {
+            expect_ctoken_type(buf, TokenType::OpenBrace)?;
+            let exp = parse_expression(buf)?;
+            expect_ctoken_type(buf, TokenType::CloseBrace)?;
+            Ok(exp)
+        }
+        Some(Token {
+            line_num, col_num, ..
+        }) => Err(CompileError::new(
+            *line_num,
+            *col_num,
+            "Malformed expression",
+        )),
+        None => Err(out_of_token_error(buf, "expected an expression")),
+    }
+    /*
     if let Token {
         line_num,
         col_num,
@@ -94,13 +129,10 @@ fn parse_expression(buf: &mut Buffer) -> ParseResult<Expression> {
         return val
             .parse::<i32>()
             .and_then(|val| Ok(Expression::Constant(val)))
-            .map_err(|_| CompileError {
-                line_num,
-                col_num,
-                message: "integer out of range or invalid".into(),
-            });
+            .map_err(|_| CompileError::new(line_num, col_num, "integer out of range or invalid"));
     }
     unreachable!("Constant should always have a value.");
+    */
 }
 
 fn parse_identifier(buf: &mut Buffer) -> ParseResult<Identifier> {
@@ -113,7 +145,28 @@ fn parse_identifier(buf: &mut Buffer) -> ParseResult<Identifier> {
     unreachable!("Identifier should always have a value.");
 }
 
-// Returns CToken::val if the next token matches token_type.
+fn parse_unary_op(buf: &mut Buffer) -> ParseResult<UnaryOp> {
+    match buf.peek(0) {
+        Some(Token {
+            tp: TokenType::Tilde,
+            ..
+        }) => Ok(UnaryOp::Complement),
+        Some(Token {
+            tp: TokenType::Hyphen,
+            ..
+        }) => Ok(UnaryOp::Negate),
+        Some(Token {
+            line_num, col_num, ..
+        }) => Err(CompileError::new(
+            *line_num,
+            *col_num,
+            "expected an unary operator",
+        )),
+        None => Err(out_of_token_error(buf, "")),
+    }
+}
+
+// Returns the token if the next token matches token_type.
 fn expect_ctoken_type(buf: &mut Buffer, token_type: TokenType) -> ParseResult<Token> {
     if let Some(Token {
         line_num,
@@ -128,18 +181,21 @@ fn expect_ctoken_type(buf: &mut Buffer, token_type: TokenType) -> ParseResult<To
             buf.advance(1);
             Ok(token)
         } else {
-            Err(CompileError {
-                line_num: *line_num,
-                col_num: *col_num,
-                message: format!("expected {}", token_type.name()),
-            })
+            Err(CompileError::new(
+                *line_num,
+                *col_num,
+                &format!("expected {}", token_type.name()),
+            ))
         };
     }
     // Out of token error.
+    Err(out_of_token_error(
+        buf,
+        &format!("expected {}", token_type.name()),
+    ))
+}
+
+fn out_of_token_error(buf: &Buffer, message: &str) -> CompileError {
     let (line_num, col_num) = buf.last_line_and_col();
-    Err(CompileError {
-        line_num,
-        col_num,
-        message: format!("expected {}", token_type.name()),
-    })
+    CompileError::new(line_num, col_num, message.into())
 }

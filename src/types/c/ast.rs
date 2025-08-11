@@ -20,4 +20,11 @@ pub enum Statement {
 #[derive(Debug)]
 pub enum Expression {
     Constant(i32),
+    Unary { op: UnaryOp, exp: Box<Expression> },
+}
+
+#[derive(Debug)]
+pub enum UnaryOp {
+    Complement,
+    Negate,
 }

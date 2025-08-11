@@ -27,7 +27,7 @@ cargo build
     - `-S`
 
     ```sh
-    cargo run --bin compiler -- --codegen test.c
+    cargo run --bin driver -- --codegen test.c
     ```
 
 This repository entirely depends on the tests provided by [writing-a-c-compiler-tests](https://github.com/nlsandler/writing-a-c-compiler-tests/tree/main) for validation. I might add some tests of my own later.
@@ -36,4 +36,4 @@ This compiler support development on both macos and linux. Currently I am workin
 
 ## Notes ##
 
-- One of the tests in chapter 1 contains comments. Though this wasn't metioned in chapter 1 that we would need to handle comments.
+- One of the tests in chapter 1 contains comments. Though this wasn't metioned in chapter 1 that we would need to handle comments. My implementation can only handle c-style '//' and '/* ... */' comments, but the latter must span a single line.

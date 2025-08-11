@@ -21,15 +21,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .output()?;
 
     // Compilation step.
-    lib::compile(
+    // Store the result to allow for cleanup of the preprocessed file.
+    let ret = lib::compile(
         Path::new(file_name),
         Path::new(&format!("{file_base_name}.s")),
         stage.into(),
-    )?;
+    );
     Command::new("sh")
         .arg("-c")
         .arg(format!("rm {file_base_name}.i"))
         .output()?;
+    // Propagate error.
+    ret?;
     if stage == "-S" {
         return Ok(());
     }

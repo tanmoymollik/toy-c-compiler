@@ -6,18 +6,18 @@ type LexResult = Result<Option<Token>, CompileError>;
 
 pub fn next_token(buf: &mut Buffer) -> LexResult {
     // Keep looping until we find the first token.
-    while ignore_whitespace(buf) && ignore_comment(buf) {}
+    while ignore_whitespace(buf) || ignore_comment(buf) {}
 
     for handler in HANDLERS.iter() {
         if let Some(token) = handler(buf)? {
             return Ok(Some(token));
         }
     }
-    if let Some(_) = buf.peek(0) {
+    if let Some(ch) = buf.peek(0) {
         Err(CompileError::new(
             buf.line_num,
             buf.col_num,
-            "Invalid Token".into(),
+            &format!("invalid token {}", ch as char),
         ))
     } else {
         Ok(None)
@@ -47,10 +47,18 @@ fn ignore_comment(buf: &mut Buffer) -> bool {
         buf.advance_to_next_line();
         ignored = true;
     }
+    if let Some(ch) = buf.peek(0)
+        && ch == b'/'
+        && let Some(ch) = buf.peek(1)
+        && ch == b'*'
+    {
+        buf.advance_to_next_line();
+        ignored = true;
+    }
     ignored
 }
 
-const HANDLERS: [fn(&mut Buffer) -> LexResult; 7] = [
+const HANDLERS: [fn(&mut Buffer) -> LexResult; 9] = [
     match_identifier_or_keyword,
     match_constant,
     match_open_parenthesis,
@@ -58,6 +66,8 @@ const HANDLERS: [fn(&mut Buffer) -> LexResult; 7] = [
     match_open_brace,
     match_close_brace,
     match_semicolon,
+    match_tilde,
+    match_hyphens,
 ];
 
 fn match_identifier_or_keyword(buf: &mut Buffer) -> LexResult {
@@ -227,6 +237,64 @@ fn match_semicolon(buf: &mut Buffer) -> LexResult {
             line_num,
             col_num,
         )))
+    } else {
+        Ok(None)
+    }
+}
+
+fn match_tilde(buf: &mut Buffer) -> LexResult {
+    if let Some(ch) = buf.peek(0)
+        && ch == b'~'
+    {
+        let (line_num, col_num) = (buf.line_num, buf.col_num);
+        buf.advance();
+        Ok(Some(Token::new(TokenType::Tilde, None, line_num, col_num)))
+    } else {
+        Ok(None)
+    }
+}
+
+// Matches either `--` (1st priority) or `-`.
+fn match_hyphens(buf: &mut Buffer) -> LexResult {
+    if let Some(token) = match_double_hyphen(buf)? {
+        assert_eq!(token.tp, TokenType::DoubleHyphen);
+        Ok(Some(token))
+    } else if let Some(token) = match_hyphen(buf)? {
+        assert_eq!(token.tp, TokenType::Hyphen);
+        Ok(Some(token))
+    } else {
+        Ok(None)
+    }
+}
+
+fn match_double_hyphen(buf: &mut Buffer) -> LexResult {
+    if let Some(ch) = buf.peek(0)
+        && ch == b'-'
+        && let Some(ch) = buf.peek(1)
+        && ch == b'-'
+    {
+        let (line_num, col_num) = (buf.line_num, buf.col_num);
+        // Twice for two `-`.
+        buf.advance();
+        buf.advance();
+        Ok(Some(Token::new(
+            TokenType::DoubleHyphen,
+            None,
+            line_num,
+            col_num,
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
+fn match_hyphen(buf: &mut Buffer) -> LexResult {
+    if let Some(ch) = buf.peek(0)
+        && ch == b'-'
+    {
+        let (line_num, col_num) = (buf.line_num, buf.col_num);
+        buf.advance();
+        Ok(Some(Token::new(TokenType::Hyphen, None, line_num, col_num)))
     } else {
         Ok(None)
     }

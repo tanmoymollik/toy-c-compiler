@@ -3,10 +3,10 @@ use std::fmt;
 
 #[derive(Debug)]
 pub struct CompileError {
-    pub line_num: usize,
-    pub col_num: usize,
+    line_num: usize,
+    col_num: usize,
     // `message`` should always start with lowercase letter. Don't add `.` in the end.
-    pub message: String,
+    message: String,
 }
 
 impl fmt::Display for CompileError {
@@ -22,11 +22,11 @@ impl fmt::Display for CompileError {
 impl Error for CompileError {}
 
 impl CompileError {
-    pub fn new(line_num: usize, col_num: usize, message: String) -> Self {
+    pub fn new(line_num: usize, col_num: usize, message: &str) -> Self {
         Self {
             line_num,
             col_num,
-            message,
+            message: message.into(),
         }
     }
 }

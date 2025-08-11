@@ -12,6 +12,7 @@ pub struct Token {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
+    // Chapter 1 tokens.
     Identitifer,
     Constant,
     OpenParen,
@@ -22,6 +23,10 @@ pub enum TokenType {
     Int,
     Void,
     Return,
+    // Chapter 2 tokens.
+    Tilde,
+    Hyphen,
+    DoubleHyphen,
 }
 
 impl Token {
@@ -38,16 +43,19 @@ impl Token {
 impl TokenType {
     pub fn name(&self) -> String {
         match self {
-            Self::Identitifer => "identifier",
-            Self::Constant => "constant",
-            Self::OpenParen => "open parenthesis",
-            Self::CloseParen => "close parenthesis",
-            Self::OpenBrace => "open brace",
-            Self::CloseBrace => "close brace",
-            Self::Semicolon => "semicolon",
-            Self::Int => "int",
-            Self::Void => "void",
-            Self::Return => "return",
+            Self::Identitifer => "an identifier",
+            Self::Constant => "a constant",
+            Self::OpenParen => "'('",
+            Self::CloseParen => "')'",
+            Self::OpenBrace => "'{'",
+            Self::CloseBrace => "'}'",
+            Self::Semicolon => "';'",
+            Self::Int => "keyword int",
+            Self::Void => "keyword void",
+            Self::Return => "keyword return",
+            Self::Tilde => "'~'",
+            Self::Hyphen => "'-'",
+            Self::DoubleHyphen => "'--'",
         }
         .into()
     }
