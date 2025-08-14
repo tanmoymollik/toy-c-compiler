@@ -38,15 +38,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Assembly and link step.
+    let nasm_command = if cfg!(feature = "linux") {
+        "nasm -f elf64"
+    } else {
+        // macos
+        "nasm -f macho64"
+    };
     Command::new("sh")
         .arg("-c")
         .arg(format!(
-            "gcc -masm=intel {file_base_name}.s -o {file_base_name}"
+            "{nasm_command} {file_base_name}.s -o {file_base_name}.o"
         ))
         .output()?;
     Command::new("sh")
         .arg("-c")
-        .arg(format!("rm {file_base_name}.s"))
+        .arg(format!("gcc {file_base_name}.o -o {file_base_name}"))
+        .output()?;
+    Command::new("sh")
+        .arg("-c")
+        .arg(format!("rm {file_base_name}.s {file_base_name}.o"))
         .output()?;
 
     Ok(())

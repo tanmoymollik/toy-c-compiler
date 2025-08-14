@@ -85,16 +85,21 @@ fn parse_return(buf: &mut Buffer) -> ParseResult<Expression> {
 
 fn parse_expression(buf: &mut Buffer) -> ParseResult<Expression> {
     match buf.peek(0) {
-        Some(token) if token.tp == TokenType::Constant => token
-            .val
-            .as_ref()
-            .and_then(|s| s.parse::<i32>().ok())
-            .and_then(|val| Some(Expression::Constant(val)))
-            .ok_or(CompileError::new(
-                token.line_num,
-                token.col_num,
-                "integer out of range or invalid",
-            )),
+        Some(token) if token.tp == TokenType::Constant => {
+            // Store the result in order to advance buffer.
+            let res = token
+                .val
+                .as_ref()
+                .and_then(|s| s.parse::<i32>().ok())
+                .and_then(|val| Some(Expression::Constant(val)))
+                .ok_or(CompileError::new(
+                    token.line_num,
+                    token.col_num,
+                    "integer out of range or invalid",
+                ));
+            buf.advance(1);
+            res
+        }
         Some(token) if token.tp == TokenType::Tilde || token.tp == TokenType::Hyphen => {
             let op = parse_unary_op(buf)?;
             let exp = parse_expression(buf)?;
@@ -104,9 +109,9 @@ fn parse_expression(buf: &mut Buffer) -> ParseResult<Expression> {
             })
         }
         Some(token) if token.tp == TokenType::OpenParen => {
-            expect_ctoken_type(buf, TokenType::OpenBrace)?;
+            expect_ctoken_type(buf, TokenType::OpenParen)?;
             let exp = parse_expression(buf)?;
-            expect_ctoken_type(buf, TokenType::CloseBrace)?;
+            expect_ctoken_type(buf, TokenType::CloseParen)?;
             Ok(exp)
         }
         Some(Token {
@@ -118,21 +123,6 @@ fn parse_expression(buf: &mut Buffer) -> ParseResult<Expression> {
         )),
         None => Err(out_of_token_error(buf, "expected an expression")),
     }
-    /*
-    if let Token {
-        line_num,
-        col_num,
-        val: Some(val),
-        ..
-    } = expect_ctoken_type(buf, TokenType::Constant)?
-    {
-        return val
-            .parse::<i32>()
-            .and_then(|val| Ok(Expression::Constant(val)))
-            .map_err(|_| CompileError::new(line_num, col_num, "integer out of range or invalid"));
-    }
-    unreachable!("Constant should always have a value.");
-    */
 }
 
 fn parse_identifier(buf: &mut Buffer) -> ParseResult<Identifier> {
@@ -150,11 +140,17 @@ fn parse_unary_op(buf: &mut Buffer) -> ParseResult<UnaryOp> {
         Some(Token {
             tp: TokenType::Tilde,
             ..
-        }) => Ok(UnaryOp::Complement),
+        }) => {
+            buf.advance(1);
+            Ok(UnaryOp::Complement)
+        }
         Some(Token {
             tp: TokenType::Hyphen,
             ..
-        }) => Ok(UnaryOp::Negate),
+        }) => {
+            buf.advance(1);
+            Ok(UnaryOp::Negate)
+        }
         Some(Token {
             line_num, col_num, ..
         }) => Err(CompileError::new(

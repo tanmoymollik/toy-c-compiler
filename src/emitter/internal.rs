@@ -20,26 +20,71 @@ fn emit_function(func: &Function, writer: &mut impl Write) -> EmitError {
         // macos
         &format!("_{}", func.name.0)
     };
-    // TODO(): Write a proper indenter.
-    writeln!(writer, "  .global {}\n{}:", name, name)?;
+
+    writeln!(writer, "section .text")?;
+    writeln!(writer, "{}global {}\n", emit_indent(1), name)?;
+    writeln!(writer, "{}:", name)?;
+    // prologue
+    writeln!(writer, "{}push rbp", emit_indent(1))?;
+    writeln!(writer, "{}mov rbp, rsp", emit_indent(1))?;
+
     for ins in &func.body {
-        writeln!(writer, "{}", emit_instruction(ins))?;
+        emit_instruction(ins, writer)?;
     }
     Ok(())
 }
 
-fn emit_instruction(ins: &Instruction) -> String {
+fn emit_instruction(ins: &Instruction, writer: &mut impl Write) -> EmitError {
     match ins {
-        Instruction::Mov { src, dst } => {
-            format!("mov {}, {}", emit_operand(dst), emit_operand(src))
+        Instruction::AllocateStack(offset) => {
+            writeln!(writer, "{}sub rsp, {offset}", emit_indent(1))?
         }
-        Instruction::Ret => "ret".into(),
+        Instruction::Mov { src, dst } => writeln!(
+            writer,
+            "{}mov {}, {}",
+            emit_indent(1),
+            emit_operand(dst),
+            emit_operand(src)
+        )?,
+        Instruction::Ret => {
+            writeln!(writer, "{}leave", emit_indent(1))?;
+            writeln!(writer, "{}ret", emit_indent(1))?;
+        }
+        Instruction::Unary(op, operand) => writeln!(
+            writer,
+            "{}{} {}",
+            emit_indent(1),
+            emit_unary_op(op),
+            emit_operand(operand)
+        )?,
+    }
+    Ok(())
+}
+
+fn emit_unary_op(op: &UnaryOp) -> String {
+    match op {
+        UnaryOp::Neg => "neg".into(),
+        UnaryOp::Not => "not".into(),
     }
 }
 
-fn emit_operand(op: &Operand) -> String {
-    match op {
+fn emit_operand(operand: &Operand) -> String {
+    match operand {
         Operand::Imm(val) => format!("{val}"),
-        Operand::Register => "eax".into(),
+        Operand::Reg(reg) => emit_register(reg),
+        Operand::Stack(offset) => format!("dword [rbp - {offset}]"),
+        _ => unreachable!(),
     }
+}
+
+fn emit_register(reg: &Reg) -> String {
+    match reg {
+        Reg::Ax => "eax".into(),
+        Reg::R10 => "r10d".into(),
+    }
+}
+
+fn emit_indent(lvl: u8) -> String {
+    // 2 space indent.
+    std::iter::repeat("  ").take(lvl as usize).collect()
 }

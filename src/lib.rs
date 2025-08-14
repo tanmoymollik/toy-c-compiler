@@ -5,6 +5,7 @@ mod asm_generator;
 mod emitter;
 mod lexer;
 mod parser;
+mod tac_generator;
 mod types;
 
 pub fn compile(
@@ -22,7 +23,12 @@ pub fn compile(
         return Ok(());
     }
 
-    let x64_program = asm_generator::generate(c_program)?;
+    let tac_program = tac_generator::generate(c_program);
+    if stage == "--tacky" {
+        return Ok(());
+    }
+
+    let x64_program = asm_generator::generate(tac_program);
     if stage == "--codegen" {
         return Ok(());
     }

@@ -2,11 +2,13 @@
 
 This repository contains my personal implementation of a C compiler, following along with the book "Writing a C Compiler" by Nora Sandler. 📚
 
-Currently this implementation only passes the tests for chapter 1.
+Currently this implementation passes tests upto chapter 2.
 
 My implementation is written in Rust because I recently learnt it and wanted to try it out on something.
 
 ## Getting Started ##
+
+My compiler uses intel x64 assembly syntax. Thus I found nasm is better suited to assemble the assembly file produced by the compiler. The book uses gcc for this step however. In order to use this compiler `gcc` and `nasm` must be installed.
 
 This repo contains 2 binaries. A simple compiler binary and a compiler driver binary. To build both binaries:
 
