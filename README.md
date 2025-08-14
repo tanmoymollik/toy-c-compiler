@@ -8,7 +8,7 @@ My implementation is written in Rust because I recently learnt it and wanted to 
 
 ## Getting Started ##
 
-My compiler uses intel x64 assembly syntax. Thus I found nasm is better suited to assemble the assembly file produced by the compiler. The book uses gcc for this step however. In order to use this compiler `gcc` and `nasm` must be installed.
+My compiler uses intel x64 assembly syntax. Thus I found nasm is better suited to assemble the assembly file produced by the compiler. The book uses gcc for this step however. In order to use this compiler `gcc` and `nasm` must be installed. To understand the differences in assembly produced by the book and this repo look at [emitter internals](src/emitter/internal.rs).
 
 This repo contains 2 binaries. A simple compiler binary and a compiler driver binary. To build both binaries:
 
