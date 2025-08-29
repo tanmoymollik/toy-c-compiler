@@ -57,6 +57,34 @@ fn emit_instruction(ins: &Instruction, writer: &mut impl Write) -> EmitError {
             emit_unary_op(op),
             emit_operand(operand)
         )?,
+        Instruction::Binary { op, dst, src } => {
+            if matches!(op, BinaryOp::Mul)
+                && let Operand::Imm(_) = src
+            {
+                // imul r, r/m, imm
+                writeln!(
+                    writer,
+                    "{}imul {}, {}, {}",
+                    emit_indent(1),
+                    emit_operand(dst),
+                    emit_operand(dst),
+                    emit_operand(src)
+                )?;
+            } else {
+                writeln!(
+                    writer,
+                    "{}{} {}, {}",
+                    emit_indent(1),
+                    emit_binary_op(op),
+                    emit_operand(dst),
+                    emit_operand(src)
+                )?;
+            }
+        }
+        Instruction::Idiv(operand) => {
+            writeln!(writer, "{}idiv {}", emit_indent(1), emit_operand(operand))?
+        }
+        Instruction::Cdq => writeln!(writer, "{}cdq", emit_indent(1))?,
     }
     Ok(())
 }
@@ -65,6 +93,14 @@ fn emit_unary_op(op: &UnaryOp) -> String {
     match op {
         UnaryOp::Neg => "neg".into(),
         UnaryOp::Not => "not".into(),
+    }
+}
+
+fn emit_binary_op(op: &BinaryOp) -> String {
+    match op {
+        BinaryOp::Add => "add".into(),
+        BinaryOp::Sub => "sub".into(),
+        BinaryOp::Mul => "imul".into(),
     }
 }
 
@@ -80,7 +116,9 @@ fn emit_operand(operand: &Operand) -> String {
 fn emit_register(reg: &Reg) -> String {
     match reg {
         Reg::Ax => "eax".into(),
+        Reg::Dx => "edx".into(),
         Reg::R10 => "r10d".into(),
+        Reg::R11 => "r11d".into(),
     }
 }
 

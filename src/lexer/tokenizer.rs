@@ -58,7 +58,7 @@ fn ignore_comment(buf: &mut Buffer) -> bool {
     ignored
 }
 
-const HANDLERS: [fn(&mut Buffer) -> LexResult; 9] = [
+const HANDLERS: [fn(&mut Buffer) -> LexResult; 13] = [
     match_identifier_or_keyword,
     match_constant,
     match_open_parenthesis,
@@ -68,6 +68,10 @@ const HANDLERS: [fn(&mut Buffer) -> LexResult; 9] = [
     match_semicolon,
     match_tilde,
     match_hyphens,
+    match_plus,
+    match_asterisk,
+    match_forward_slash,
+    match_percent,
 ];
 
 fn match_identifier_or_keyword(buf: &mut Buffer) -> LexResult {
@@ -295,6 +299,69 @@ fn match_hyphen(buf: &mut Buffer) -> LexResult {
         let (line_num, col_num) = (buf.line_num, buf.col_num);
         buf.advance();
         Ok(Some(Token::new(TokenType::Hyphen, None, line_num, col_num)))
+    } else {
+        Ok(None)
+    }
+}
+
+fn match_plus(buf: &mut Buffer) -> LexResult {
+    if let Some(ch) = buf.peek(0)
+        && ch == b'+'
+    {
+        let (line_num, col_num) = (buf.line_num, buf.col_num);
+        buf.advance();
+        Ok(Some(Token::new(TokenType::Plus, None, line_num, col_num)))
+    } else {
+        Ok(None)
+    }
+}
+
+fn match_asterisk(buf: &mut Buffer) -> LexResult {
+    if let Some(ch) = buf.peek(0)
+        && ch == b'*'
+    {
+        let (line_num, col_num) = (buf.line_num, buf.col_num);
+        buf.advance();
+        Ok(Some(Token::new(
+            TokenType::Asterisk,
+            None,
+            line_num,
+            col_num,
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
+fn match_forward_slash(buf: &mut Buffer) -> LexResult {
+    if let Some(ch) = buf.peek(0)
+        && ch == b'/'
+    {
+        let (line_num, col_num) = (buf.line_num, buf.col_num);
+        buf.advance();
+        Ok(Some(Token::new(
+            TokenType::ForwardSlash,
+            None,
+            line_num,
+            col_num,
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
+fn match_percent(buf: &mut Buffer) -> LexResult {
+    if let Some(ch) = buf.peek(0)
+        && ch == b'%'
+    {
+        let (line_num, col_num) = (buf.line_num, buf.col_num);
+        buf.advance();
+        Ok(Some(Token::new(
+            TokenType::Percent,
+            None,
+            line_num,
+            col_num,
+        )))
     } else {
         Ok(None)
     }

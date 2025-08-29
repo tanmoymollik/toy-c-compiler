@@ -1,46 +1,7 @@
+use super::buffer::Buffer;
 use crate::types::c::ast::*;
 use crate::types::c::token::{Token, TokenType};
 use crate::types::compile_error::CompileError;
-
-pub struct Buffer {
-    container: Vec<Token>,
-    cur_idx: usize,
-}
-
-impl Buffer {
-    pub fn new(tokens: Vec<Token>) -> Self {
-        Buffer {
-            container: tokens,
-            cur_idx: 0,
-        }
-    }
-
-    fn peek(&self, idx: usize) -> Option<&Token> {
-        let idx = self.cur_idx + idx;
-        if idx >= self.container.len() {
-            None
-        } else {
-            Some(&self.container[idx])
-        }
-    }
-
-    fn advance(&mut self, step: usize) -> bool {
-        if self.cur_idx + step > self.container.len() {
-            false
-        } else {
-            self.cur_idx += step;
-            true
-        }
-    }
-
-    fn last_line_and_col(&self) -> (usize, usize) {
-        if let Some(token) = self.container.last() {
-            (token.line_num, token.col_num)
-        } else {
-            (0, 0)
-        }
-    }
-}
 
 type ParseResult<T> = Result<T, CompileError>;
 
@@ -71,6 +32,16 @@ fn parse_function(buf: &mut Buffer) -> ParseResult<Function> {
     Ok(Function { name, body })
 }
 
+fn parse_identifier(buf: &mut Buffer) -> ParseResult<Identifier> {
+    if let Token {
+        val: Some(iden), ..
+    } = expect_ctoken_type(buf, TokenType::Identitifer)?
+    {
+        return Ok(Identifier(iden.into()));
+    }
+    unreachable!("Identifier should always have a value.");
+}
+
 fn parse_statement(buf: &mut Buffer) -> ParseResult<Statement> {
     let exp = parse_return(buf)?;
     Ok(Statement::Return(exp))
@@ -78,12 +49,41 @@ fn parse_statement(buf: &mut Buffer) -> ParseResult<Statement> {
 
 fn parse_return(buf: &mut Buffer) -> ParseResult<Expression> {
     expect_ctoken_type(buf, TokenType::Return)?;
-    let exp = parse_expression(buf)?;
+    let exp = parse_expression(buf, 0)?;
     expect_ctoken_type(buf, TokenType::Semicolon)?;
     Ok(exp)
 }
 
-fn parse_expression(buf: &mut Buffer) -> ParseResult<Expression> {
+fn parse_expression(buf: &mut Buffer, pr: usize) -> ParseResult<Expression> {
+    let mut left = parse_factor(buf)?;
+    while let Some(token) = buf.peek(0)
+        && is_binary_op(&token.tp)
+        && precedence(&token.tp) >= pr
+    {
+        let next_pr = precedence(&token.tp) + 1;
+        let op = parse_binary_op(buf)?;
+        let right = parse_expression(buf, next_pr)?;
+        left = Expression::Binary {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+        };
+    }
+    Ok(left)
+}
+
+fn precedence(op: &TokenType) -> usize {
+    match op {
+        TokenType::Plus => 0,
+        TokenType::Hyphen => 0,
+        TokenType::Asterisk => 1,
+        TokenType::ForwardSlash => 1,
+        TokenType::Percent => 1,
+        _ => unreachable!("Invalid binary op"),
+    }
+}
+
+fn parse_factor(buf: &mut Buffer) -> ParseResult<Expression> {
     match buf.peek(0) {
         Some(token) if token.tp == TokenType::Constant => {
             // Store the result in order to advance buffer.
@@ -100,9 +100,9 @@ fn parse_expression(buf: &mut Buffer) -> ParseResult<Expression> {
             buf.advance(1);
             res
         }
-        Some(token) if token.tp == TokenType::Tilde || token.tp == TokenType::Hyphen => {
+        Some(token) if is_unary_op(&token.tp) => {
             let op = parse_unary_op(buf)?;
-            let exp = parse_expression(buf)?;
+            let exp = parse_factor(buf)?;
             Ok(Expression::Unary {
                 op,
                 exp: Box::new(exp),
@@ -110,29 +110,34 @@ fn parse_expression(buf: &mut Buffer) -> ParseResult<Expression> {
         }
         Some(token) if token.tp == TokenType::OpenParen => {
             expect_ctoken_type(buf, TokenType::OpenParen)?;
-            let exp = parse_expression(buf)?;
+            let exp = parse_expression(buf, 0)?;
             expect_ctoken_type(buf, TokenType::CloseParen)?;
             Ok(exp)
         }
         Some(Token {
             line_num, col_num, ..
-        }) => Err(CompileError::new(
-            *line_num,
-            *col_num,
-            "Malformed expression",
-        )),
+        }) => Err(CompileError::new(*line_num, *col_num, "Malformed factor")),
         None => Err(out_of_token_error(buf, "expected an expression")),
     }
 }
 
-fn parse_identifier(buf: &mut Buffer) -> ParseResult<Identifier> {
-    if let Token {
-        val: Some(iden), ..
-    } = expect_ctoken_type(buf, TokenType::Identitifer)?
-    {
-        return Ok(Identifier(iden.into()));
+fn is_unary_op(tp: &TokenType) -> bool {
+    match tp {
+        TokenType::Tilde => true,
+        TokenType::Hyphen => true,
+        _ => false,
     }
-    unreachable!("Identifier should always have a value.");
+}
+
+fn is_binary_op(tp: &TokenType) -> bool {
+    match tp {
+        TokenType::Hyphen => true,
+        TokenType::Plus => true,
+        TokenType::Asterisk => true,
+        TokenType::ForwardSlash => true,
+        TokenType::Percent => true,
+        _ => false,
+    }
 }
 
 fn parse_unary_op(buf: &mut Buffer) -> ParseResult<UnaryOp> {
@@ -150,6 +155,54 @@ fn parse_unary_op(buf: &mut Buffer) -> ParseResult<UnaryOp> {
         }) => {
             buf.advance(1);
             Ok(UnaryOp::Negate)
+        }
+        Some(Token {
+            line_num, col_num, ..
+        }) => Err(CompileError::new(
+            *line_num,
+            *col_num,
+            "expected an unary operator",
+        )),
+        None => Err(out_of_token_error(buf, "")),
+    }
+}
+
+fn parse_binary_op(buf: &mut Buffer) -> ParseResult<BinaryOp> {
+    match buf.peek(0) {
+        Some(Token {
+            tp: TokenType::Hyphen,
+            ..
+        }) => {
+            buf.advance(1);
+            Ok(BinaryOp::Subtract)
+        }
+        Some(Token {
+            tp: TokenType::Plus,
+            ..
+        }) => {
+            buf.advance(1);
+            Ok(BinaryOp::Add)
+        }
+        Some(Token {
+            tp: TokenType::Asterisk,
+            ..
+        }) => {
+            buf.advance(1);
+            Ok(BinaryOp::Multiply)
+        }
+        Some(Token {
+            tp: TokenType::ForwardSlash,
+            ..
+        }) => {
+            buf.advance(1);
+            Ok(BinaryOp::Divide)
+        }
+        Some(Token {
+            tp: TokenType::Percent,
+            ..
+        }) => {
+            buf.advance(1);
+            Ok(BinaryOp::Remainder)
         }
         Some(Token {
             line_num, col_num, ..

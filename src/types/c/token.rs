@@ -27,6 +27,11 @@ pub enum TokenType {
     Tilde,
     Hyphen,
     DoubleHyphen,
+    // Chapter 3 tokens.
+    Plus,
+    Asterisk,
+    ForwardSlash,
+    Percent,
 }
 
 impl Token {
@@ -56,6 +61,10 @@ impl TokenType {
             Self::Tilde => "'~'",
             Self::Hyphen => "'-'",
             Self::DoubleHyphen => "'--'",
+            Self::Plus => "'+'",
+            Self::Asterisk => "'*'",
+            Self::ForwardSlash => "'/'",
+            Self::Percent => "'%'",
         }
         .into()
     }

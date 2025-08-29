@@ -2,7 +2,7 @@
 
 This repository contains my personal implementation of a C compiler, following along with the book "Writing a C Compiler" by Nora Sandler. 📚
 
-Currently this implementation passes tests upto chapter 2.
+Currently this implementation passes tests upto chapter 3 (bonus not yet implemented).
 
 My implementation is written in Rust because I recently learnt it and wanted to try it out on something.
 

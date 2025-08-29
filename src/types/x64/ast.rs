@@ -14,8 +14,21 @@ pub struct Identifier(pub String);
 
 #[derive(Debug)]
 pub enum Instruction {
-    Mov { src: Operand, dst: Operand },
+    Mov {
+        // dst is always Operand::Stack.
+        dst: Operand,
+        src: Operand,
+    },
+    // Operand is always Operand::Stack.
     Unary(UnaryOp, Operand),
+    Binary {
+        op: BinaryOp,
+        // dst is always Operand::Stack.
+        dst: Operand,
+        src: Operand,
+    },
+    Idiv(Operand),
+    Cdq,
     AllocateStack(usize),
     Ret,
 }
@@ -24,6 +37,13 @@ pub enum Instruction {
 pub enum UnaryOp {
     Neg,
     Not,
+}
+
+#[derive(Debug)]
+pub enum BinaryOp {
+    Add,
+    Sub,
+    Mul,
 }
 
 #[derive(Debug, Clone)]
@@ -37,5 +57,7 @@ pub enum Operand {
 #[derive(Debug, Clone)]
 pub enum Reg {
     Ax,
+    Dx,
     R10,
+    R11,
 }

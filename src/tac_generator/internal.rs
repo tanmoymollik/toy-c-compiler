@@ -31,19 +31,32 @@ fn gen_for_statement(stmt: &c_ast::Statement) -> Instructions {
 
 fn gen_for_expression(exp: &c_ast::Expression, instructions: &mut Instructions) -> tac_ast::Val {
     use c_ast::Expression;
-    use tac_ast::{Instruction, Val};
+    use tac_ast::{Constant, Instruction, Val, Var};
     match exp {
-        Expression::Constant(val) => Val::Constant(*val),
+        Expression::Constant(val) => Val::Constant(Constant(*val)),
         Expression::Unary { op, exp } => {
             let src = gen_for_expression(exp, instructions);
             let dst_iden = make_temporary_identifier();
-            let dst = Val::Var(dst_iden);
+            let dst = Var(dst_iden);
             instructions.push(Instruction::Unary {
                 op: gen_for_unary_op(op),
-                src,
                 dst: dst.clone(),
+                src,
             });
-            dst
+            Val::Var(dst)
+        }
+        Expression::Binary { op, left, right } => {
+            let src1 = gen_for_expression(left, instructions);
+            let src2 = gen_for_expression(right, instructions);
+            let dst_iden = make_temporary_identifier();
+            let dst = Var(dst_iden);
+            instructions.push(Instruction::Binary {
+                op: gen_for_binary_op(op),
+                dst: dst.clone(),
+                src1,
+                src2,
+            });
+            Val::Var(dst)
         }
     }
 }
@@ -52,6 +65,16 @@ fn gen_for_unary_op(op: &c_ast::UnaryOp) -> tac_ast::UnaryOp {
     match op {
         c_ast::UnaryOp::Complement => tac_ast::UnaryOp::Complement,
         c_ast::UnaryOp::Negate => tac_ast::UnaryOp::Negate,
+    }
+}
+
+fn gen_for_binary_op(op: &c_ast::BinaryOp) -> tac_ast::BinaryOp {
+    match op {
+        c_ast::BinaryOp::Add => tac_ast::BinaryOp::Add,
+        c_ast::BinaryOp::Subtract => tac_ast::BinaryOp::Subtract,
+        c_ast::BinaryOp::Multiply => tac_ast::BinaryOp::Multiply,
+        c_ast::BinaryOp::Divide => tac_ast::BinaryOp::Divide,
+        c_ast::BinaryOp::Remainder => tac_ast::BinaryOp::Remainder,
     }
 }
 
