@@ -1,0 +1,68 @@
+module Stage = Stage
+module Platform = Platform
+
+exception CompileException of string
+
+type compile_args =
+  { stage : Stage.stage
+  ; platform : Platform.platform
+  ; infile : string
+  ; outfile : string
+  }
+
+module Impl : sig
+  val compile : compile_args -> unit
+end = struct
+  let print_position lexbuf =
+    let pos = Lexing.lexeme_start_p lexbuf in
+    Printf.sprintf
+      "%s:%d:%d: %s\n"
+      pos.pos_fname
+      pos.pos_lnum
+      (pos.pos_cnum - pos.pos_bol + 1)
+      (Lexing.lexeme lexbuf)
+  ;;
+
+  let parse lexbuf =
+    try Some (Parser.prog Lexer.read lexbuf) with
+    | Lexer.SyntaxError _ -> raise (CompileException (print_position lexbuf))
+    | Parser.Error -> raise (CompileException (print_position lexbuf))
+  ;;
+
+  let codegen stage prog =
+    match stage with
+    | Stage.Parse ->
+      print_endline C_ast.(show_program prog);
+      None
+    | _ -> Some (Generator.gen_program prog)
+  ;;
+
+  let codeemit stage platform prog =
+    match stage with
+    | Stage.CodeGen ->
+      print_endline X64_ast.(show_program prog);
+      None
+    | _ -> Some (Emitter.emit_program platform prog)
+  ;;
+
+  let compile = function
+    | { stage; platform; infile; outfile } ->
+      let inx = In_channel.open_text infile in
+      let lexbuf = Lexing.from_channel inx in
+      Lexing.set_filename lexbuf infile;
+      let ( >>= ) = Option.bind in
+      let code = parse lexbuf >>= codegen stage >>= codeemit stage platform in
+      (match code with
+       | Some v ->
+         print_endline v;
+         let oc = open_out outfile in
+         output_string oc v;
+         close_out oc
+       | None -> ())
+  ;;
+end
+
+(** Compiles the given file.
+    @raise CompileException if an error is encountered.
+*)
+let compile args = Impl.compile args
