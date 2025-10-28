@@ -29,12 +29,20 @@ end = struct
     | Parser.Error -> raise (CompileException (print_position lexbuf))
   ;;
 
-  let codegen stage prog =
+  let tacky_gen stage prog =
     match stage with
     | Stage.Parse ->
       print_endline C_ast.(show_program prog);
       None
-    | _ -> Some (Generator.gen_program prog)
+    | _ -> Some (Tacky_gen.gen_program prog)
+  ;;
+
+  let x64_gen stage prog =
+    match stage with
+    | Stage.Tacky ->
+      print_endline Tacky.(show_program prog);
+      None
+    | _ -> Some (X64_gen.gen_program prog)
   ;;
 
   let codeemit stage platform prog =
@@ -51,7 +59,9 @@ end = struct
       let lexbuf = Lexing.from_channel inx in
       Lexing.set_filename lexbuf infile;
       let ( >>= ) = Option.bind in
-      let code = parse lexbuf >>= codegen stage >>= codeemit stage platform in
+      let code =
+        parse lexbuf >>= tacky_gen stage >>= x64_gen stage >>= codeemit stage platform
+      in
       (match code with
        | Some v ->
          print_endline v;

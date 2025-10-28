@@ -18,6 +18,9 @@ rule read =
   | ')'        { Parser.RPAREN }
   | '{'        { Parser.LBRACE }
   | '}'        { Parser.RBRACE }
+  | "--"       { Parser.DHYPHEN }
+  | '-'        { Parser.HYPHEN }
+  | '~'        { Parser.TILDE }
   | ';'        { Parser.SEMICOLON }
   | identifier { Parser.IDENT (Lexing.lexeme lexbuf) }
   | constant   { Parser.CONST (int_of_string (Lexing.lexeme lexbuf)) }

@@ -5,17 +5,24 @@ type unary_op =
   | Negate
 [@@deriving show]
 
-type expression =
+type value =
   | Constant of int
-  | Unary of unary_op * expression
+  | Var of identifier
 [@@deriving show]
 
-type statement = Return of expression [@@deriving show]
+type instruction =
+  | Unary of
+      { uop : unary_op
+      ; src : value
+      ; dst : value
+      }
+  | Ret of value
+[@@deriving show]
 
 type function_def =
   | Function of
       { name : identifier
-      ; body : statement
+      ; body : instruction list
       }
 [@@deriving show]
 

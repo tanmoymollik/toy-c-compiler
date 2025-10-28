@@ -1,8 +1,19 @@
 type identifier = Identifier of string [@@deriving show]
 
+type unary_op =
+  | Neg
+  | Not
+[@@deriving show]
+
+type reg =
+  | AX
+  | R10
+[@@deriving show]
+
 type operand =
   | Imm of int
-  | Register
+  | Reg of reg
+  | Stack of int
 [@@deriving show]
 
 type instruction =
@@ -10,6 +21,8 @@ type instruction =
       { src : operand
       ; dst : operand
       }
+  | Unary of unary_op * operand
+  | AllocStack of int
   | Ret
 [@@deriving show]
 

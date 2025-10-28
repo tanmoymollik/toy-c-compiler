@@ -1,23 +1,35 @@
-let indent_size = 4
+let indent = String.make 4 ' '
 
 let emit_identifier = function
   | X64_ast.Identifier ident -> ident
 ;;
 
+let emit_uop = function
+  | X64_ast.Neg -> "neg"
+  | X64_ast.Not -> "not"
+;;
+
+let emit_reg = function
+  | X64_ast.AX -> "eax"
+  | X64_ast.R10 -> "r10d"
+;;
+
 let emit_operand = function
   | X64_ast.Imm i -> Printf.sprintf "%d" i
-  | X64_ast.Register -> "eax"
+  | X64_ast.Reg r -> emit_reg r
+  | X64_ast.Stack i -> Printf.sprintf "dword [rbp - %d]" i
 ;;
 
 let emit_instruction = function
   | X64_ast.Mov { src; dst } ->
-    Printf.sprintf
-      "%smov %s, %s"
-      (String.make indent_size ' ')
-      (emit_operand dst)
-      (emit_operand src)
-  | X64_ast.Ret -> Printf.sprintf "%sret" (String.make indent_size ' ')
+    Printf.sprintf "%smov %s, %s" indent (emit_operand dst) (emit_operand src)
+  | X64_ast.Unary (uop, src) ->
+    Printf.sprintf "%s%s %s" indent (emit_uop uop) (emit_operand src)
+  | X64_ast.AllocStack i -> Printf.sprintf "%ssub rsp, %d" indent i
+  | X64_ast.Ret -> Printf.sprintf "%sleave\n%sret" indent indent
 ;;
+
+let emit_function_prologue = Printf.sprintf "%spush rbp\n%smov rbp, rsp\n" indent indent
 
 let emit_function_def platform = function
   | X64_ast.Function { name; body } ->
@@ -26,6 +38,7 @@ let emit_function_def platform = function
     "section .text\n"
     ^ Printf.sprintf "global %s\n\n" name
     ^ Printf.sprintf "%s:\n" name
+    ^ emit_function_prologue
     ^ (List.map emit_instruction body |> String.concat "\n")
 ;;
 
