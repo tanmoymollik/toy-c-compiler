@@ -5,9 +5,22 @@ type unary_op =
   | Negate
 [@@deriving show]
 
+type binary_op =
+  | Add
+  | Sub
+  | Mul
+  | Div
+  | Rem
+[@@deriving show]
+
 type expression =
   | Constant of int
   | Unary of unary_op * expression
+  | Binary of
+      { bop : binary_op
+      ; lexp : expression
+      ; rexp : expression
+      }
 [@@deriving show]
 
 type statement = Return of expression [@@deriving show]

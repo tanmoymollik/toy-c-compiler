@@ -9,9 +9,17 @@ let emit_uop = function
   | X64_ast.Not -> "not"
 ;;
 
+let emit_bop = function
+  | X64_ast.Add -> "add"
+  | X64_ast.Sub -> "sub"
+  | X64_ast.Mul -> "imul"
+;;
+
 let emit_reg = function
   | X64_ast.AX -> "eax"
+  | X64_ast.DX -> "edx"
   | X64_ast.R10 -> "r10d"
+  | X64_ast.R11 -> "r11d"
 ;;
 
 let emit_operand = function
@@ -25,6 +33,15 @@ let emit_instruction = function
     Printf.sprintf "%smov %s, %s" indent (emit_operand dst) (emit_operand src)
   | X64_ast.Unary (uop, src) ->
     Printf.sprintf "%s%s %s" indent (emit_uop uop) (emit_operand src)
+  | X64_ast.Binary { bop; src; dst } ->
+    Printf.sprintf
+      "%s%s %s, %s"
+      indent
+      (emit_bop bop)
+      (emit_operand dst)
+      (emit_operand src)
+  | X64_ast.Idiv operand -> Printf.sprintf "%sidiv %s" indent (emit_operand operand)
+  | X64_ast.Cdq -> Printf.sprintf "%scdq" indent
   | X64_ast.AllocStack i -> Printf.sprintf "%ssub rsp, %d" indent i
   | X64_ast.Ret -> Printf.sprintf "%sleave\n%sret" indent indent
 ;;

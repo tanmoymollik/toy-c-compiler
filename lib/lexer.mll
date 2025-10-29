@@ -19,7 +19,11 @@ rule read =
   | '{'        { Parser.LBRACE }
   | '}'        { Parser.RBRACE }
   | "--"       { Parser.DHYPHEN }
+  | '+'        { Parser.PLUS }
   | '-'        { Parser.HYPHEN }
+  | '*'        { Parser.ASTERISK }
+  | '/'        { Parser.FSLASH }
+  | '%'        { Parser.PERCENT }
   | '~'        { Parser.TILDE }
   | ';'        { Parser.SEMICOLON }
   | identifier { Parser.IDENT (Lexing.lexeme lexbuf) }

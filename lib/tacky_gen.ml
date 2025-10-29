@@ -7,6 +7,14 @@ let gen_uop = function
   | C_ast.Negate -> Tacky.Negate
 ;;
 
+let gen_bop = function
+  | C_ast.Add -> Tacky.Add
+  | C_ast.Sub -> Tacky.Sub
+  | C_ast.Mul -> Tacky.Mul
+  | C_ast.Div -> Tacky.Div
+  | C_ast.Rem -> Tacky.Rem
+;;
+
 let tmp_var_count = ref 0
 
 let make_tmp_dst () =
@@ -18,11 +26,19 @@ let make_tmp_dst () =
 let rec gen_expression ins = function
   | C_ast.Constant c -> Tacky.Constant c
   | C_ast.Unary (uop, exp) ->
-    let src = gen_expression ins exp in
     let uop = gen_uop uop in
+    let src = gen_expression ins exp in
     let dst = make_tmp_dst () in
     let u_ins = Tacky.Unary { uop; src; dst } in
     Stack.push u_ins ins;
+    dst
+  | C_ast.Binary { bop; lexp; rexp } ->
+    let bop = gen_bop bop in
+    let src1 = gen_expression ins lexp in
+    let src2 = gen_expression ins rexp in
+    let dst = make_tmp_dst () in
+    let b_ins = Tacky.Binary { bop; src1; src2; dst } in
+    Stack.push b_ins ins;
     dst
 ;;
 

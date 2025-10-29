@@ -5,6 +5,14 @@ type unary_op =
   | Negate
 [@@deriving show]
 
+type binary_op =
+  | Add
+  | Sub
+  | Mul
+  | Div
+  | Rem
+[@@deriving show]
+
 type value =
   | Constant of int
   | Var of identifier
@@ -14,6 +22,12 @@ type instruction =
   | Unary of
       { uop : unary_op
       ; src : value
+      ; dst : value
+      }
+  | Binary of
+      { bop : binary_op
+      ; src1 : value
+      ; src2 : value
       ; dst : value
       }
   | Ret of value

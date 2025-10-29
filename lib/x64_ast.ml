@@ -5,9 +5,17 @@ type unary_op =
   | Not
 [@@deriving show]
 
+type binary_op =
+  | Add
+  | Sub
+  | Mul
+[@@deriving show]
+
 type reg =
   | AX
+  | DX
   | R10
+  | R11
 [@@deriving show]
 
 type operand =
@@ -22,6 +30,13 @@ type instruction =
       ; dst : operand
       }
   | Unary of unary_op * operand
+  | Binary of
+      { bop : binary_op
+      ; src : operand
+      ; dst : operand
+      }
+  | Idiv of operand
+  | Cdq
   | AllocStack of int
   | Ret
 [@@deriving show]
