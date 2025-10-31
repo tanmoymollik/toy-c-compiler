@@ -3,6 +3,7 @@ type identifier = Identifier of string [@@deriving show]
 type unary_op =
   | Complement
   | Negate
+  | Not
 [@@deriving show]
 
 type binary_op =
@@ -11,6 +12,17 @@ type binary_op =
   | Mul
   | Div
   | Rem
+  | And
+  | Or
+  | Xor
+  | Lsft
+  | Rsft
+  | Equal
+  | NEqual
+  | Less
+  | LEqual
+  | Greater
+  | GEqual
 [@@deriving show]
 
 type value =
@@ -19,6 +31,7 @@ type value =
 [@@deriving show]
 
 type instruction =
+  | Ret of value
   | Unary of
       { uop : unary_op
       ; src : value
@@ -30,7 +43,14 @@ type instruction =
       ; src2 : value
       ; dst : value
       }
-  | Ret of value
+  | Copy of
+      { src : value
+      ; dst : value
+      }
+  | Jump of identifier
+  | JumpIfZero of value * identifier (* cond * target *)
+  | JumpIfNotZero of value * identifier (* cond * target *)
+  | Label of identifier
 [@@deriving show]
 
 type function_def =

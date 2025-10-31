@@ -4,21 +4,30 @@
 %token INT
 %token VOID
 %token RETURN
-%token LPAREN
-%token RPAREN
-%token LBRACE
-%token RBRACE
-%token DHYPHEN
-%token PLUS
-%token HYPHEN
-%token ASTERISK
-%token FSLASH
-%token PERCENT
-%token TILDE 
+%token LPAREN RPAREN
+%token LBRACE RBRACE
 %token SEMICOLON
+%token DHYPHEN
+%token PLUS HYPHEN
+%token ASTERISK FSLASH PERCENT
+%token TILDE 
+%token AMPERSAND PIPE CARET 
+%token LSHIFT RSHIFT
+%token DAMPERSAND DPIPE
+%token EXCLAMATION
+%token LESS GREATER
+%token DEQUAL NEQUAL LEQUAL GEQUAL
 %token EOF
 
 // Precedence and associativity
+%left DPIPE
+%left DAMPERSAND
+%left PIPE
+%left CARET
+%left AMPERSAND
+%left DEQUAL NEQUAL
+%left LESS GREATER LEQUAL GEQUAL
+%left LSHIFT RSHIFT
 %left PLUS HYPHEN
 %left ASTERISK FSLASH PERCENT
 
@@ -49,12 +58,26 @@ factor:
   | LPAREN; exp = expression; RPAREN { exp }
     
 %inline uop:
-  | HYPHEN { C_ast.Negate }
-  | TILDE  { C_ast.Complement }
+  | HYPHEN       { C_ast.Negate }
+  | TILDE        { C_ast.Complement }
+  | EXCLAMATION  { C_ast.Not }
 
 %inline bop:
-  | PLUS     { C_ast.Add }
-  | HYPHEN   { C_ast.Sub }
-  | ASTERISK { C_ast.Mul }
-  | FSLASH   { C_ast.Div }
-  | PERCENT  { C_ast.Rem }
+  | PLUS       { C_ast.Add }
+  | HYPHEN     { C_ast.Sub }
+  | ASTERISK   { C_ast.Mul }
+  | FSLASH     { C_ast.Div }
+  | PERCENT    { C_ast.Rem }
+  | AMPERSAND  { C_ast.BAnd }
+  | PIPE       { C_ast.BOr }
+  | CARET      { C_ast.Xor }
+  | LSHIFT     { C_ast.Lsft }
+  | RSHIFT     { C_ast.Rsft }
+  | DAMPERSAND { C_ast.And }
+  | DPIPE      { C_ast.Or }
+  | DEQUAL     { C_ast.Equal }
+  | NEQUAL     { C_ast.NEqual }
+  | LEQUAL     { C_ast.LEqual }
+  | GEQUAL     { C_ast.GEqual }
+  | LESS       { C_ast.Less }
+  | GREATER    { C_ast.Greater }

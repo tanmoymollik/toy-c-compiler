@@ -18,14 +18,28 @@ rule read =
   | ')'        { Parser.RPAREN }
   | '{'        { Parser.LBRACE }
   | '}'        { Parser.RBRACE }
+  | ';'        { Parser.SEMICOLON }
   | "--"       { Parser.DHYPHEN }
+  | "<<"       { Parser.LSHIFT }
+  | ">>"       { Parser.RSHIFT }
+  | "&&"       { Parser.DAMPERSAND }
+  | "||"       { Parser.DPIPE }
+  | "=="       { Parser.DEQUAL }
+  | "!="       { Parser.NEQUAL }
+  | "<="       { Parser.LEQUAL }
+  | ">="       { Parser.GEQUAL }
   | '+'        { Parser.PLUS }
   | '-'        { Parser.HYPHEN }
   | '*'        { Parser.ASTERISK }
   | '/'        { Parser.FSLASH }
   | '%'        { Parser.PERCENT }
   | '~'        { Parser.TILDE }
-  | ';'        { Parser.SEMICOLON }
+  | '&'        { Parser.AMPERSAND }
+  | '|'        { Parser.PIPE }
+  | '^'        { Parser.CARET }
+  | '!'        { Parser.EXCLAMATION }
+  | '<'        { Parser.LESS }
+  | '>'        { Parser.GREATER }
   | identifier { Parser.IDENT (Lexing.lexeme lexbuf) }
   | constant   { Parser.CONST (int_of_string (Lexing.lexeme lexbuf)) }
   | white      { read lexbuf }

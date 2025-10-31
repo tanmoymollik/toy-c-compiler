@@ -31,7 +31,9 @@ let postprocess base_name =
     (Printf.sprintf "%s %s.s -o %s.o" nasm_cmd base_name base_name)
     "Error during linking";
   runCommand (Printf.sprintf "rm %s.s" base_name) "Error removing assembly file";
-  runCommand (Printf.sprintf "gcc %s.o -o %s" base_name base_name) "Error during linking";
+  runCommand
+    (Printf.sprintf "gcc -w %s.o -o %s" base_name base_name)
+    "Error during linking";
   runCommand (Printf.sprintf "rm %s.o" base_name) "Error removing object file"
 ;;
 

@@ -3,8 +3,7 @@
 This repository contains my personal implementation of a C compiler, following
 along with the book "Writing a C Compiler" by Nora Sandler. 📚
 
-Currently this implementation passes tests upto chapter 3 (bonus not yet
-implemented).
+Currently this implementation passes tests upto chapter 4 with bonus parts.
 
 My first implementation was written in Rust because I had recently learnt it and
 wanted to try it out on something. But then I pivoted to OCaml because I found
@@ -14,9 +13,11 @@ it better suited for writing a compiler.
 
 My compiler uses intel x64 assembly syntax. Thus I found nasm is better suited
 to assemble the assembly file produced by the compiler. The book uses gcc for
-this step however. In order to use this compiler `gcc` and `nasm` must be
-installed. To understand the differences in assembly produced by the book and
-this repo look at [emitter internals](lib/emitter.ml).
+this step however. This mean that the instructions produced by this compiiler
+and the book is different (src and dst are swapped). In order to use this
+compiler `gcc` and `nasm` must be installed. To understand the differences in
+assembly produced by the book and this repo look at
+[emitter internals](lib/emitter.ml).
 
 This repo contains a single driver binary. To build it run:
 

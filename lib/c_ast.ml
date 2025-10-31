@@ -3,6 +3,7 @@ type identifier = Identifier of string [@@deriving show]
 type unary_op =
   | Complement
   | Negate
+  | Not
 [@@deriving show]
 
 type binary_op =
@@ -11,6 +12,19 @@ type binary_op =
   | Mul
   | Div
   | Rem
+  | BAnd
+  | BOr
+  | Xor
+  | Lsft
+  | Rsft
+  | And
+  | Or
+  | Equal
+  | NEqual
+  | LEqual
+  | GEqual
+  | Less
+  | Greater
 [@@deriving show]
 
 type expression =
