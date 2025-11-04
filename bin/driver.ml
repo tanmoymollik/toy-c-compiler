@@ -5,6 +5,9 @@ let usage_msg = "Usage: dune exec c_compiler -- [options] <input_file>.c"
 let spec =
   [ "--lex", Arg.Unit (fun () -> stage := Lib.Stage.Lex), "Stop after lexing"
   ; "--parse", Arg.Unit (fun () -> stage := Lib.Stage.Parse), "Stop after parsing"
+  ; ( "--validate"
+    , Arg.Unit (fun () -> stage := Lib.Stage.Validate)
+    , "Stop after semantic analysis" )
   ; ( "--tacky"
     , Arg.Unit (fun () -> stage := Lib.Stage.Tacky)
     , "Stop after tacky generation" )

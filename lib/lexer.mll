@@ -19,6 +19,9 @@ rule read =
   | '{'        { Parser.LBRACE }
   | '}'        { Parser.RBRACE }
   | ';'        { Parser.SEMICOLON }
+  | "<<="      { Parser.LSHIFT_EQ }
+  | ">>="      { Parser.RSHIFT_EQ }
+  | "++"       { Parser.DPLUS }
   | "--"       { Parser.DHYPHEN }
   | "<<"       { Parser.LSHIFT }
   | ">>"       { Parser.RSHIFT }
@@ -28,8 +31,16 @@ rule read =
   | "!="       { Parser.NEQUAL }
   | "<="       { Parser.LEQUAL }
   | ">="       { Parser.GEQUAL }
+  | "+="       { Parser.PLUS_EQ }
+  | "-="       { Parser.MINUS_EQ }
+  | "*="       { Parser.ASTERISK_EQ }
+  | "/="       { Parser.FSLASH_EQ }
+  | "%="       { Parser.PERCENT_EQ }
+  | "&="       { Parser.AMPERSAND_EQ }
+  | "|="       { Parser.PIPE_EQ }
+  | "^="       { Parser.CARET_EQ }
   | '+'        { Parser.PLUS }
-  | '-'        { Parser.HYPHEN }
+  | '-'        { Parser.MINUS }
   | '*'        { Parser.ASTERISK }
   | '/'        { Parser.FSLASH }
   | '%'        { Parser.PERCENT }
@@ -40,6 +51,7 @@ rule read =
   | '!'        { Parser.EXCLAMATION }
   | '<'        { Parser.LESS }
   | '>'        { Parser.GREATER }
+  | '='        { Parser.EQUAL }
   | identifier { Parser.IDENT (Lexing.lexeme lexbuf) }
   | constant   { Parser.CONST (int_of_string (Lexing.lexeme lexbuf)) }
   | white      { read lexbuf }

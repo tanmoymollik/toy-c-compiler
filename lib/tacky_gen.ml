@@ -29,11 +29,22 @@ let gen_bop = function
   | C_ast.And | C_ast.Or -> assert false
 ;;
 
-let tmp_var_count = ref 0
+let aop_to_bop = function
+  | C_ast.AEq -> Tacky.Add
+  | C_ast.SEq -> Tacky.Sub
+  | C_ast.MEq -> Tacky.Mul
+  | C_ast.DEq -> Tacky.Div
+  | C_ast.REq -> Tacky.Rem
+  | C_ast.BAEq -> Tacky.And
+  | C_ast.BOEq -> Tacky.Or
+  | C_ast.XEq -> Tacky.Xor
+  | C_ast.LsftEq -> Tacky.Lsft
+  | C_ast.RsftEq -> Tacky.Rsft
+  | C_ast.Eq -> assert false
+;;
 
 let make_tmp_dst () =
-  let c = !tmp_var_count in
-  tmp_var_count := c + 1;
+  let c = State.get_var_count () in
   Tacky.Var (Tacky.Identifier (Printf.sprintf "tmp.%d" c))
 ;;
 
@@ -47,6 +58,7 @@ let make_local_label prefix =
 
 let rec gen_expression ins = function
   | C_ast.Constant c -> Tacky.Constant c
+  | C_ast.Var iden -> Tacky.Var (gen_identifier iden)
   | C_ast.Unary (uop, exp) ->
     let uop = gen_uop uop in
     let src = gen_expression ins exp in
@@ -54,6 +66,21 @@ let rec gen_expression ins = function
     let u_ins = Tacky.Unary { uop; src; dst } in
     Stack.push u_ins ins;
     dst
+  | C_ast.TUnary (tuop, prefix, lval) ->
+    (match lval with
+     | C_ast.Var _ ->
+       let src = gen_expression ins lval in
+       let bop =
+         match tuop with
+         | C_ast.Inc -> Tacky.Add
+         | C_ast.Dec -> Tacky.Sub
+       in
+       let i = Tacky.Binary { bop; src1 = src; src2 = Tacky.Constant 1; dst = src } in
+       let dst = make_tmp_dst () in
+       if not prefix then Stack.push (Tacky.Copy { src; dst }) ins;
+       Stack.push i ins;
+       if prefix then src else dst
+     | _ -> assert false)
   | C_ast.Binary { bop; lexp; rexp } ->
     (match bop with
      | C_ast.And | C_ast.Or ->
@@ -90,21 +117,51 @@ let rec gen_expression ins = function
        let b_ins = Tacky.Binary { bop; src1; src2; dst } in
        Stack.push b_ins ins;
        dst)
+  | C_ast.Assignment { aop; lval; rval } ->
+    (match lval with
+     | C_ast.Var _ ->
+       let src = gen_expression ins rval in
+       let dst = gen_expression ins lval in
+       (match aop with
+        | C_ast.Eq -> Stack.push (Tacky.Copy { src; dst }) ins
+        | aop ->
+          let bop = aop_to_bop aop in
+          Stack.push (Tacky.Binary { bop; src1 = dst; src2 = src; dst }) ins);
+       dst
+     | _ -> assert false)
 ;;
 
-let gen_statement = function
-  | C_ast.Return exp ->
-    let stk = Stack.create () in
+let gen_declaration stk = function
+  | C_ast.Declaration { name; init = Some exp } ->
     let exp_val = gen_expression stk exp in
-    Stack.push (Tacky.Ret exp_val) stk;
-    (* The stack is effectively reversed here. *)
-    let f acc a = a :: acc in
-    Stack.fold f [] stk
+    Stack.push (Tacky.Copy { src = exp_val; dst = Tacky.Var (gen_identifier name) }) stk
+  | _ -> ()
+;;
+
+let gen_statement stk = function
+  | C_ast.Return exp ->
+    let exp_val = gen_expression stk exp in
+    Stack.push (Tacky.Ret exp_val) stk
+  | C_ast.Expression exp ->
+    let _ = gen_expression stk exp in
+    ()
+  | C_ast.Null -> ()
+;;
+
+let gen_block_item stk = function
+  | C_ast.S s -> gen_statement stk s
+  | C_ast.D d -> gen_declaration stk d
 ;;
 
 let gen_function_def = function
-  | C_ast.Function f ->
-    Tacky.Function { name = gen_identifier f.name; body = gen_statement f.body }
+  | C_ast.Function { name; body } ->
+    let stk = Stack.create () in
+    List.iter (gen_block_item stk) body;
+    Stack.push (Tacky.Ret (Tacky.Constant 0)) stk;
+    (* The stack is effectively reversed here. *)
+    let f acc a = a :: acc in
+    let body = Stack.fold f [] stk in
+    Tacky.Function { name = gen_identifier name; body }
 ;;
 
 let gen_program = function

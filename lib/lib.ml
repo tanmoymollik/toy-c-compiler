@@ -25,13 +25,24 @@ end = struct
 
   let parse lexbuf =
     try Some (Parser.prog Lexer.read lexbuf) with
-    | Lexer.SyntaxError _ -> raise (CompileException (print_position lexbuf))
-    | Parser.Error -> raise (CompileException (print_position lexbuf))
+    | Lexer.SyntaxError e ->
+      raise (CompileException ("LexError: " ^ e ^ ": " ^ print_position lexbuf))
+    | Parser.Error -> raise (CompileException ("ParseError: " ^ print_position lexbuf))
+  ;;
+
+  let validate stage prog =
+    match stage with
+    | Stage.Parse ->
+      print_endline C_ast.(show_program prog);
+      None
+    | _ ->
+      (try Some (Validate.resolve_program prog) with
+       | Validate.SemanticError e -> raise (CompileException ("SemanticError: " ^ e)))
   ;;
 
   let tacky_gen stage prog =
     match stage with
-    | Stage.Parse ->
+    | Stage.Validate ->
       print_endline C_ast.(show_program prog);
       None
     | _ -> Some (Tacky_gen.gen_program prog)
@@ -60,7 +71,11 @@ end = struct
       Lexing.set_filename lexbuf infile;
       let ( >>= ) = Option.bind in
       let code =
-        parse lexbuf >>= tacky_gen stage >>= x64_gen stage >>= codeemit stage platform
+        parse lexbuf
+        >>= validate stage
+        >>= tacky_gen stage
+        >>= x64_gen stage
+        >>= codeemit stage platform
       in
       (match code with
        | Some v ->

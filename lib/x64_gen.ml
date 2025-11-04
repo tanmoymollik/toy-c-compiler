@@ -45,7 +45,6 @@ let alloc_stack = ref 0
 let gen_stack_address ident =
   let parts = String.split_on_char '.' ident in
   assert (List.length parts = 2);
-  assert (List.hd parts = "tmp");
   let idx = int_of_string (List.nth parts 1) in
   4 * (idx + 1)
 ;;
@@ -61,6 +60,8 @@ let gen_value = function
 let gen_instruction = function
   | Tacky.Ret v ->
     [ X64_ast.Mov { src = gen_value v; dst = X64_ast.Reg X64_ast.Ax }; X64_ast.Ret ]
+  | Tacky.Unary { dst = Tacky.Constant _; _ } -> assert false
+  (* dst is always Tacky.Var *)
   | Tacky.Unary { uop; src; dst } ->
     (match uop with
      | Tacky.Complement | Tacky.Negate ->
@@ -74,6 +75,8 @@ let gen_instruction = function
        ; X64_ast.Mov { src = zr; dst }
        ; X64_ast.SetC (E, dst)
        ])
+  | Tacky.Binary { dst = Tacky.Constant _; _ } -> assert false
+  (* dst is always Tacky.Var *)
   | Tacky.Binary { bop; src1; src2; dst } ->
     (match bop with
      | Tacky.Div ->
@@ -133,9 +136,10 @@ let fix_ins_cmp = function
 ;;
 
 let fix_instruction = function
+  | X64_ast.Mov { dst = X64_ast.Imm _; _ } -> assert false
   | X64_ast.Mov { src; dst } as ret ->
-    (match src with
-     | X64_ast.Stack _ ->
+    (match src, dst with
+     | X64_ast.Stack _, X64_ast.Stack _ ->
        let tmp_src = X64_ast.Reg X64_ast.R10 in
        [ X64_ast.Mov { src; dst = tmp_src }; X64_ast.Mov { src = tmp_src; dst } ]
      | _ -> [ ret ])
@@ -144,10 +148,10 @@ let fix_instruction = function
     (match bop, src, dst with
      | ( (X64_ast.Add | X64_ast.Sub | X64_ast.And | X64_ast.Or | X64_ast.Xor)
        , X64_ast.Stack _
-       , _ ) ->
+       , X64_ast.Stack _ ) ->
        let tmp_src = X64_ast.Reg X64_ast.R10 in
        [ X64_ast.Mov { src; dst = tmp_src }; X64_ast.Binary { bop; src = tmp_src; dst } ]
-     | (X64_ast.Sal | X64_ast.Sar), X64_ast.Stack _, _ ->
+     | (X64_ast.Sal | X64_ast.Sar), X64_ast.Stack _, X64_ast.Stack _ ->
        (* We don't have different sized registers yet. For now we copy to Cx
              and use Cl when shifting. *)
        [ X64_ast.Mov { src; dst = X64_ast.Reg X64_ast.Cx }

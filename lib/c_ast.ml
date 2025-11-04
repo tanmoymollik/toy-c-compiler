@@ -6,6 +6,11 @@ type unary_op =
   | Not
 [@@deriving show]
 
+type tunary_op =
+  | Inc
+  | Dec
+[@@deriving show]
+
 type binary_op =
   | Add
   | Sub
@@ -27,22 +32,59 @@ type binary_op =
   | Greater
 [@@deriving show]
 
+type assign_op =
+  | Eq
+  | AEq
+  | SEq
+  | MEq
+  | DEq
+  | REq
+  | BAEq
+  | BOEq
+  | XEq
+  | LsftEq
+  | RsftEq
+[@@deriving show]
+
 type expression =
   | Constant of int
+  | Var of identifier
   | Unary of unary_op * expression
+  | TUnary of tunary_op * bool * expression
   | Binary of
       { bop : binary_op
       ; lexp : expression
       ; rexp : expression
       }
+  | Assignment of
+      { aop : assign_op
+      ; lval : expression
+      ; rval : expression
+      }
 [@@deriving show]
 
-type statement = Return of expression [@@deriving show]
+type declaration =
+  | Declaration of
+      { name : identifier
+      ; init : expression option
+      }
+[@@deriving show]
+
+type statement =
+  | Return of expression
+  | Expression of expression
+  | Null
+[@@deriving show]
+
+type block_item =
+  | S of statement
+  | D of declaration
+[@@deriving show]
 
 type function_def =
   | Function of
       { name : identifier
-      ; body : statement
+      ; body : block_item list
       }
 [@@deriving show]
 
