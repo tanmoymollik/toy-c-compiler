@@ -61,6 +61,11 @@ type expression =
       ; lval : expression
       ; rval : expression
       }
+  | Conditional of
+      { cnd : expression
+      ; lhs : expression
+      ; rhs : expression
+      }
 [@@deriving show]
 
 type declaration =
@@ -73,6 +78,11 @@ type declaration =
 type statement =
   | Return of expression
   | Expression of expression
+  | If of
+      { cnd : expression
+      ; thn : statement
+      ; els : statement option
+      }
   | Null
 [@@deriving show]
 

@@ -1,12 +1,12 @@
 // Token Definitions
 %token <string> IDENT
 %token <int> CONST
-%token INT
-%token VOID
+%token INT VOID
 %token RETURN
+%token IF ELSE
 %token LPAREN RPAREN
 %token LBRACE RBRACE
-%token SEMICOLON
+%token SEMICOLON QUESTION COLON
 %token DPLUS DHYPHEN
 %token PLUS MINUS
 %token ASTERISK FSLASH PERCENT
@@ -26,6 +26,7 @@
        ASTERISK_EQ FSLASH_EQ PERCENT_EQ
        LSHIFT_EQ RSHIFT_EQ
        AMPERSAND_EQ PIPE_EQ CARET_EQ
+%right QUESTION COLON
 %left DPIPE
 %left DAMPERSAND
 %left PIPE
@@ -56,18 +57,22 @@ block_item:
   | d = declaration { C_ast.D d }
 
 statement:
-  | RETURN; exp = expression; SEMICOLON { C_ast.Return exp }
-  | exp = expression; SEMICOLON         { C_ast.Expression exp }
-  | SEMICOLON                           { C_ast.Null }
+  | RETURN; exp = expression; SEMICOLON
+    { C_ast.Return exp }
+  | exp = expression; SEMICOLON                              
+    { C_ast.Expression exp }
+  | IF; LPAREN; cnd = expression; RPAREN; thn = statement; els = option(pair(ELSE, statement))
+    {
+      let els = Option.map (fun (_, stmt) -> stmt) els in
+      C_ast.If { cnd; thn; els }
+    }
+  | SEMICOLON
+    { C_ast.Null }
 
 declaration:
   INT; name = identifier; init = option(pair(EQUAL, expression)); SEMICOLON
   {
-    let init =
-      match init with
-      | Some (_, exp) -> Some exp
-      | None -> None
-    in
+    let init = Option.map (fun (_, exp) -> exp) init in
     C_ast.Declaration { name; init }
   }
 
@@ -77,6 +82,8 @@ expression:
     { C_ast.Binary { bop; lexp; rexp } }
   | lval = expression; aop = aop; rval = expression
     { C_ast.Assignment { aop; lval; rval } }
+  | cnd = expression; QUESTION; lhs = expression; COLON; rhs = expression
+    { C_ast.Conditional { cnd; lhs; rhs } }
 
 factor:
   | i = CONST                        { C_ast.Constant i }

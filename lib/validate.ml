@@ -36,11 +36,20 @@ let rec resolve_exp = function
      | C_ast.Var _ ->
        C_ast.Assignment { aop; lval = resolve_exp lval; rval = resolve_exp rval }
      | _ -> raise (SemanticError "Invalid lvalue of assignment operator."))
+  | C_ast.Conditional { cnd; lhs; rhs } ->
+    C_ast.Conditional
+      { cnd = resolve_exp cnd; lhs = resolve_exp lhs; rhs = resolve_exp rhs }
 ;;
 
-let resolve_statement = function
+let rec resolve_statement = function
   | C_ast.Return exp -> C_ast.Return (resolve_exp exp)
   | C_ast.Expression exp -> C_ast.Expression (resolve_exp exp)
+  | C_ast.If { cnd; thn; els } ->
+    C_ast.If
+      { cnd = resolve_exp cnd
+      ; thn = resolve_statement thn
+      ; els = Option.map resolve_statement els
+      }
   | Null -> Null
 ;;
 

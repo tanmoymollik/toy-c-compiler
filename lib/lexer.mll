@@ -14,11 +14,15 @@ rule read =
   | "int"      { Parser.INT }
   | "void"     { Parser.VOID }
   | "return"   { Parser.RETURN }
+  | "if"       { Parser.IF }
+  | "else"     { Parser.ELSE }
   | '('        { Parser.LPAREN }
   | ')'        { Parser.RPAREN }
   | '{'        { Parser.LBRACE }
   | '}'        { Parser.RBRACE }
   | ';'        { Parser.SEMICOLON }
+  | '?'        { Parser.QUESTION }
+  | ':'        { Parser.COLON }
   | "<<="      { Parser.LSHIFT_EQ }
   | ">>="      { Parser.RSHIFT_EQ }
   | "++"       { Parser.DPLUS }
