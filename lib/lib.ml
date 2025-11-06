@@ -13,6 +13,8 @@ type compile_args =
 module Impl : sig
   val compile : compile_args -> unit
 end = struct
+  module Validater = Validater.M
+
   let print_position lexbuf =
     let pos = Lexing.lexeme_start_p lexbuf in
     Printf.sprintf
@@ -36,8 +38,8 @@ end = struct
       print_endline C_ast.(show_program prog);
       None
     | _ ->
-      (try Some (Validate.resolve_program prog) with
-       | Validate.SemanticError e -> raise (CompileException ("SemanticError: " ^ e)))
+      (try Some (Validater.resolve_program prog) with
+       | Validater.SemanticError e -> raise (CompileException ("SemanticError: " ^ e)))
   ;;
 
   let tacky_gen stage prog =

@@ -16,6 +16,7 @@ rule read =
   | "return"   { Parser.RETURN }
   | "if"       { Parser.IF }
   | "else"     { Parser.ELSE }
+  | "goto"     { Parser.GOTO (Lexing.lexeme lexbuf) }
   | '('        { Parser.LPAREN }
   | ')'        { Parser.RPAREN }
   | '{'        { Parser.LBRACE }

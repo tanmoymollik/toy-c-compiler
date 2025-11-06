@@ -1,4 +1,4 @@
-exception SemanticError of string
+exception SemanticError = Semantic_error.SemanticError
 
 let var_map : (string, string) Hashtbl.t = Hashtbl.create 100
 
@@ -50,7 +50,13 @@ let rec resolve_statement = function
       ; thn = resolve_statement thn
       ; els = Option.map resolve_statement els
       }
-  | Null -> Null
+  | C_ast.Label ((C_ast.Identifier label as lbl), stmt) ->
+    if State.exists_label label
+    then raise (SemanticError ("duplicate label: " ^ label))
+    else (
+      State.add_label label;
+      C_ast.Label (lbl, resolve_statement stmt))
+  | _ as ret -> ret
 ;;
 
 let resolve_declaration = function

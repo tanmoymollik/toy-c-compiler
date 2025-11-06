@@ -4,6 +4,7 @@
 %token INT VOID
 %token RETURN
 %token IF ELSE
+%token <string> GOTO
 %token LPAREN RPAREN
 %token LBRACE RBRACE
 %token SEMICOLON QUESTION COLON
@@ -66,6 +67,10 @@ statement:
       let els = Option.map (fun (_, stmt) -> stmt) els in
       C_ast.If { cnd; thn; els }
     }
+  | GOTO; label = identifier; SEMICOLON
+    { C_ast.Goto label }
+  | label = identifier; COLON; stmt = statement
+    { C_ast.Label (label, stmt) }
   | SEMICOLON
     { C_ast.Null }
 

@@ -83,6 +83,8 @@ type statement =
       ; thn : statement
       ; els : statement option
       }
+  | Goto of identifier
+  | Label of identifier * statement
   | Null
 [@@deriving show]
 

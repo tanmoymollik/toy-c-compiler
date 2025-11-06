@@ -46,3 +46,6 @@ This compiler support development on both macos and linux. Currently I am
 working on macos, so by default the compiler emits assembly code suitable for
 macos. For linux development, set `platform` to `Lib.Platform.Linux` in
 [driver binary](bin/driver.ml).
+
+## Implementation Notes ##
+Labels are first mapped during the first semantic analysis pass and resolved in a second pass

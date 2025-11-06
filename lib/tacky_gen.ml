@@ -48,13 +48,7 @@ let make_tmp_dst () =
   Tacky.Var (Tacky.Identifier (Printf.sprintf "tmp.%d" c))
 ;;
 
-let label_count = ref 0
-
-let make_local_label prefix =
-  let c = !label_count in
-  label_count := c + 1;
-  Tacky.Identifier (Printf.sprintf "%s_%d" prefix c)
-;;
+let make_local_label prefix = Tacky.Identifier (State.make_unique_label prefix)
 
 let rec gen_expression stk = function
   | C_ast.Constant c -> Tacky.Constant c
@@ -173,11 +167,13 @@ let rec gen_statement stk = function
       Stack.push (Tacky.Jump en_lbl) stk;
       Stack.push (Tacky.Label els_lbl) stk;
       let _ = Option.map (gen_statement stk) els in
-      ();
       ())
     else ();
-    Stack.push (Tacky.Label en_lbl) stk;
-    ()
+    Stack.push (Tacky.Label en_lbl) stk
+  | C_ast.Goto label -> Stack.push (Tacky.Jump (gen_identifier label)) stk
+  | C_ast.Label (label, stmt) ->
+    Stack.push (Tacky.Label (gen_identifier label)) stk;
+    gen_statement stk stmt
   | C_ast.Null -> ()
 ;;
 
