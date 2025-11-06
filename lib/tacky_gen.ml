@@ -174,18 +174,21 @@ let rec gen_statement stk = function
   | C_ast.Label (label, stmt) ->
     Stack.push (Tacky.Label (gen_identifier label)) stk;
     gen_statement stk stmt
+  | C_ast.Compound block -> gen_block stk block
   | C_ast.Null -> ()
-;;
 
-let gen_block_item stk = function
+and gen_block_item stk = function
   | C_ast.S s -> gen_statement stk s
   | C_ast.D d -> gen_declaration stk d
+
+and gen_block stk = function
+  | C_ast.Block items -> List.iter (gen_block_item stk) items
 ;;
 
 let gen_function_def = function
   | C_ast.Function { name; body } ->
     let stk = Stack.create () in
-    List.iter (gen_block_item stk) body;
+    gen_block stk body;
     Stack.push (Tacky.Ret (Tacky.Constant 0)) stk;
     (* The stack is effectively reversed here. *)
     let f acc a = a :: acc in

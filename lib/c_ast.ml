@@ -85,18 +85,21 @@ type statement =
       }
   | Goto of identifier
   | Label of identifier * statement
+  | Compound of block
   | Null
 [@@deriving show]
 
-type block_item =
+and block_item =
   | S of statement
   | D of declaration
 [@@deriving show]
 
+and block = Block of block_item list [@@deriving show]
+
 type function_def =
   | Function of
       { name : identifier
-      ; body : block_item list
+      ; body : block
       }
 [@@deriving show]
 

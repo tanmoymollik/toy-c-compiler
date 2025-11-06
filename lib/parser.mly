@@ -47,11 +47,11 @@ prog:
   f = function_def; EOF { C_ast.Program f }
 
 function_def:
-  INT; name = identifier; LPAREN; VOID; RPAREN; LBRACE; body = list(block_item); RBRACE
+  INT; name = identifier; LPAREN; VOID; RPAREN; body = block
     { C_ast.Function { name; body; } }
 
-identifier:
-  id = IDENT { C_ast.Identifier id }
+block:
+  LBRACE; items = list(block_item); RBRACE { C_ast.Block items }
 
 block_item:
   | s = statement   { C_ast.S s }
@@ -71,6 +71,8 @@ statement:
     { C_ast.Goto label }
   | label = identifier; COLON; stmt = statement
     { C_ast.Label (label, stmt) }
+  | block = block
+    { C_ast.Compound block }
   | SEMICOLON
     { C_ast.Null }
 
@@ -139,3 +141,6 @@ factor:
   | AMPERSAND_EQ { C_ast.BAEq }
   | PIPE_EQ      { C_ast.BOEq }
   | CARET_EQ     { C_ast.XEq }
+
+identifier:
+  id = IDENT { C_ast.Identifier id }
