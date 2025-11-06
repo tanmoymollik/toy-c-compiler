@@ -75,6 +75,11 @@ type declaration =
       }
 [@@deriving show]
 
+type for_init =
+  | InitDecl of declaration
+  | InitExp of expression option
+[@@deriving show]
+
 type statement =
   | Return of expression
   | Expression of expression
@@ -86,6 +91,17 @@ type statement =
   | Goto of identifier
   | Label of identifier * statement
   | Compound of block
+  | Break of identifier
+  | Continue of identifier
+  | While of expression * statement * identifier
+  | DoWhile of statement * expression * identifier
+  | For of
+      { init : for_init
+      ; cnd : expression option
+      ; post : expression option
+      ; body : statement
+      ; label : identifier
+      }
   | Null
 [@@deriving show]
 

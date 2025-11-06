@@ -17,6 +17,11 @@ rule read =
   | "if"       { Parser.IF }
   | "else"     { Parser.ELSE }
   | "goto"     { Parser.GOTO (Lexing.lexeme lexbuf) }
+  | "do"       { Parser.DO }
+  | "while"    { Parser.WHILE }
+  | "for"      { Parser.FOR }
+  | "break"    { Parser.BREAK }
+  | "continue" { Parser.CONTINUE }
   | '('        { Parser.LPAREN }
   | ')'        { Parser.RPAREN }
   | '{'        { Parser.LBRACE }

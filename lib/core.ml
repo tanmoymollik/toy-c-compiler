@@ -7,6 +7,12 @@ let get_var_count () =
 ;;
 
 let label_count = ref 0
+let binary_label = "bin"
+let conditional_label = "cnd"
+let if_label = "if"
+let loop_label = "loop"
+let break_label loop = "break_" ^ loop
+let continue_label loop = "continue_" ^ loop
 
 let make_unique_label prefix =
   let c = !label_count in

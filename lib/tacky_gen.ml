@@ -44,11 +44,11 @@ let aop_to_bop = function
 ;;
 
 let make_tmp_dst () =
-  let c = State.get_var_count () in
+  let c = Core.get_var_count () in
   Tacky.Var (Tacky.Identifier (Printf.sprintf "tmp.%d" c))
 ;;
 
-let make_local_label prefix = Tacky.Identifier (State.make_unique_label prefix)
+let make_label prefix = Tacky.Identifier (Core.make_unique_label prefix)
 
 let rec gen_expression stk = function
   | C_ast.Constant c -> Tacky.Constant c
@@ -79,8 +79,8 @@ let rec gen_expression stk = function
     (match bop with
      | C_ast.And | C_ast.Or ->
        let cnd1 = gen_expression stk lexp in
-       let br_label = make_local_label "cnd_branch" in
-       let en_label = make_local_label "end_branch" in
+       let br_label = make_label ("_other" ^ Core.binary_label) in
+       let en_label = make_label ("_end" ^ Core.binary_label) in
        (* Default short-circuit value. *)
        let dflt = if bop = C_ast.And then 0 else 1 in
        let j1 =
@@ -125,8 +125,8 @@ let rec gen_expression stk = function
      | _ -> assert false)
   | C_ast.Conditional { cnd; lhs; rhs } ->
     let cnd = gen_expression stk cnd in
-    let rhs_lbl = make_local_label "rhs_tert" in
-    let en_lbl = make_local_label "end_tert" in
+    let rhs_lbl = make_label ("_other" ^ Core.conditional_label) in
+    let en_lbl = make_label ("_end" ^ Core.conditional_label) in
     let dst = make_tmp_dst () in
     Stack.push (Tacky.JumpIfZero (cnd, rhs_lbl)) stk;
     let src = gen_expression stk lhs in
@@ -146,6 +146,16 @@ let gen_declaration stk = function
   | _ -> ()
 ;;
 
+let gen_for_init stk = function
+  | C_ast.InitDecl d -> gen_declaration stk d
+  | C_ast.InitExp e ->
+    (match e with
+     | Some e ->
+       let _ = gen_expression stk e in
+       ()
+     | None -> ())
+;;
+
 let rec gen_statement stk = function
   | C_ast.Return exp ->
     let exp_val = gen_expression stk exp in
@@ -156,9 +166,11 @@ let rec gen_statement stk = function
   | C_ast.If { cnd; thn; els } ->
     let cnd = gen_expression stk cnd in
     let els_lbl =
-      if els != None then make_local_label "else_if" else Tacky.Identifier "not_used"
+      if els != None
+      then make_label ("_else" ^ Core.if_label)
+      else Tacky.Identifier "not_used"
     in
-    let en_lbl = make_local_label "end_if" in
+    let en_lbl = make_label ("_end" ^ Core.if_label) in
     let to_go = if els != None then els_lbl else en_lbl in
     Stack.push (Tacky.JumpIfZero (cnd, to_go)) stk;
     let () = gen_statement stk thn in
@@ -175,6 +187,49 @@ let rec gen_statement stk = function
     Stack.push (Tacky.Label (gen_identifier label)) stk;
     gen_statement stk stmt
   | C_ast.Compound block -> gen_block stk block
+  | C_ast.Break label ->
+    Stack.push (Tacky.Jump (gen_identifier label)) stk;
+    ()
+  | C_ast.Continue label ->
+    Stack.push (Tacky.Jump (gen_identifier label)) stk;
+    ()
+  | C_ast.While (exp, stmt, C_ast.Identifier label) ->
+    let cont_label = Tacky.Identifier (Core.continue_label label) in
+    let brk_label = Tacky.Identifier (Core.break_label label) in
+    Stack.push (Tacky.Label cont_label) stk;
+    let cnd = gen_expression stk exp in
+    Stack.push (Tacky.JumpIfZero (cnd, brk_label)) stk;
+    gen_statement stk stmt;
+    Stack.push (Tacky.Jump cont_label) stk;
+    Stack.push (Tacky.Label brk_label) stk
+  | C_ast.DoWhile (stmt, exp, C_ast.Identifier label) ->
+    let start_label = Tacky.Identifier ("start_" ^ label) in
+    let cont_label = Tacky.Identifier (Core.continue_label label) in
+    let brk_label = Tacky.Identifier (Core.break_label label) in
+    Stack.push (Tacky.Label start_label) stk;
+    gen_statement stk stmt;
+    Stack.push (Tacky.Label cont_label) stk;
+    let cnd = gen_expression stk exp in
+    Stack.push (Tacky.JumpIfNotZero (cnd, start_label)) stk;
+    Stack.push (Tacky.Label brk_label) stk
+  | C_ast.For { init; cnd; post; body; label = C_ast.Identifier label } ->
+    gen_for_init stk init;
+    let start_label = Tacky.Identifier ("start_" ^ label) in
+    let cont_label = Tacky.Identifier (Core.continue_label label) in
+    let brk_label = Tacky.Identifier (Core.break_label label) in
+    Stack.push (Tacky.Label start_label) stk;
+    let f cnd =
+      let cnd = gen_expression stk cnd in
+      Stack.push (Tacky.JumpIfZero (cnd, brk_label)) stk
+    in
+    let _ = Option.map f cnd in
+    ();
+    gen_statement stk body;
+    Stack.push (Tacky.Label cont_label) stk;
+    let _ = Option.map (gen_expression stk) post in
+    ();
+    Stack.push (Tacky.Jump start_label) stk;
+    Stack.push (Tacky.Label brk_label) stk
   | C_ast.Null -> ()
 
 and gen_block_item stk = function

@@ -5,6 +5,8 @@
 %token RETURN
 %token IF ELSE
 %token <string> GOTO
+%token DO WHILE FOR
+%token BREAK CONTINUE
 %token LPAREN RPAREN
 %token LBRACE RBRACE
 %token SEMICOLON QUESTION COLON
@@ -73,6 +75,16 @@ statement:
     { C_ast.Label (label, stmt) }
   | block = block
     { C_ast.Compound block }
+  | BREAK; SEMICOLON
+    { C_ast.Break (C_ast.Identifier "dummy") }
+  | CONTINUE; SEMICOLON
+    { C_ast.Continue (C_ast.Identifier "dummy") }
+  | WHILE; LPAREN; exp = expression; RPAREN; stmt = statement
+    { C_ast.While (exp, stmt, C_ast.Identifier "dummy") }
+  | DO; stmt = statement; WHILE; LPAREN; exp = expression; RPAREN; SEMICOLON
+    { C_ast.DoWhile (stmt, exp, C_ast.Identifier "dummy") }
+  | FOR; LPAREN; init = for_init; cnd = option(expression); SEMICOLON; post = option(expression); RPAREN; body = statement
+    { C_ast.For { init; cnd; post; body; label = C_ast.Identifier "dummy" } }
   | SEMICOLON
     { C_ast.Null }
 
@@ -82,6 +94,10 @@ declaration:
     let init = Option.map (fun (_, exp) -> exp) init in
     C_ast.Declaration { name; init }
   }
+
+for_init:
+  | d = declaration                    { C_ast.InitDecl d }
+  | e = option(expression); SEMICOLON { C_ast.InitExp e }
 
 expression:
   | f = factor { f }

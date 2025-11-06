@@ -24,32 +24,39 @@ let copy_var_map (var_map : var_map_type) =
 ;;
 
 let make_unique_name iden =
-  let c = State.get_var_count () in
+  let c = Core.get_var_count () in
   Printf.sprintf "%s.%d" iden c
 ;;
 
-let rec resolve_exp var_map = function
+let rec resolve_expression var_map = function
   | C_ast.Constant _ as ret -> ret
   | C_ast.Var (C_ast.Identifier iden) ->
     C_ast.Var (C_ast.Identifier (get_var var_map iden))
-  | C_ast.Unary (uop, exp) -> C_ast.Unary (uop, resolve_exp var_map exp)
+  | C_ast.Unary (uop, exp) -> C_ast.Unary (uop, resolve_expression var_map exp)
   | C_ast.TUnary (tuop, prefix, lval) ->
     (match lval with
-     | C_ast.Var _ -> C_ast.TUnary (tuop, prefix, resolve_exp var_map lval)
+     | C_ast.Var _ -> C_ast.TUnary (tuop, prefix, resolve_expression var_map lval)
      | _ -> raise (SemanticError "Invalid lvalue of suffix/postfix operator."))
   | C_ast.Binary { bop; lexp; rexp } ->
-    C_ast.Binary { bop; lexp = resolve_exp var_map lexp; rexp = resolve_exp var_map rexp }
+    C_ast.Binary
+      { bop
+      ; lexp = resolve_expression var_map lexp
+      ; rexp = resolve_expression var_map rexp
+      }
   | C_ast.Assignment { aop; lval; rval } ->
     (match lval with
      | C_ast.Var _ ->
        C_ast.Assignment
-         { aop; lval = resolve_exp var_map lval; rval = resolve_exp var_map rval }
+         { aop
+         ; lval = resolve_expression var_map lval
+         ; rval = resolve_expression var_map rval
+         }
      | _ -> raise (SemanticError "Invalid lvalue of assignment operator."))
   | C_ast.Conditional { cnd; lhs; rhs } ->
     C_ast.Conditional
-      { cnd = resolve_exp var_map cnd
-      ; lhs = resolve_exp var_map lhs
-      ; rhs = resolve_exp var_map rhs
+      { cnd = resolve_expression var_map cnd
+      ; lhs = resolve_expression var_map lhs
+      ; rhs = resolve_expression var_map rhs
       }
 ;;
 
@@ -59,26 +66,44 @@ let resolve_declaration var_map = function
     then raise (SemanticError ("Duplicate variable declaration - " ^ iden));
     let name = make_unique_name iden in
     add_var var_map iden name;
-    let init = Option.map (resolve_exp var_map) init in
+    let init = Option.map (resolve_expression var_map) init in
     C_ast.Declaration { name = C_ast.Identifier name; init }
 ;;
 
+let resolve_for_init var_map = function
+  | C_ast.InitDecl d -> C_ast.InitDecl (resolve_declaration var_map d)
+  | C_ast.InitExp e ->
+    let e = Option.map (resolve_expression var_map) e in
+    C_ast.InitExp e
+;;
+
 let rec resolve_statement var_map = function
-  | C_ast.Return exp -> C_ast.Return (resolve_exp var_map exp)
-  | C_ast.Expression exp -> C_ast.Expression (resolve_exp var_map exp)
+  | C_ast.Return exp -> C_ast.Return (resolve_expression var_map exp)
+  | C_ast.Expression exp -> C_ast.Expression (resolve_expression var_map exp)
   | C_ast.If { cnd; thn; els } ->
     C_ast.If
-      { cnd = resolve_exp var_map cnd
+      { cnd = resolve_expression var_map cnd
       ; thn = resolve_statement var_map thn
       ; els = Option.map (resolve_statement var_map) els
       }
   | C_ast.Label ((C_ast.Identifier label as lbl), stmt) ->
-    if State.exists_label label
+    if Core.exists_label label
     then raise (SemanticError ("duplicate label: " ^ label))
     else (
-      State.add_label label;
+      Core.add_label label;
       C_ast.Label (lbl, resolve_statement var_map stmt))
   | C_ast.Compound block -> C_ast.Compound (resolve_block var_map block)
+  | C_ast.While (exp, stmt, iden) ->
+    C_ast.While (resolve_expression var_map exp, resolve_statement var_map stmt, iden)
+  | C_ast.DoWhile (stmt, exp, iden) ->
+    C_ast.DoWhile (resolve_statement var_map stmt, resolve_expression var_map exp, iden)
+  | C_ast.For { init; cnd; post; body; label } ->
+    let var_map = copy_var_map var_map in
+    let init = resolve_for_init var_map init in
+    let cnd = Option.map (resolve_expression var_map) cnd in
+    let post = Option.map (resolve_expression var_map) post in
+    let body = resolve_statement var_map body in
+    C_ast.For { init; cnd; post; body; label }
   | _ as ret -> ret
 
 and resolve_block_item var_map = function

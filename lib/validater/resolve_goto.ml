@@ -1,12 +1,18 @@
 exception SemanticError = Common.SemanticError
 
 let rec resolve_statement = function
+  | C_ast.If { cnd; thn; els } ->
+    C_ast.If { cnd; thn = resolve_statement thn; els = Option.map resolve_statement els }
   | C_ast.Goto (C_ast.Identifier label) as ret ->
-    if State.exists_label label
+    if Core.exists_label label
     then ret
     else raise (SemanticError ("goto label doesn't exist: " ^ label))
   | C_ast.Label (lbl, stmt) -> C_ast.Label (lbl, resolve_statement stmt)
   | C_ast.Compound block -> C_ast.Compound (resolve_block block)
+  | C_ast.While (exp, stmt, iden) -> C_ast.While (exp, resolve_statement stmt, iden)
+  | C_ast.DoWhile (stmt, exp, iden) -> C_ast.DoWhile (resolve_statement stmt, exp, iden)
+  | C_ast.For { init; cnd; post; body; label } ->
+    C_ast.For { init; cnd; post; body = resolve_statement body; label }
   | _ as ret -> ret
 
 and resolve_block_item = function
