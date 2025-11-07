@@ -81,7 +81,7 @@ end = struct
       in
       (match code with
        | Some v ->
-         print_endline v;
+         if stage = Stage.CodeEmit then print_endline v;
          let oc = open_out outfile in
          output_string oc v;
          close_out oc

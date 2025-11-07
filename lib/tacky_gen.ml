@@ -167,10 +167,10 @@ let rec gen_statement stk = function
     let cnd = gen_expression stk cnd in
     let els_lbl =
       if els != None
-      then make_label ("_else" ^ Core.if_label)
+      then make_label ("else@" ^ Core.if_label)
       else Tacky.Identifier "not_used"
     in
-    let en_lbl = make_label ("_end" ^ Core.if_label) in
+    let en_lbl = make_label ("end@" ^ Core.if_label) in
     let to_go = if els != None then els_lbl else en_lbl in
     Stack.push (Tacky.JumpIfZero (cnd, to_go)) stk;
     let () = gen_statement stk thn in
@@ -205,7 +205,7 @@ let rec gen_statement stk = function
     Stack.push (Tacky.Jump cont_label) stk;
     Stack.push (Tacky.Label brk_label) stk
   | C_ast.DoWhile (stmt, exp, C_ast.Identifier label) ->
-    let start_label = Tacky.Identifier ("start_" ^ label) in
+    let start_label = Tacky.Identifier ("start@" ^ label) in
     let cont_label = Tacky.Identifier (Core.continue_label label) in
     let brk_label = Tacky.Identifier (Core.break_label label) in
     Stack.push (Tacky.Label start_label) stk;
@@ -216,7 +216,7 @@ let rec gen_statement stk = function
     Stack.push (Tacky.Label brk_label) stk
   | C_ast.For { init; cnd; post; body; label = C_ast.Identifier label } ->
     gen_for_init stk init;
-    let start_label = Tacky.Identifier ("start_" ^ label) in
+    let start_label = Tacky.Identifier ("start@" ^ label) in
     let cont_label = Tacky.Identifier (Core.continue_label label) in
     let brk_label = Tacky.Identifier (Core.break_label label) in
     Stack.push (Tacky.Label start_label) stk;
@@ -232,7 +232,26 @@ let rec gen_statement stk = function
     ();
     Stack.push (Tacky.Jump start_label) stk;
     Stack.push (Tacky.Label brk_label) stk
-  | C_ast.Switch _ -> assert false
+  | C_ast.Switch { cnd; body; cases; default; label = C_ast.Identifier label } ->
+    let src1 = gen_expression stk cnd in
+    let dst = make_tmp_dst () in
+    let calc_jmp ind v =
+      let jmp_lbl = Tacky.Identifier (Core.case_label ind label) in
+      let jmp_ins =
+        Tacky.Binary { bop = Tacky.Equal; src1; src2 = Tacky.Constant v; dst }
+      in
+      Stack.push jmp_ins stk;
+      Stack.push (Tacky.JumpIfNotZero (dst, jmp_lbl)) stk
+    in
+    List.iteri calc_jmp cases;
+    let en_lbl = Tacky.Identifier (Core.break_label label) in
+    if default
+    then (
+      let jmp_ins = Tacky.Identifier (Core.default_label label) in
+      Stack.push (Tacky.Jump jmp_ins) stk)
+    else Stack.push (Tacky.Jump en_lbl) stk;
+    gen_statement stk body;
+    Stack.push (Tacky.Label en_lbl) stk
   | C_ast.Null -> ()
   | C_ast.Case _ | C_ast.Default _ -> assert false
 
