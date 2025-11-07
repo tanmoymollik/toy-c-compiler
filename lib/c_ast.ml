@@ -102,6 +102,15 @@ type statement =
       ; body : statement
       ; label : identifier
       }
+  | Switch of
+      { cnd : expression
+      ; body : statement
+      ; cases : int list
+      ; default : bool
+      ; label : identifier
+      }
+  | Case of expression * statement * identifier
+  | Default of statement * identifier
   | Null
 [@@deriving show]
 

@@ -11,9 +11,13 @@ let binary_label = "bin"
 let conditional_label = "cnd"
 let if_label = "if"
 let loop_label = "loop"
-let break_label loop = "break_" ^ loop
-let continue_label loop = "continue_" ^ loop
+let break_label scope = "break@" ^ scope
+let continue_label scope = "continue@" ^ scope
+let switch_label = "switch"
+let case_label id scope = "case" ^ string_of_int id ^ "@" ^ scope
+let default_label scope = "default@" ^ scope
 
+(* Adds a numerical suffix to create a unique label. *)
 let make_unique_label prefix =
   let c = !label_count in
   label_count := c + 1;

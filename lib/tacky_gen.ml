@@ -187,11 +187,13 @@ let rec gen_statement stk = function
     Stack.push (Tacky.Label (gen_identifier label)) stk;
     gen_statement stk stmt
   | C_ast.Compound block -> gen_block stk block
-  | C_ast.Break label ->
-    Stack.push (Tacky.Jump (gen_identifier label)) stk;
+  | C_ast.Break (C_ast.Identifier label) ->
+    let label = Tacky.Identifier (Core.break_label label) in
+    Stack.push (Tacky.Jump label) stk;
     ()
-  | C_ast.Continue label ->
-    Stack.push (Tacky.Jump (gen_identifier label)) stk;
+  | C_ast.Continue (C_ast.Identifier label) ->
+    let label = Tacky.Identifier (Core.continue_label label) in
+    Stack.push (Tacky.Jump label) stk;
     ()
   | C_ast.While (exp, stmt, C_ast.Identifier label) ->
     let cont_label = Tacky.Identifier (Core.continue_label label) in
@@ -230,7 +232,9 @@ let rec gen_statement stk = function
     ();
     Stack.push (Tacky.Jump start_label) stk;
     Stack.push (Tacky.Label brk_label) stk
+  | C_ast.Switch _ -> assert false
   | C_ast.Null -> ()
+  | C_ast.Case _ | C_ast.Default _ -> assert false
 
 and gen_block_item stk = function
   | C_ast.S s -> gen_statement stk s

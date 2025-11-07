@@ -22,6 +22,9 @@ rule read =
   | "for"      { Parser.FOR }
   | "break"    { Parser.BREAK }
   | "continue" { Parser.CONTINUE }
+  | "switch"   { Parser.SWITCH }
+  | "case"     { Parser.CASE }
+  | "default"  { Parser.DEFAULT }
   | '('        { Parser.LPAREN }
   | ')'        { Parser.RPAREN }
   | '{'        { Parser.LBRACE }

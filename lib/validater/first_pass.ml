@@ -36,7 +36,7 @@ let rec resolve_expression var_map = function
   | C_ast.TUnary (tuop, prefix, lval) ->
     (match lval with
      | C_ast.Var _ -> C_ast.TUnary (tuop, prefix, resolve_expression var_map lval)
-     | _ -> raise (SemanticError "Invalid lvalue of suffix/postfix operator."))
+     | _ -> raise (SemanticError "Invalid lvalue of suffix/postfix operator"))
   | C_ast.Binary { bop; lexp; rexp } ->
     C_ast.Binary
       { bop
@@ -51,7 +51,7 @@ let rec resolve_expression var_map = function
          ; lval = resolve_expression var_map lval
          ; rval = resolve_expression var_map rval
          }
-     | _ -> raise (SemanticError "Invalid lvalue of assignment operator."))
+     | _ -> raise (SemanticError "Invalid lvalue of assignment operator"))
   | C_ast.Conditional { cnd; lhs; rhs } ->
     C_ast.Conditional
       { cnd = resolve_expression var_map cnd
@@ -104,7 +104,14 @@ let rec resolve_statement var_map = function
     let post = Option.map (resolve_expression var_map) post in
     let body = resolve_statement var_map body in
     C_ast.For { init; cnd; post; body; label }
-  | _ as ret -> ret
+  | C_ast.Switch { cnd; body; cases; default; label } ->
+    let cnd = resolve_expression var_map cnd in
+    let body = resolve_statement var_map body in
+    C_ast.Switch { cnd; body; cases; default; label }
+  | C_ast.Case (exp, stmt, label) ->
+    C_ast.Case (resolve_expression var_map exp, resolve_statement var_map stmt, label)
+  | C_ast.Default (stmt, label) -> C_ast.Default (resolve_statement var_map stmt, label)
+  | (C_ast.Goto _ | C_ast.Break _ | C_ast.Continue _ | C_ast.Null) as ret -> ret
 
 and resolve_block_item var_map = function
   | C_ast.S s -> C_ast.S (resolve_statement var_map s)

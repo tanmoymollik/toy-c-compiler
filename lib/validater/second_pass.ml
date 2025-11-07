@@ -13,11 +13,16 @@ let rec resolve_statement = function
   | C_ast.DoWhile (stmt, exp, iden) -> C_ast.DoWhile (resolve_statement stmt, exp, iden)
   | C_ast.For { init; cnd; post; body; label } ->
     C_ast.For { init; cnd; post; body = resolve_statement body; label }
-  | _ as ret -> ret
+  | C_ast.Switch { cnd; body; cases; default; label } ->
+    C_ast.Switch { cnd; body = resolve_statement body; cases; default; label }
+  | C_ast.Case (exp, stmt, label) -> C_ast.Case (exp, resolve_statement stmt, label)
+  | C_ast.Default (stmt, label) -> C_ast.Default (resolve_statement stmt, label)
+  | (C_ast.Return _ | C_ast.Expression _ | C_ast.Break _ | C_ast.Continue _ | C_ast.Null)
+    as ret -> ret
 
 and resolve_block_item = function
   | C_ast.S s -> C_ast.S (resolve_statement s)
-  | _ as ret -> ret
+  | C_ast.D _ as ret -> ret
 
 and resolve_block = function
   | C_ast.Block items -> C_ast.Block (List.map resolve_block_item items)

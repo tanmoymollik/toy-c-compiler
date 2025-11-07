@@ -7,6 +7,7 @@
 %token <string> GOTO
 %token DO WHILE FOR
 %token BREAK CONTINUE
+%token SWITCH CASE DEFAULT 
 %token LPAREN RPAREN
 %token LBRACE RBRACE
 %token SEMICOLON QUESTION COLON
@@ -85,6 +86,12 @@ statement:
     { C_ast.DoWhile (stmt, exp, C_ast.Identifier "dummy") }
   | FOR; LPAREN; init = for_init; cnd = option(expression); SEMICOLON; post = option(expression); RPAREN; body = statement
     { C_ast.For { init; cnd; post; body; label = C_ast.Identifier "dummy" } }
+  | SWITCH; LPAREN; cnd = expression; RPAREN; body = statement
+    { C_ast.Switch { cnd; body; cases = []; default = false; label = C_ast.Identifier "dummy" } }
+  | CASE; exp = expression; COLON; stmt = statement
+    { C_ast.Case (exp, stmt, C_ast.Identifier "dummy") }
+  | DEFAULT; COLON; stmt = statement
+    { C_ast.Default (stmt, C_ast.Identifier "dummy") }
   | SEMICOLON
     { C_ast.Null }
 
