@@ -1,7 +1,7 @@
 module Stage = Stage
 module Platform = Platform
 
-exception CompileException of string
+exception CompileError of string
 
 type compile_args =
   { stage : Stage.stage
@@ -28,23 +28,23 @@ end = struct
   let parse lexbuf =
     try Some (Parser.prog Lexer.read lexbuf) with
     | Lexer.SyntaxError e ->
-      raise (CompileException ("LexError: " ^ e ^ ": " ^ print_position lexbuf))
-    | Parser.Error -> raise (CompileException ("ParseError: " ^ print_position lexbuf))
+      raise (CompileError ("LexError: " ^ e ^ ": " ^ print_position lexbuf))
+    | Parser.Error -> raise (CompileError ("ParseError: " ^ print_position lexbuf))
   ;;
 
   let validate stage prog =
     match stage with
-    | Stage.Parse ->
+    | `Parse ->
       print_endline C_ast.(show_program prog);
       None
     | _ ->
       (try Some (Validater.resolve_program prog) with
-       | Validater.SemanticError e -> raise (CompileException ("SemanticError: " ^ e)))
+       | Validater.SemanticError e -> raise (CompileError ("SemanticError: " ^ e)))
   ;;
 
   let tacky_gen stage prog =
     match stage with
-    | Stage.Validate ->
+    | `Validate ->
       print_endline C_ast.(show_program prog);
       None
     | _ -> Some (Tacky_gen.gen_program prog)
@@ -52,7 +52,7 @@ end = struct
 
   let x64_gen stage prog =
     match stage with
-    | Stage.Tacky ->
+    | `Tacky ->
       print_endline Tacky.(show_program prog);
       None
     | _ -> Some (X64_gen.gen_program prog)
@@ -60,7 +60,7 @@ end = struct
 
   let codeemit stage platform prog =
     match stage with
-    | Stage.CodeGen ->
+    | `CodeGen ->
       print_endline X64_ast.(show_program prog);
       None
     | _ -> Some (Emitter.emit_program platform prog)
@@ -81,7 +81,7 @@ end = struct
       in
       (match code with
        | Some v ->
-         if stage = Stage.CodeEmit then print_endline v;
+         if stage = `CodeEmit then print_endline v;
          let oc = open_out outfile in
          output_string oc v;
          close_out oc
@@ -90,6 +90,6 @@ end = struct
 end
 
 (** Compiles the given file.
-    @raise CompileException if an error is encountered.
+    @raise CompileError if an error is encountered.
 *)
 let compile args = Impl.compile args

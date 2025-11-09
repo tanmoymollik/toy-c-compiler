@@ -1,75 +1,102 @@
-let stage = ref Lib.Stage.Link
+type driver_stage =
+  [ `LibStage of Lib.Stage.stage
+  | `Assemble
+  | `Link
+  ]
+
+exception CommandException of string
+
+let stage : driver_stage ref = ref `Link
 let platform = Lib.Platform.Mac
 let usage_msg = "Usage: dune exec c_compiler -- [options] <input_file>.c"
 
 let spec =
-  [ "--lex", Arg.Unit (fun () -> stage := Lib.Stage.Lex), "Stop after lexing"
-  ; "--parse", Arg.Unit (fun () -> stage := Lib.Stage.Parse), "Stop after parsing"
+  [ "--lex", Arg.Unit (fun () -> stage := `LibStage `Lex), "Stop after lexing"
+  ; "--parse", Arg.Unit (fun () -> stage := `LibStage `Parse), "Stop after parsing"
   ; ( "--validate"
-    , Arg.Unit (fun () -> stage := Lib.Stage.Validate)
+    , Arg.Unit (fun () -> stage := `LibStage `Validate)
     , "Stop after semantic analysis" )
   ; ( "--tacky"
-    , Arg.Unit (fun () -> stage := Lib.Stage.Tacky)
+    , Arg.Unit (fun () -> stage := `LibStage `Tacky)
     , "Stop after tacky generation" )
   ; ( "--codegen"
-    , Arg.Unit (fun () -> stage := Lib.Stage.CodeGen)
+    , Arg.Unit (fun () -> stage := `LibStage `CodeGen)
     , "Stop after assembly code generation" )
   ; ( "-S"
-    , Arg.Unit (fun () -> stage := Lib.Stage.CodeEmit)
+    , Arg.Unit (fun () -> stage := `LibStage `CodeEmit)
     , "Stop after assembly code emission" )
   ]
 ;;
 
-exception CommandException of string
-
+let preprocessed_file base_name = base_name ^ ".i"
+let assembly_file base_name = base_name ^ ".s"
+let object_file base_name = base_name ^ ".o"
 let runCommand cmd errMsg = if Sys.command cmd <> 0 then raise (CommandException errMsg)
 
-let postprocess base_name =
-  let nasm_cmd =
-    match platform with
-    | Lib.Platform.Linux -> "nasm -f elf64"
-    | Lib.Platform.Mac -> "nasm -f macho64"
-  in
-  runCommand
-    (Printf.sprintf "%s %s.s -o %s.o" nasm_cmd base_name base_name)
-    "Error during linking";
-  runCommand (Printf.sprintf "rm %s.s" base_name) "Error removing assembly file";
-  runCommand
-    (Printf.sprintf "gcc -w %s.o -o %s" base_name base_name)
-    "Error during linking";
-  runCommand (Printf.sprintf "rm %s.o" base_name) "Error removing object file"
-;;
-
-let compile args processed_file =
+let compile args =
   try
     Lib.compile args;
-    runCommand (Printf.sprintf "rm %s" processed_file) "Error removing preprocessed file"
+    true
   with
-  | CommandException msg ->
-    print_endline msg;
-    exit 1
-  | Lib.CompileException msg ->
+  | Lib.CompileError msg ->
     print_endline ("CompileError: " ^ msg);
-    (* In case of compile error the preprocessed file was not deleted. Delete it here. *)
-    runCommand (Printf.sprintf "rm %s" processed_file) "Error removing preprocessed file";
-    exit 1
+    false
+;;
+
+let assemble stage base_name = function
+  | true ->
+    let preprocessed_file = preprocessed_file base_name in
+    runCommand ("rm " ^ preprocessed_file) "Error removing preprocessed file";
+    (match stage with
+     | `LibStage _ -> false
+     | `Assemble | `Link ->
+       let nasm_cmd =
+         match platform with
+         | Lib.Platform.Linux -> "nasm -f elf64"
+         | Lib.Platform.Mac -> "nasm -f macho64"
+       in
+       let assembly_file = assembly_file base_name in
+       let object_file = object_file base_name in
+       runCommand
+         (Printf.sprintf "%s %s -o %s" nasm_cmd assembly_file object_file)
+         "Error during linking";
+       runCommand ("rm " ^ assembly_file) "Error removing assembly file";
+       true)
+  | false -> false
+;;
+
+let link stage base_name = function
+  | true ->
+    (match stage with
+     | `LibStage _ | `Assemble -> ()
+     | `Link ->
+       let object_file = object_file base_name in
+       runCommand
+         (Printf.sprintf "gcc -w %s -o %s" object_file base_name)
+         "Error during linking";
+       runCommand ("rm " ^ object_file) "Error removing object file";
+       ())
+  | false -> ()
 ;;
 
 let drive stage platform infile =
   try
     let base_name = Filename.remove_extension infile in
-    runCommand
-      (Printf.sprintf "gcc -E -P %s -o %s.i" infile base_name)
-      "Error during preprocessing";
-    let args : Lib.compile_args =
-      { stage
-      ; platform
-      ; infile = Printf.sprintf "%s.i" base_name
-      ; outfile = Printf.sprintf "%s.s" base_name
-      }
+    let preprocessed_file = preprocessed_file base_name in
+    let assembly_file = assembly_file base_name in
+    let lib_stage =
+      match stage with
+      | `LibStage ls -> ls
+      | _ -> `CodeEmit
     in
-    compile args args.infile;
-    if stage = Lib.Stage.Link then postprocess base_name
+    let args : Lib.compile_args =
+      { stage = lib_stage; platform; infile = preprocessed_file; outfile = assembly_file }
+    in
+    runCommand
+      (Printf.sprintf "gcc -E -P %s -o %s" infile preprocessed_file)
+      "Error during preprocessing";
+    compile args |> assemble stage base_name |> link stage base_name;
+    runCommand ("rm " ^ preprocessed_file) "Error removing preprocessed file"
   with
   | CommandException msg ->
     print_endline msg;

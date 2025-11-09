@@ -1,8 +1,8 @@
 type stage =
-  | Lex
-  | Parse
-  | Validate
-  | Tacky
-  | CodeGen
-  | CodeEmit
-  | Link
+  [ `Lex
+  | `Parse
+  | `Validate
+  | `Tacky
+  | `CodeGen
+  | `CodeEmit
+  ]
