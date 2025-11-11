@@ -16,6 +16,7 @@ let continue_label scope = "continue@" ^ scope
 let switch_label = "switch"
 let case_label id scope = "case" ^ string_of_int id ^ "@" ^ scope
 let default_label scope = "default@" ^ scope
+let goto_label lbl fun_name = lbl ^ "@" ^ fun_name
 
 (* Adds a numerical suffix to create a unique label. *)
 let make_unique_label prefix =
@@ -23,13 +24,3 @@ let make_unique_label prefix =
   label_count := c + 1;
   Printf.sprintf "%s#%d" prefix c
 ;;
-
-let label_map : (string, bool) Hashtbl.t = Hashtbl.create 100
-
-let exists_label label =
-  match Hashtbl.find_opt label_map label with
-  | Some _ -> true
-  | None -> false
-;;
-
-let add_label label = Hashtbl.add label_map label true

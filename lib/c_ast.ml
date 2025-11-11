@@ -66,17 +66,17 @@ type expression =
       ; lhs : expression
       ; rhs : expression
       }
+  | FunctionCall of identifier * expression list
 [@@deriving show]
 
-type declaration =
-  | Declaration of
-      { name : identifier
-      ; init : expression option
-      }
+type variable_decl =
+  { name : identifier
+  ; init : expression option
+  }
 [@@deriving show]
 
 type for_init =
-  | InitDecl of declaration
+  | InitDecl of variable_decl
   | InitExp of expression option
 [@@deriving show]
 
@@ -121,11 +121,16 @@ and block_item =
 
 and block = Block of block_item list [@@deriving show]
 
-type function_def =
-  | Function of
-      { name : identifier
-      ; body : block
-      }
+and function_decl =
+  { name : identifier
+  ; params : identifier list
+  ; body : block option
+  }
 [@@deriving show]
 
-type program = Program of function_def [@@deriving show]
+and declaration =
+  | FunDecl of function_decl
+  | VarDecl of variable_decl
+[@@deriving show]
+
+type program = Program of function_decl list [@@deriving show]

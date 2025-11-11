@@ -10,7 +10,8 @@
 %token SWITCH CASE DEFAULT 
 %token LPAREN RPAREN
 %token LBRACE RBRACE
-%token SEMICOLON QUESTION COLON
+%token SEMICOLON COMMA
+%token QUESTION COLON
 %token DPLUS DHYPHEN
 %token PLUS MINUS
 %token ASTERISK FSLASH PERCENT
@@ -47,11 +48,29 @@
 %%
 
 prog:
-  f = function_def; EOF { C_ast.Program f }
+  f = list(function_decl); EOF { C_ast.Program f }
 
-function_def:
-  INT; name = identifier; LPAREN; VOID; RPAREN; body = block
-    { C_ast.Function { name; body; } }
+declaration:
+  | v = variable_decl { C_ast.VarDecl v }
+  | f = function_decl { C_ast.FunDecl f }
+
+variable_decl:
+  INT; name = identifier; init = option(pair(EQUAL, expression)); SEMICOLON
+    {
+      let init = Option.map (fun (_, exp) -> exp) init in C_ast.{ name; init }
+    }
+
+function_decl:
+  | INT; name = identifier; LPAREN; params = param_list; RPAREN; body = block
+    { C_ast.{ name; params; body = Some body; } }
+  | INT; name = identifier; LPAREN; params = param_list; RPAREN; SEMICOLON
+    { C_ast.{ name; params; body = None; } }
+
+param_list:
+  | VOID
+    { [] }
+  | params = separated_nonempty_list(COMMA, pair(INT, identifier))
+    { List.map (fun (_, id) -> id) params }
 
 block:
   LBRACE; items = list(block_item); RBRACE { C_ast.Block items }
@@ -95,15 +114,8 @@ statement:
   | SEMICOLON
     { C_ast.Null }
 
-declaration:
-  INT; name = identifier; init = option(pair(EQUAL, expression)); SEMICOLON
-  {
-    let init = Option.map (fun (_, exp) -> exp) init in
-    C_ast.Declaration { name; init }
-  }
-
 for_init:
-  | d = declaration                    { C_ast.InitDecl d }
+  | d = variable_decl                 { C_ast.InitDecl d }
   | e = option(expression); SEMICOLON { C_ast.InitExp e }
 
 expression:
@@ -116,13 +128,15 @@ expression:
     { C_ast.Conditional { cnd; lhs; rhs } }
 
 factor:
-  | i = CONST                        { C_ast.Constant i }
-  | id = identifier                  { C_ast.Var id }
-  | uop = uop; exp = factor          { C_ast.Unary (uop, exp) }
-  | tuop = tuop; exp = factor        { C_ast.TUnary (tuop, true, exp) }
-  | exp = factor; tuop = tuop        { C_ast.TUnary (tuop, false, exp) }
-  | LPAREN; exp = expression; RPAREN { exp }
-    
+  | i = CONST                         { C_ast.Constant i }
+  | id = identifier                   { C_ast.Var id }
+  | uop = uop; exp = factor           { C_ast.Unary (uop, exp) }
+  | tuop = tuop; exp = factor         { C_ast.TUnary (tuop, true, exp) }
+  | exp = factor; tuop = tuop         { C_ast.TUnary (tuop, false, exp) }
+  | LPAREN; exp = expression; RPAREN  { exp }
+  | id = identifier; LPAREN; args = separated_list(COMMA, expression); RPAREN
+    { C_ast.FunctionCall (id, args) }
+
 %inline uop:
   | MINUS        { C_ast.Negate }
   | TILDE        { C_ast.Complement }

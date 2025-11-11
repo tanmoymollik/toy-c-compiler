@@ -43,43 +43,35 @@ let compile args =
     false
 ;;
 
-let assemble stage base_name = function
-  | true ->
-    let preprocessed_file = preprocessed_file base_name in
-    runCommand ("rm " ^ preprocessed_file) "Error removing preprocessed file";
-    (match stage with
-     | `LibStage _ -> false
-     | `Assemble | `Link ->
-       let nasm_cmd =
-         match platform with
-         | Lib.Platform.Linux -> "nasm -f elf64"
-         | Lib.Platform.Mac -> "nasm -f macho64"
-       in
-       let assembly_file = assembly_file base_name in
-       let object_file = object_file base_name in
-       runCommand
-         (Printf.sprintf "%s %s -o %s" nasm_cmd assembly_file object_file)
-         "Error during linking";
-       runCommand ("rm " ^ assembly_file) "Error removing assembly file";
-       true)
-  | false -> false
+let assemble stage base_name =
+  match stage with
+  | `LibStage _ -> ()
+  | `Assemble | `Link ->
+    let nasm_cmd =
+      match platform with
+      | Lib.Platform.Linux -> "nasm -f elf64"
+      | Lib.Platform.Mac -> "nasm -f macho64"
+    in
+    let assembly_file = assembly_file base_name in
+    let object_file = object_file base_name in
+    runCommand
+      (Printf.sprintf "%s %s -o %s" nasm_cmd assembly_file object_file)
+      "Error during linking";
+    runCommand ("rm " ^ assembly_file) "Error removing assembly file"
 ;;
 
-let link stage base_name = function
-  | true ->
-    (match stage with
-     | `LibStage _ | `Assemble -> ()
-     | `Link ->
-       let object_file = object_file base_name in
-       runCommand
-         (Printf.sprintf "gcc -w %s -o %s" object_file base_name)
-         "Error during linking";
-       runCommand ("rm " ^ object_file) "Error removing object file";
-       ())
-  | false -> ()
+let link stage base_name =
+  match stage with
+  | `LibStage _ | `Assemble -> ()
+  | `Link ->
+    let object_file = object_file base_name in
+    runCommand
+      (Printf.sprintf "gcc -w %s -o %s" object_file base_name)
+      "Error during linking";
+    runCommand ("rm " ^ object_file) "Error removing object file"
 ;;
 
-let drive stage platform infile =
+let drive_single stage platform infile =
   try
     let base_name = Filename.remove_extension infile in
     let preprocessed_file = preprocessed_file base_name in
@@ -95,8 +87,11 @@ let drive stage platform infile =
     runCommand
       (Printf.sprintf "gcc -E -P %s -o %s" infile preprocessed_file)
       "Error during preprocessing";
-    compile args |> assemble stage base_name |> link stage base_name;
-    runCommand ("rm " ^ preprocessed_file) "Error removing preprocessed file"
+    let compile_success = compile args in
+    runCommand ("rm " ^ preprocessed_file) "Error removing preprocessed file";
+    if not compile_success then exit 1;
+    assemble stage base_name;
+    link stage base_name
   with
   | CommandException msg ->
     print_endline msg;
@@ -111,5 +106,5 @@ let () =
   then (
     Arg.usage spec usage_msg;
     exit 1)
-  else drive !stage platform !input_file
+  else drive_single !stage platform !input_file
 ;;

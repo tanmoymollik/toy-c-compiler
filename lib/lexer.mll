@@ -30,6 +30,7 @@ rule read =
   | '{'        { Parser.LBRACE }
   | '}'        { Parser.RBRACE }
   | ';'        { Parser.SEMICOLON }
+  | ','        { Parser.COMMA }
   | '?'        { Parser.QUESTION }
   | ':'        { Parser.COLON }
   | "<<="      { Parser.LSHIFT_EQ }

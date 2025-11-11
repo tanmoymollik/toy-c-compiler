@@ -79,8 +79,8 @@ let rec gen_expression stk = function
     (match bop with
      | C_ast.And | C_ast.Or ->
        let cnd1 = gen_expression stk lexp in
-       let br_label = make_label ("_other" ^ Core.binary_label) in
-       let en_label = make_label ("_end" ^ Core.binary_label) in
+       let br_label = make_label ("other" ^ Core.binary_label) in
+       let en_label = make_label ("end" ^ Core.binary_label) in
        (* Default short-circuit value. *)
        let dflt = if bop = C_ast.And then 0 else 1 in
        let j1 =
@@ -125,8 +125,8 @@ let rec gen_expression stk = function
      | _ -> assert false)
   | C_ast.Conditional { cnd; lhs; rhs } ->
     let cnd = gen_expression stk cnd in
-    let rhs_lbl = make_label ("_other" ^ Core.conditional_label) in
-    let en_lbl = make_label ("_end" ^ Core.conditional_label) in
+    let rhs_lbl = make_label ("other" ^ Core.conditional_label) in
+    let en_lbl = make_label ("end" ^ Core.conditional_label) in
     let dst = make_tmp_dst () in
     Stack.push (Tacky.JumpIfZero (cnd, rhs_lbl)) stk;
     let src = gen_expression stk lhs in
@@ -137,17 +137,18 @@ let rec gen_expression stk = function
     Stack.push (Tacky.Copy { src; dst }) stk;
     Stack.push (Tacky.Label en_lbl) stk;
     dst
+  | C_ast.FunctionCall _ -> assert false
 ;;
 
-let gen_declaration stk = function
-  | C_ast.Declaration { name; init = Some exp } ->
+let gen_variable_decl stk = function
+  | C_ast.{ name; init = Some exp } ->
     let exp_val = gen_expression stk exp in
     Stack.push (Tacky.Copy { src = exp_val; dst = Tacky.Var (gen_identifier name) }) stk
   | _ -> ()
 ;;
 
 let gen_for_init stk = function
-  | C_ast.InitDecl d -> gen_declaration stk d
+  | C_ast.InitDecl d -> gen_variable_decl stk d
   | C_ast.InitExp e ->
     (match e with
      | Some e ->
@@ -261,18 +262,23 @@ and gen_block_item stk = function
 
 and gen_block stk = function
   | C_ast.Block items -> List.iter (gen_block_item stk) items
+
+and gen_declaration _ = function
+  | _ -> assert false
 ;;
 
 let gen_function_def = function
-  | C_ast.Function { name; body } ->
+  | _ -> assert false
+;;
+
+(* | C_ast.Function { name; body } ->
     let stk = Stack.create () in
     gen_block stk body;
     Stack.push (Tacky.Ret (Tacky.Constant 0)) stk;
     (* The stack is effectively reversed here. *)
     let f acc a = a :: acc in
     let body = Stack.fold f [] stk in
-    Tacky.Function { name = gen_identifier name; body }
-;;
+    Tacky.Function { name = gen_identifier name; body } *)
 
 let gen_program = function
   | C_ast.Program f -> Tacky.Program (gen_function_def f)

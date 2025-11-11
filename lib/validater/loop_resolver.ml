@@ -63,12 +63,12 @@ and resolve_block loop_lbl switch_lbl inner_loop = function
     C_ast.Block (List.map (resolve_block_item loop_lbl switch_lbl inner_loop) items)
 ;;
 
-let resolve_function_def = function
-  | C_ast.Function { name; body } ->
-    (* inner_loop value doesn't matter here. *)
-    C_ast.Function { name; body = resolve_block null_label null_label true body }
+let resolve_function_decl = function
+  | C_ast.{ name; params; body } ->
+    C_ast.
+      { name; params; body = Option.map (resolve_block null_label null_label true) body }
 ;;
 
 let resolve_program = function
-  | C_ast.Program f -> C_ast.Program (resolve_function_def f)
+  | C_ast.Program fns -> C_ast.Program (List.map resolve_function_decl fns)
 ;;

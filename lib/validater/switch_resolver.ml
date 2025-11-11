@@ -75,6 +75,7 @@ let rec evaluate_case_expression = function
     let lhs = evaluate_case_expression lhs in
     let rhs = evaluate_case_expression rhs in
     if cnd <> 0 then lhs else rhs
+  | C_ast.FunctionCall _ -> raise (SemanticError "Non-const value for switch-case")
 ;;
 
 let rec resolve_statement label_map default_map = function
@@ -129,13 +130,13 @@ and resolve_block label_map default_map = function
     C_ast.Block (List.map (resolve_block_item label_map default_map) items)
 ;;
 
-let resolve_function_def = function
-  | C_ast.Function { name; body } ->
+let resolve_function_decl = function
+  | C_ast.{ name; params; body } ->
     let label_map : label_map_type = Hashtbl.create 10 in
-    let default_map : default_map_type = Hashtbl.create 10 in
-    C_ast.Function { name; body = resolve_block label_map default_map body }
+    let default_map : default_map_type = Hashtbl.create 2 in
+    C_ast.{ name; params; body = Option.map (resolve_block label_map default_map) body }
 ;;
 
 let resolve_program = function
-  | C_ast.Program f -> C_ast.Program (resolve_function_def f)
+  | C_ast.Program fns -> C_ast.Program (List.map resolve_function_decl fns)
 ;;

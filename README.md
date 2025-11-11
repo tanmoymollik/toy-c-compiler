@@ -48,6 +48,5 @@ macos. For linux development, set `platform` to `Lib.Platform.Linux` in
 [driver binary](bin/driver.ml).
 
 ## Implementation Notes ##
-Labels are first mapped during the first semantic analysis pass and resolved in
-a second pass.
 Loop labels are set as dummy when parsing and resolved in semantic analysis pass.
+Case and Default statements converted to Label statements in semantic analysis pass.
