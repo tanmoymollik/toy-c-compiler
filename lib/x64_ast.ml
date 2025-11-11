@@ -72,4 +72,4 @@ type function_def =
       }
 [@@deriving show]
 
-type program = Program of function_def [@@deriving show]
+type program = Program of function_def list [@@deriving show]

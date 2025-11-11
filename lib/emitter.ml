@@ -100,7 +100,8 @@ let emit_function_def platform = function
 ;;
 
 let emit_program platform = function
-  | X64_ast.Program f ->
+  | X64_ast.Program fns ->
+    let f = List.hd fns in
     emit_function_def platform f
     ^
     if platform = Platform.Linux then ".section .note.GNU-stack,\"\",@progbits\n" else ""

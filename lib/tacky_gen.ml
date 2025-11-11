@@ -137,7 +137,12 @@ let rec gen_expression stk = function
     Stack.push (Tacky.Copy { src; dst }) stk;
     Stack.push (Tacky.Label en_lbl) stk;
     dst
-  | C_ast.FunctionCall _ -> assert false
+  | C_ast.FunctionCall (name, args) ->
+    let name = gen_identifier name in
+    let args = List.map (gen_expression stk) args in
+    let dst = make_tmp_dst () in
+    Stack.push (Tacky.FunCall { name; args; dst }) stk;
+    dst
 ;;
 
 let gen_variable_decl stk = function
@@ -263,23 +268,31 @@ and gen_block_item stk = function
 and gen_block stk = function
   | C_ast.Block items -> List.iter (gen_block_item stk) items
 
-and gen_declaration _ = function
-  | _ -> assert false
+and gen_declaration stk = function
+  | VarDecl v -> gen_variable_decl stk v
+  (* These are empty function declarations. Do nothing. *)
+  | FunDecl _ -> ()
 ;;
 
-let gen_function_def = function
-  | _ -> assert false
-;;
-
-(* | C_ast.Function { name; body } ->
+let gen_function_decl = function
+  | C_ast.{ name; params; body = Some body } ->
+    let params = List.map gen_identifier params in
     let stk = Stack.create () in
     gen_block stk body;
     Stack.push (Tacky.Ret (Tacky.Constant 0)) stk;
     (* The stack is effectively reversed here. *)
     let f acc a = a :: acc in
     let body = Stack.fold f [] stk in
-    Tacky.Function { name = gen_identifier name; body } *)
+    Tacky.Function { name = gen_identifier name; params; body }
+  | _ -> assert false
+;;
 
 let gen_program = function
-  | C_ast.Program f -> Tacky.Program (gen_function_def f)
+  | C_ast.Program fns ->
+    let drop_empty_body = function
+      | C_ast.{ body = None; _ } -> false
+      | _ -> true
+    in
+    let fns = List.filter drop_empty_body fns in
+    Tacky.Program (List.map gen_function_decl fns)
 ;;

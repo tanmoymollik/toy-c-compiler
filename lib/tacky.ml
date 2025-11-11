@@ -51,13 +51,19 @@ type instruction =
   | JumpIfZero of value * identifier (* cond * target *)
   | JumpIfNotZero of value * identifier (* cond * target *)
   | Label of identifier
+  | FunCall of
+      { name : identifier
+      ; args : value list
+      ; dst : value
+      }
 [@@deriving show]
 
 type function_def =
   | Function of
       { name : identifier
+      ; params : identifier list
       ; body : instruction list
       }
 [@@deriving show]
 
-type program = Program of function_def [@@deriving show]
+type program = Program of function_def list [@@deriving show]

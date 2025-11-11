@@ -119,6 +119,7 @@ let gen_instruction = function
     ; X64_ast.JmpC (X64_ast.NE, gen_identifier tgt)
     ]
   | Tacky.Label iden -> [ X64_ast.Label (gen_identifier iden) ]
+  | Tacky.FunCall _ -> assert false
 ;;
 
 let fix_ins_cmp = function
@@ -182,5 +183,5 @@ let gen_function_def = function
 ;;
 
 let gen_program = function
-  | Tacky.Program f -> X64_ast.Program (gen_function_def f)
+  | Tacky.Program fns -> X64_ast.Program (List.map gen_function_def fns)
 ;;
