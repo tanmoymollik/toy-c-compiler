@@ -1,3 +1,22 @@
+let var_map : (string, int) Hashtbl.t = Hashtbl.create 100
+let fun_map : (string, int) Hashtbl.t = Hashtbl.create 100
+
+let get_fun_stack_alloc fun_name =
+  match Hashtbl.find_opt fun_map fun_name with
+  | Some v -> v
+  | None -> 0
+;;
+
+let get_stack_address fun_name iden =
+  match Hashtbl.find_opt var_map iden with
+  | Some v -> v
+  | None ->
+    let stk_ptr = get_fun_stack_alloc fun_name + 4 in
+    Hashtbl.add fun_map fun_name stk_ptr;
+    Hashtbl.add var_map iden stk_ptr;
+    stk_ptr
+;;
+
 let gen_identifier = function
   | Tacky.Identifier ident -> X64_ast.Identifier ident
 ;;
@@ -40,8 +59,6 @@ let gen_cond_code = function
   | _ -> assert false
 ;;
 
-let alloc_stack = ref 0
-
 let gen_stack_address ident =
   let parts = String.split_on_char '.' ident in
   assert (List.length parts = 2);
@@ -49,17 +66,17 @@ let gen_stack_address ident =
   4 * (idx + 1)
 ;;
 
-let gen_value = function
+let gen_value fun_name = function
   | Tacky.Constant c -> X64_ast.Imm c, X64_ast.DWord
-  | Tacky.Var (Tacky.Identifier ident) ->
-    let addr = gen_stack_address ident in
-    alloc_stack := max !alloc_stack addr;
+  | Tacky.Var (Tacky.Identifier iden) ->
+    let addr = get_stack_address fun_name iden in
     X64_ast.Stack addr, X64_ast.DWord
 ;;
 
-let gen_instruction = function
+let gen_instruction fun_name = function
   | Tacky.Ret v ->
-    [ X64_ast.Mov { src = gen_value v; dst = X64_ast.Reg X64_ast.Ax, X64_ast.DWord }
+    [ X64_ast.Mov
+        { src = gen_value fun_name v; dst = X64_ast.Reg X64_ast.Ax, X64_ast.DWord }
     ; X64_ast.Ret
     ]
   | Tacky.Unary { dst = Tacky.Constant _; _ } -> assert false
@@ -67,13 +84,13 @@ let gen_instruction = function
   | Tacky.Unary { uop; src; dst } ->
     (match uop with
      | Tacky.Complement | Tacky.Negate ->
-       [ X64_ast.Mov { src = gen_value src; dst = gen_value dst }
-       ; X64_ast.Unary (gen_uop uop, gen_value dst)
+       [ X64_ast.Mov { src = gen_value fun_name src; dst = gen_value fun_name dst }
+       ; X64_ast.Unary (gen_uop uop, gen_value fun_name dst)
        ]
      | Tacky.Not ->
-       let dst = gen_value dst in
+       let dst = gen_value fun_name dst in
        let zr = X64_ast.Imm 0, X64_ast.DWord in
-       [ X64_ast.Cmp { lhs = gen_value src; rhs = zr }
+       [ X64_ast.Cmp { lhs = gen_value fun_name src; rhs = zr }
        ; X64_ast.Mov { src = zr; dst }
        ; X64_ast.SetC (E, dst)
        ])
@@ -83,16 +100,18 @@ let gen_instruction = function
     (match bop with
      | Tacky.Div ->
        let tmp_dst = X64_ast.Reg X64_ast.Ax, X64_ast.DWord in
-       [ X64_ast.Mov { src = gen_value src1; dst = tmp_dst }
+       [ X64_ast.Mov { src = gen_value fun_name src1; dst = tmp_dst }
        ; X64_ast.Cdq
-       ; X64_ast.Idiv (gen_value src2)
-       ; X64_ast.Mov { src = tmp_dst; dst = gen_value dst }
+       ; X64_ast.Idiv (gen_value fun_name src2)
+       ; X64_ast.Mov { src = tmp_dst; dst = gen_value fun_name dst }
        ]
      | Tacky.Rem ->
-       [ X64_ast.Mov { src = gen_value src1; dst = X64_ast.Reg X64_ast.Ax, X64_ast.DWord }
+       [ X64_ast.Mov
+           { src = gen_value fun_name src1; dst = X64_ast.Reg X64_ast.Ax, X64_ast.DWord }
        ; X64_ast.Cdq
-       ; X64_ast.Idiv (gen_value src2)
-       ; X64_ast.Mov { src = X64_ast.Reg X64_ast.Dx, X64_ast.DWord; dst = gen_value dst }
+       ; X64_ast.Idiv (gen_value fun_name src2)
+       ; X64_ast.Mov
+           { src = X64_ast.Reg X64_ast.Dx, X64_ast.DWord; dst = gen_value fun_name dst }
        ]
      | Tacky.Equal
      | Tacky.NEqual
@@ -100,27 +119,31 @@ let gen_instruction = function
      | Tacky.LEqual
      | Tacky.Greater
      | Tacky.GEqual ->
-       let dst = gen_value dst in
+       let dst = gen_value fun_name dst in
        let zr = X64_ast.Imm 0, X64_ast.DWord in
-       [ X64_ast.Cmp { lhs = gen_value src1; rhs = gen_value src2 }
+       [ X64_ast.Cmp { lhs = gen_value fun_name src1; rhs = gen_value fun_name src2 }
        ; X64_ast.Mov { src = zr; dst }
        ; X64_ast.SetC (gen_cond_code bop, dst)
        ]
      | _ ->
-       [ X64_ast.Mov { src = gen_value src1; dst = gen_value dst }
-       ; X64_ast.Binary { bop = gen_bop bop; src = gen_value src2; dst = gen_value dst }
+       [ X64_ast.Mov { src = gen_value fun_name src1; dst = gen_value fun_name dst }
+       ; X64_ast.Binary
+           { bop = gen_bop bop
+           ; src = gen_value fun_name src2
+           ; dst = gen_value fun_name dst
+           }
        ])
   | Tacky.Copy { src; dst } ->
-    [ X64_ast.Mov { src = gen_value src; dst = gen_value dst } ]
+    [ X64_ast.Mov { src = gen_value fun_name src; dst = gen_value fun_name dst } ]
   | Tacky.Jump iden -> [ X64_ast.Jmp (gen_identifier iden) ]
   | Tacky.JumpIfZero (cnd, tgt) ->
     let zr = X64_ast.Imm 0, X64_ast.DWord in
-    [ X64_ast.Cmp { lhs = gen_value cnd; rhs = zr }
+    [ X64_ast.Cmp { lhs = gen_value fun_name cnd; rhs = zr }
     ; X64_ast.JmpC (X64_ast.E, gen_identifier tgt)
     ]
   | Tacky.JumpIfNotZero (cnd, tgt) ->
     let zr = X64_ast.Imm 0, X64_ast.DWord in
-    [ X64_ast.Cmp { lhs = gen_value cnd; rhs = zr }
+    [ X64_ast.Cmp { lhs = gen_value fun_name cnd; rhs = zr }
     ; X64_ast.JmpC (X64_ast.NE, gen_identifier tgt)
     ]
   | Tacky.Label iden -> [ X64_ast.Label (gen_identifier iden) ]
@@ -158,7 +181,7 @@ let fix_instruction = function
        [ X64_ast.Mov { src; dst = tmp_src }; X64_ast.Binary { bop; src = tmp_src; dst } ]
      | (X64_ast.Sal | X64_ast.Sar), (X64_ast.Stack _, sz), (X64_ast.Stack _, _) ->
        (* We don't have different sized registers yet. For now we copy to Cx
-             and use Cl when shifting. *)
+          and use Cl when shifting. *)
        [ X64_ast.Mov { src; dst = X64_ast.Reg X64_ast.Cx, sz }
        ; X64_ast.Binary { bop; src = X64_ast.Reg X64_ast.Cx, X64_ast.Byte; dst }
        ]
@@ -178,14 +201,16 @@ let fix_instruction = function
   | _ as ret -> [ ret ]
 ;;
 
-let gen_function_def = function
-  | Tacky.Function f ->
-    let ins = List.concat_map gen_instruction f.body in
-    let ins = if !alloc_stack <> 0 then X64_ast.AllocStack !alloc_stack :: ins else ins in
+let gen_function_def platform = function
+  | Tacky.Function { name = Tacky.Identifier name; body; _ } ->
+    let name = if platform = Platform.Linux then name else "_" ^ name in
+    let body = List.concat_map (gen_instruction name) body in
+    let alloc_stack = get_fun_stack_alloc name in
+    let ins = if alloc_stack <> 0 then X64_ast.AllocStack alloc_stack :: body else body in
     let body = List.concat_map fix_instruction ins in
-    X64_ast.Function { name = gen_identifier f.name; body }
+    X64_ast.Function { name = X64_ast.Identifier name; body }
 ;;
 
-let gen_program = function
-  | Tacky.Program fns -> X64_ast.Program (List.map gen_function_def fns)
+let gen_program platform = function
+  | Tacky.Program fns -> X64_ast.Program (List.map (gen_function_def platform) fns)
 ;;

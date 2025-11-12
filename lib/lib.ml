@@ -50,12 +50,12 @@ end = struct
     | _ -> Some (Tacky_gen.gen_program prog)
   ;;
 
-  let x64_gen stage prog =
+  let x64_gen stage platform prog =
     match stage with
     | `Tacky ->
       print_endline Tacky.(show_program prog);
       None
-    | _ -> Some (X64_gen.gen_program prog)
+    | _ -> Some (X64_gen.gen_program platform prog)
   ;;
 
   let codeemit stage platform prog =
@@ -76,7 +76,7 @@ end = struct
         parse lexbuf
         >>= validate stage
         >>= tacky_gen stage
-        >>= x64_gen stage
+        >>= x64_gen stage platform
         >>= codeemit stage platform
       in
       (match code with

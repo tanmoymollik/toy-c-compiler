@@ -96,23 +96,28 @@ let emit_instruction = function
   | X64_ast.Ret -> Printf.sprintf "%sleave\n%sret" indent indent
 ;;
 
+let has_main = ref false
 let emit_function_prologue = Printf.sprintf "%spush rbp\n%smov rbp, rsp\n" indent indent
 
-let emit_function_def platform = function
-  | X64_ast.Function { name; body } ->
-    let name_prefix = if platform = Platform.Linux then "" else "_" in
-    let name = Printf.sprintf "%s%s" name_prefix (emit_identifier name) in
-    "section .text\n"
-    ^ Printf.sprintf "global %s\n\n" name
-    ^ Printf.sprintf "%s:\n" name
+let emit_function_def = function
+  | X64_ast.Function { name = X64_ast.Identifier name; body } ->
+    if name = "_main" then has_main := true;
+    Printf.sprintf "%s:\n" name
     ^ emit_function_prologue
     ^ (List.map emit_instruction body |> String.concat "\n")
 ;;
 
 let emit_program platform = function
   | X64_ast.Program fns ->
-    let f = List.hd fns in
-    emit_function_def platform f
-    ^
-    if platform = Platform.Linux then ".section .note.GNU-stack,\"\",@progbits\n" else ""
+    let fn_codes = List.map emit_function_def fns in
+    let prog_prologue =
+      "section .text\n" ^ if !has_main then "global _main\n\n" else "\n"
+    in
+    let body = String.concat "\n\n" fn_codes in
+    let prog_epilogue =
+      if platform = Platform.Linux
+      then ".section .note.GNU-stack,\"\",@progbits\n"
+      else ""
+    in
+    prog_prologue ^ body ^ prog_epilogue
 ;;
