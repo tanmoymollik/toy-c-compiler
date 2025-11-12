@@ -27,18 +27,26 @@ type cond_code =
 
 type reg =
   | Ax
-  | Dx
   | Cx
-  | Cl
+  | Dx
   | R10
   | R11
 [@@deriving show]
 
-type operand =
+type operand_type =
   | Imm of int
   | Reg of reg
   | Stack of int
 [@@deriving show]
+
+type operand_size =
+  | Byte
+  | Word
+  | DWord
+  | QWord
+[@@deriving show]
+
+type operand = operand_type * operand_size [@@deriving show]
 
 type instruction =
   | Mov of
