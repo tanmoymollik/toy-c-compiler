@@ -122,20 +122,18 @@ let gen_instruction fun_name = function
        ; X64_ast.Mov { src = zr; dst }
        ; X64_ast.SetC (gen_cond_code bop, dst)
        ]
-     | Tacky.Add
-     | Tacky.Sub
-     | Tacky.Mul
-     | Tacky.And
-     | Tacky.Or
-     | Tacky.Xor
-     | Tacky.Lsft
-     | Tacky.Rsft ->
-       [ X64_ast.Mov { src = gen_value fun_name src1; dst = gen_value fun_name dst }
-       ; X64_ast.Binary
-           { bop = gen_bop bop
-           ; src = gen_value fun_name src2
-           ; dst = gen_value fun_name dst
-           }
+     | Tacky.Add | Tacky.Sub | Tacky.Mul | Tacky.And | Tacky.Or | Tacky.Xor ->
+       let dst = gen_value fun_name dst in
+       [ X64_ast.Mov { src = gen_value fun_name src1; dst }
+       ; X64_ast.Binary { bop = gen_bop bop; src = gen_value fun_name src2; dst }
+       ]
+     | Tacky.Lsft | Tacky.Rsft ->
+       let src2_t, src2_s = gen_value fun_name src2 in
+       let tmp_src2_t = X64_ast.Reg X64_ast.Cx in
+       let dst = gen_value fun_name dst in
+       [ X64_ast.Mov { src = gen_value fun_name src1; dst }
+       ; X64_ast.Mov { src = src2_t, src2_s; dst = tmp_src2_t, src2_s }
+       ; X64_ast.Binary { bop = gen_bop bop; src = tmp_src2_t, X64_ast.Byte; dst }
        ])
   | Tacky.Copy { src; dst } ->
     [ X64_ast.Mov { src = gen_value fun_name src; dst = gen_value fun_name dst } ]
@@ -214,12 +212,6 @@ let fix_instruction = function
        , (X64_ast.Stack _, _) ) ->
        let tmp_src = X64_ast.Reg X64_ast.R10, sz in
        [ X64_ast.Mov { src; dst = tmp_src }; X64_ast.Binary { bop; src = tmp_src; dst } ]
-     | (X64_ast.Sal | X64_ast.Sar), (X64_ast.Stack _, sz), (X64_ast.Stack _, _) ->
-       (* We don't have different sized registers yet. For now we copy to Cx
-          and use Cl when shifting. *)
-       [ X64_ast.Mov { src; dst = X64_ast.Reg X64_ast.Cx, sz }
-       ; X64_ast.Binary { bop; src = X64_ast.Reg X64_ast.Cx, X64_ast.Byte; dst }
-       ]
      | X64_ast.Imul, _, (X64_ast.Stack _, sz) ->
        let tmp_dst = X64_ast.Reg X64_ast.R11, sz in
        [ X64_ast.Mov { src = dst; dst = tmp_dst }
@@ -251,7 +243,7 @@ let gen_function_def = function
     let reg_param_ins = List.mapi f reg_params in
     let f ind arg =
       let dst_t, _ = gen_stack_for_var name arg in
-      let src_t = X64_ast.Stack (-(16 + 8 * ind)) in
+      let src_t = X64_ast.Stack (-(16 + (8 * ind))) in
       let src_s = X64_ast.DWord in
       X64_ast.Mov { src = src_t, src_s; dst = dst_t, src_s }
     in
