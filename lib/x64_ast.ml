@@ -29,9 +29,21 @@ type reg =
   | Ax
   | Cx
   | Dx
+  | Di
+  | Si
+  | R8
+  | R9
   | R10
   | R11
 [@@deriving show]
+
+let arg_regs = [ Di; Si; Dx; Cx; R8; R9 ]
+let arg_regs_len = 6
+
+let is_arg_reg = function
+  | Di | Si | Dx | Cx | R8 | R9 -> true
+  | _ -> false
+;;
 
 type operand_type =
   | Imm of int
@@ -70,6 +82,9 @@ type instruction =
   | SetC of cond_code * operand
   | Label of identifier
   | AllocStack of int
+  | DeallocStack of int
+  | Push of operand
+  | Call of identifier
   | Ret
 [@@deriving show]
 

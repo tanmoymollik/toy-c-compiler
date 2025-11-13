@@ -4,7 +4,7 @@ type driver_stage =
   | `Link
   ]
 
-exception CommandException of string
+exception CommandError of string
 
 let stage : driver_stage ref = ref `Link
 let platform = Lib.Platform.Mac
@@ -25,13 +25,14 @@ let spec =
   ; ( "-S"
     , Arg.Unit (fun () -> stage := `LibStage `CodeEmit)
     , "Stop after assembly code emission" )
+  ; "-c", Arg.Unit (fun () -> stage := `Assemble), "Stop after assembly code emission"
   ]
 ;;
 
 let preprocessed_file base_name = base_name ^ ".i"
 let assembly_file base_name = base_name ^ ".s"
 let object_file base_name = base_name ^ ".o"
-let runCommand cmd errMsg = if Sys.command cmd <> 0 then raise (CommandException errMsg)
+let runCommand cmd errMsg = if Sys.command cmd <> 0 then raise (CommandError errMsg)
 
 let compile args =
   try
@@ -71,6 +72,15 @@ let link stage base_name =
     runCommand ("rm " ^ object_file) "Error removing object file"
 ;;
 
+let cleanup base_name =
+  let preprocessed_file = preprocessed_file base_name in
+  let assembly_file = assembly_file base_name in
+  let object_file = object_file base_name in
+  runCommand
+    (Printf.sprintf "rm -f %s %s %s" preprocessed_file assembly_file object_file)
+    "Error removing auxiliary files"
+;;
+
 let drive_single stage platform infile =
   try
     let base_name = Filename.remove_extension infile in
@@ -93,8 +103,9 @@ let drive_single stage platform infile =
     assemble stage base_name;
     link stage base_name
   with
-  | CommandException msg ->
-    print_endline msg;
+  | CommandError msg ->
+    print_endline ("CommandError: " ^ msg);
+    cleanup (Filename.remove_extension infile);
     exit 1
 ;;
 

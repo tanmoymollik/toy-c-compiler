@@ -24,3 +24,16 @@ let make_unique_label prefix =
   label_count := c + 1;
   Printf.sprintf "%s#%d" prefix c
 ;;
+
+type symbol_type =
+  | Int
+  | FunType of int
+
+type symbol_info =
+  { tp : symbol_type
+  ; defined : bool
+  }
+
+type symbol_map_type = (string, symbol_info) Hashtbl.t
+
+let symbol_map : symbol_map_type = Hashtbl.create 100

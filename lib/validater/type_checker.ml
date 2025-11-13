@@ -1,21 +1,10 @@
 exception SemanticError = Common.SemanticError
 
-type symbol_type =
-  | Int
-  | FunType of int
-
-type symbol_info =
-  { tp : symbol_type
-  ; defined : bool
-  }
-
-type symbol_map_type = (string, symbol_info) Hashtbl.t
-
 let rec typecheck_expression symbol_map = function
   | C_ast.Constant _ -> ()
   | C_ast.Var (C_ast.Identifier iden) ->
     (match Hashtbl.find_opt symbol_map iden with
-     | Some { tp = Int; _ } -> ()
+     | Some Core.{ tp = Core.Int; _ } -> ()
      | _ -> raise (SemanticError ("Function name used as variable - " ^ iden)))
   | C_ast.Unary (_, exp) -> typecheck_expression symbol_map exp
   | C_ast.TUnary (_, _, lval) -> typecheck_expression symbol_map lval
@@ -42,7 +31,7 @@ let rec typecheck_expression symbol_map = function
 ;;
 
 let typecheck_variable symbol_map = function
-  | C_ast.Identifier name -> Hashtbl.add symbol_map name { tp = Int; defined = true }
+  | C_ast.Identifier name -> Hashtbl.add symbol_map name Core.{ tp = Int; defined = true }
 ;;
 
 let typecheck_variable_decl symbol_map = function
@@ -100,18 +89,18 @@ and typecheck_block symbol_map = function
 
 and typecheck_function_decl symbol_map = function
   | C_ast.{ name = C_ast.Identifier iden; params; body } ->
-    let fun_type = FunType (List.length params) in
+    let fun_type = Core.FunType (List.length params) in
     let has_body = Option.is_some body in
     let already_defined = ref false in
     (match Hashtbl.find_opt symbol_map iden with
-     | Some { tp; defined } ->
+     | Some Core.{ tp; defined } ->
        if fun_type <> tp
        then raise (SemanticError ("Incomplete function declaration - " ^ iden));
        already_defined := defined;
        if defined && has_body
        then raise (SemanticError ("Function is defined more thand once - " ^ iden))
      | _ -> ());
-    let info = { tp = fun_type; defined = !already_defined || has_body } in
+    let info = Core.{ tp = fun_type; defined = !already_defined || has_body } in
     Hashtbl.add symbol_map iden info;
     (match body with
      | Some body ->
@@ -127,7 +116,6 @@ and typecheck_declaration symbol_map = function
 
 let typecheck_program = function
   | C_ast.Program fns as ret ->
-    let symbol_map : symbol_map_type = Hashtbl.create 100 in
-    let _ = List.map (typecheck_function_decl symbol_map) fns in
+    let _ = List.map (typecheck_function_decl Core.symbol_map) fns in
     ret
 ;;
