@@ -251,8 +251,8 @@ let gen_function_def = function
     let reg_param_ins = List.mapi f reg_params in
     let f ind arg =
       let dst_t, _ = gen_stack_for_var name arg in
-      let src_t = X64_ast.Stack (-16 * (ind + 1)) in
-      let src_s = X64_ast.QWord in
+      let src_t = X64_ast.Stack (-(16 + 8 * ind)) in
+      let src_s = X64_ast.DWord in
       X64_ast.Mov { src = src_t, src_s; dst = dst_t, src_s }
     in
     let stk_param_ins = List.mapi f stk_params in

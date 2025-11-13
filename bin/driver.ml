@@ -7,7 +7,7 @@ type driver_stage =
 exception CommandError of string
 
 let stage : driver_stage ref = ref `Link
-let platform = Lib.Platform.Mac
+let platform = Lib.Platform.Linux
 let usage_msg = "Usage: dune exec c_compiler -- [options] <input_file>.c"
 
 let spec =
@@ -25,7 +25,7 @@ let spec =
   ; ( "-S"
     , Arg.Unit (fun () -> stage := `LibStage `CodeEmit)
     , "Stop after assembly code emission" )
-  ; "-c", Arg.Unit (fun () -> stage := `Assemble), "Stop after assembly code emission"
+  ; "-c", Arg.Unit (fun () -> stage := `Assemble), "Generate object file only"
   ]
 ;;
 

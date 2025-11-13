@@ -121,9 +121,8 @@ let emit_instruction = function
     let name =
       match Hashtbl.find_opt Core.symbol_map name with
       | None | Some Core.{ defined = false; _ } ->
-        let name = platform_name ^ if !platform = Linux then "@PLT" else "" in
-        Hashtbl.add extern_funcs name true;
-        name
+        Hashtbl.add extern_funcs platform_name true;
+        platform_name ^ " wrt ..plt"
       | _ -> platform_name
     in
     Printf.sprintf "%scall %s" indent name
@@ -148,7 +147,8 @@ let emit_program plt = function
     let extern_decls = Hashtbl.fold f extern_funcs [] in
     let prog_epilogue =
       if !platform = Platform.Linux
-      then ".section .note.GNU-stack,\"\",@progbits\n"
+      then ""
+      (* then "\n\nsection .note.GNU-stack,\"\",@progbits\n" *)
       else ""
     in
     "section .text\n"
