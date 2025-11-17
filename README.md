@@ -50,3 +50,5 @@ macos. For linux development, set `platform` to `Lib.Platform.Linux` in
 ## Implementation Notes ##
 Loop labels are set as dummy when parsing and resolved in semantic analysis pass.
 Case and Default statements converted to Label statements in semantic analysis pass.
+- This implementation lexes and parses at the same time. So just stopping after lex
+  stage is not possible. --lex option does nothing.

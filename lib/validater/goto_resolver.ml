@@ -58,16 +58,17 @@ and resolve_block fun_name = function
 ;;
 
 let resolve_function_decl = function
-  | C_ast.{ name = C_ast.Identifier iden; params; body } ->
-    C_ast.
-      { name = C_ast.Identifier iden
-      ; params
-      ; body =
-          (let first_pass = Option.map (resolve_block (Some iden)) body in
-           Option.map (resolve_block None) first_pass)
-      }
+  | C_ast.{ name = C_ast.Identifier iden; params; body; storage } ->
+    let first_pass = Option.map (resolve_block (Some iden)) body in
+    let body = Option.map (resolve_block None) first_pass in
+    C_ast.{ name = C_ast.Identifier iden; params; body; storage }
+;;
+
+let resolve_declaration = function
+  | C_ast.FunDecl f -> C_ast.FunDecl (resolve_function_decl f)
+  | C_ast.VarDecl _ as ret -> ret
 ;;
 
 let resolve_program = function
-  | C_ast.Program fns -> C_ast.Program (List.map resolve_function_decl fns)
+  | C_ast.Program dns -> C_ast.Program (List.map resolve_declaration dns)
 ;;

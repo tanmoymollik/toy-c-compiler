@@ -146,7 +146,7 @@ let rec gen_expression stk = function
 ;;
 
 let gen_variable_decl stk = function
-  | C_ast.{ name; init = Some exp } ->
+  | C_ast.{ name; init = Some exp; storage = None } ->
     let exp_val = gen_expression stk exp in
     Stack.push (Tacky.Copy { src = exp_val; dst = Tacky.Var (gen_identifier name) }) stk
   | _ -> ()
@@ -263,19 +263,17 @@ let rec gen_statement stk = function
 
 and gen_block_item stk = function
   | C_ast.S s -> gen_statement stk s
-  | C_ast.D d -> gen_declaration stk d
+  | C_ast.D d ->
+    (match d with
+     | VarDecl v -> gen_variable_decl stk v
+     | FunDecl f -> assert (f.body = None))
 
 and gen_block stk = function
   | C_ast.Block items -> List.iter (gen_block_item stk) items
-
-and gen_declaration stk = function
-  | VarDecl v -> gen_variable_decl stk v
-  (* These are empty function declarations. Do nothing. *)
-  | FunDecl _ -> ()
 ;;
 
 let gen_function_decl = function
-  | C_ast.{ name; params; body = Some body } ->
+  | C_ast.{ name; params; body = Some body; _ } ->
     let params = List.map gen_identifier params in
     let stk = Stack.create () in
     gen_block stk body;
@@ -283,16 +281,41 @@ let gen_function_decl = function
     (* The stack is effectively reversed here. *)
     let f acc a = a :: acc in
     let body = Stack.fold f [] stk in
-    Tacky.Function { name = gen_identifier name; params; body }
-  | _ -> assert false
+    let is_global (C_ast.Identifier name) =
+      match Hashtbl.find_opt Core.symbol_map name with
+      | Some Core.{ attrs = Core.FunAttr { global; _ }; _ } -> global
+      | _ -> assert false
+    in
+    let tacky_f =
+      Tacky.Function { name = gen_identifier name; global = is_global name; params; body }
+    in
+    Some tacky_f
+  (* Do nothing for empty function bodies. *)
+  | _ -> None
+;;
+
+let gen_declaration = function
+  | C_ast.VarDecl _ -> None
+  | C_ast.FunDecl f -> gen_function_decl f
+;;
+
+let convert_symbols_to_tacky symbol_map acc =
+  Hashtbl.fold
+    (fun iden Core.{ attrs; _ } acc ->
+       match attrs with
+       | Core.StaticAttr { init; global } ->
+         let name = Tacky.Identifier iden in
+         (match init with
+          | Initial i -> Tacky.StaticVar { name; global; init = i } :: acc
+          | Tentative -> Tacky.StaticVar { name; global; init = 0 } :: acc
+          | NoInitial -> acc)
+       | _ -> acc)
+    symbol_map
+    acc
 ;;
 
 let gen_program = function
-  | C_ast.Program fns ->
-    let drop_empty_body = function
-      | C_ast.{ body = None; _ } -> false
-      | _ -> true
-    in
-    let fns = List.filter drop_empty_body fns in
-    Tacky.Program (List.map gen_function_decl fns)
+  | C_ast.Program dns ->
+    let top_lvls = List.filter_map gen_declaration dns in
+    Tacky.Program (convert_symbols_to_tacky Core.symbol_map top_lvls)
 ;;

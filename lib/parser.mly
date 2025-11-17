@@ -8,6 +8,7 @@
 %token DO WHILE FOR
 %token BREAK CONTINUE
 %token SWITCH CASE DEFAULT 
+%token STATIC EXTERN
 %token LPAREN RPAREN
 %token LBRACE RBRACE
 %token SEMICOLON COMMA
@@ -48,23 +49,33 @@
 %%
 
 prog:
-  f = list(function_decl); EOF { C_ast.Program f }
+  f = list(declaration); EOF { C_ast.Program f }
 
 declaration:
   | v = variable_decl { C_ast.VarDecl v }
   | f = function_decl { C_ast.FunDecl f }
 
 variable_decl:
-  INT; name = identifier; init = option(pair(EQUAL, expression)); SEMICOLON
+  storage = specifier; name = identifier; init = option(pair(EQUAL, expression)); SEMICOLON
     {
-      let init = Option.map (fun (_, exp) -> exp) init in C_ast.{ name; init }
+      let init = Option.map (fun (_, exp) -> exp) init in C_ast.{ name; init; storage }
     }
+  
+specifier:
+  | INT; storage = option(storage_class)
+    { storage }
+  | storage = option(storage_class); INT
+    { storage }
+    
+%inline storage_class:
+  | STATIC   { C_ast.Static }
+  | EXTERN   { C_ast.Extern }
 
 function_decl:
-  | INT; name = identifier; LPAREN; params = param_list; RPAREN; body = block
-    { C_ast.{ name; params; body = Some body; } }
-  | INT; name = identifier; LPAREN; params = param_list; RPAREN; SEMICOLON
-    { C_ast.{ name; params; body = None; } }
+  | storage = specifier; name = identifier; LPAREN; params = param_list; RPAREN; body = block
+    { C_ast.{ name; params; body = Some body; storage; } }
+  | storage = specifier; name = identifier; LPAREN; params = param_list; RPAREN; SEMICOLON
+    { C_ast.{ name; params; body = None; storage; } }
 
 param_list:
   | VOID

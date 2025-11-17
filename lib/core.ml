@@ -29,9 +29,25 @@ type symbol_type =
   | Int
   | FunType of int
 
+type initial_value =
+  | Tentative
+  | Initial of int
+  | NoInitial
+
+type identifier_attrs =
+  | FunAttr of
+      { defined : bool
+      ; global : bool
+      }
+  | StaticAttr of
+      { init : initial_value
+      ; global : bool
+      }
+  | LocalAttr
+
 type symbol_info =
   { tp : symbol_type
-  ; defined : bool
+  ; attrs : identifier_attrs
   }
 
 type symbol_map_type = (string, symbol_info) Hashtbl.t

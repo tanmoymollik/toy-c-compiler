@@ -69,9 +69,15 @@ type expression =
   | FunctionCall of identifier * expression list
 [@@deriving show]
 
+type storage_class =
+  | Static
+  | Extern
+[@@deriving show]
+
 type variable_decl =
   { name : identifier
   ; init : expression option
+  ; storage : storage_class option
   }
 [@@deriving show]
 
@@ -125,6 +131,7 @@ and function_decl =
   { name : identifier
   ; params : identifier list
   ; body : block option
+  ; storage : storage_class option
   }
 [@@deriving show]
 
@@ -133,4 +140,4 @@ and declaration =
   | VarDecl of variable_decl
 [@@deriving show]
 
-type program = Program of function_decl list [@@deriving show]
+type program = Program of declaration list [@@deriving show]

@@ -2,8 +2,11 @@ open X64_ast
 
 let indent = String.make 4 ' '
 let platform = ref Platform.Mac
-let emit_function_name name = if !platform = Platform.Linux then name else "_" ^ name
-let extern_funcs : (string, bool) Hashtbl.t = Hashtbl.create 10
+let emit_platform_name name = if !platform = Platform.Linux then name else "_" ^ name
+let extern_decls : (string, bool) Hashtbl.t = Hashtbl.create 10
+let data_section = Stack.create ()
+let bss_section = Stack.create ()
+let text_section = Stack.create ()
 
 let emit_identifier = function
   | Identifier iden -> iden
@@ -86,6 +89,14 @@ let emit_operand = function
     if i >= 0
     then Printf.sprintf "%s [rbp - %d]" (emit_operand_size sz) i
     else Printf.sprintf "%s [rbp + %d]" (emit_operand_size sz) (-i)
+  | Data iden, sz ->
+    let iden = emit_identifier iden in
+    let platform_name = emit_platform_name iden in
+    (match Hashtbl.find_opt Core.symbol_map iden with
+     | None | Some Core.{ attrs = StaticAttr { init = NoInitial; _ }; _ } ->
+       Hashtbl.replace extern_decls platform_name true
+     | _ -> ());
+    Printf.sprintf "[rel %s %s]" (emit_operand_size sz) platform_name
 ;;
 
 let emit_instruction = function
@@ -117,11 +128,11 @@ let emit_instruction = function
   | DeallocStack i -> Printf.sprintf "%sadd rsp, %d" indent i
   | Push operand -> Printf.sprintf "%spush %s" indent (emit_operand operand)
   | Call (X64_ast.Identifier name) ->
-    let platform_name = emit_function_name name in
+    let platform_name = emit_platform_name name in
     let name =
       match Hashtbl.find_opt Core.symbol_map name with
-      | None | Some Core.{ defined = false; _ } ->
-        Hashtbl.add extern_funcs platform_name true;
+      | None | Some Core.{ attrs = FunAttr { defined = false; _ }; _ } ->
+        Hashtbl.replace extern_decls platform_name true;
         platform_name ^ " wrt ..plt"
       | _ -> platform_name
     in
@@ -129,31 +140,64 @@ let emit_instruction = function
   | Ret -> Printf.sprintf "%sleave\n%sret" indent indent
 ;;
 
-let emit_function_prologue = Printf.sprintf "%spush rbp\n%smov rbp, rsp\n" indent indent
+let emit_static_var = function
+  | StaticVar { name = Identifier iden; global; init } ->
+    let iden = emit_platform_name iden in
+    (if global then "global " ^ iden ^ "\n" else "")
+    ^ (iden ^ ":\n")
+    ^ Printf.sprintf "%s%s dw %s" indent iden (string_of_int init)
+  | _ -> assert false
+;;
 
-let emit_function_def = function
-  | Function { name = Identifier name; body } ->
-    let name = emit_function_name name in
-    Printf.sprintf "global %s\n%s:\n" name name
-    ^ emit_function_prologue
-    ^ (List.map emit_instruction body |> String.concat "\n")
+let emit_top_level = function
+  | Function { name = Identifier name; global; body } ->
+    let name = emit_platform_name name in
+    let emit_function_prologue =
+      Printf.sprintf "%spush rbp\n%smov rbp, rsp\n" indent indent
+    in
+    let entry =
+      (if global then "global " ^ name ^ "\n" else "")
+      ^ (name ^ ":\n")
+      ^ emit_function_prologue
+      ^ (List.map emit_instruction body |> String.concat "\n")
+    in
+    Stack.push entry text_section
+  | StaticVar { name = Identifier iden; global; init = 0 } ->
+    let iden = emit_platform_name iden in
+    let entry =
+      (indent ^ "align 4\n")
+      ^ (if global then "global " ^ iden ^ "\n" else "")
+      ^ Printf.sprintf "%s%s resd 1" indent iden
+    in
+    Stack.push entry bss_section
+  | StaticVar { name = Identifier iden; global; init } ->
+    let iden = emit_platform_name iden in
+    let entry =
+      (indent ^ "align 4\n")
+      ^ (if global then "global " ^ iden ^ "\n" else "")
+      ^ Printf.sprintf "%s%s dd %s" indent iden (string_of_int init)
+    in
+    Stack.push entry data_section
 ;;
 
 let emit_program plt = function
-  | Program fns ->
+  | Program tns ->
     platform := plt;
-    let func_bodies = List.map emit_function_def fns in
+    List.iter emit_top_level tns;
     let f k _ acc = ("extern " ^ k) :: acc in
-    let extern_decls = Hashtbl.fold f extern_funcs [] in
-    let prog_epilogue =
-      if !platform = Platform.Linux
-      then ""
-      (* then "\n\nsection .note.GNU-stack,\"\",@progbits\n" *)
-      else ""
-    in
-    "section .text\n"
+    let extern_decls = Hashtbl.fold f extern_decls [] in
+    let f acc e = e :: acc in
+    let data_body = Stack.fold f [] data_section in
+    let bss_body = Stack.fold f [] bss_section in
+    let text_body = Stack.fold f [] text_section in
+    "section .data\n"
+    ^ String.concat "\n\n" data_body
+    ^ (if List.length data_body > 0 then "\n\n" else "\n")
+    ^ "section .bss\n"
+    ^ String.concat "\n\n" bss_body
+    ^ (if List.length bss_body > 0 then "\n\n" else "\n")
+    ^ "section .text\n"
     ^ String.concat "\n" extern_decls
-    ^ "\n\n"
-    ^ String.concat "\n\n" func_bodies
-    ^ prog_epilogue
+    ^ (if List.length extern_decls > 0 then "\n\n" else "\n")
+    ^ String.concat "\n\n" text_body
 ;;

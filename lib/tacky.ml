@@ -58,12 +58,18 @@ type instruction =
       }
 [@@deriving show]
 
-type function_def =
+type top_level =
   | Function of
       { name : identifier
+      ; global : bool
       ; params : identifier list
       ; body : instruction list
       }
+  | StaticVar of
+      { name : identifier
+      ; global : bool
+      ; init : int
+      }
 [@@deriving show]
 
-type program = Program of function_def list [@@deriving show]
+type program = Program of top_level list [@@deriving show]

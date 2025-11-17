@@ -25,6 +25,8 @@ rule read =
   | "switch"   { Parser.SWITCH }
   | "case"     { Parser.CASE }
   | "default"  { Parser.DEFAULT }
+  | "static"   { Parser.STATIC }
+  | "extern"   { Parser.EXTERN }
   | '('        { Parser.LPAREN }
   | ')'        { Parser.RPAREN }
   | '{'        { Parser.LBRACE }

@@ -16,12 +16,8 @@ let exists_var_iden (iden_map : iden_map_type) iden =
   | _ -> false
 ;;
 
-let add_var_iden (iden_map : iden_map_type) k v =
-  Hashtbl.add iden_map k { name = v; from_curr_scope = true; has_linkage = false }
-;;
-
-let add_fun_iden (iden_map : iden_map_type) k v =
-  Hashtbl.add iden_map k { name = v; from_curr_scope = true; has_linkage = true }
+let add_iden (iden_map : iden_map_type) k v linkage =
+  Hashtbl.replace iden_map k { name = v; from_curr_scope = true; has_linkage = linkage }
 ;;
 
 let get_iden (iden_map : iden_map_type) iden =
@@ -79,24 +75,35 @@ let rec resolve_expression iden_map = function
     C_ast.FunctionCall (name, List.map (resolve_expression iden_map) exps)
 ;;
 
-let resolve_variable_name iden_map = function
-  | C_ast.Identifier name ->
-    if exists_var_iden iden_map name
-    then raise (SemanticError ("Duplicate identifier - " ^ name));
-    let nw_name = make_unique_name name in
-    add_var_iden iden_map name nw_name;
-    C_ast.Identifier nw_name
+let resolve_block_scope_variable_decl iden_map = function
+  | C_ast.{ name = C_ast.Identifier name; init; storage } as ret ->
+    (match Hashtbl.find_opt iden_map name with
+     | Some prev_entry ->
+       if
+         prev_entry.from_curr_scope
+         && not (prev_entry.has_linkage && storage = Some C_ast.Extern)
+       then raise (SemanticError ("Conflicting local declaration - " ^ name))
+     | None -> ());
+    if storage = Some C_ast.Extern
+    then (
+      add_iden iden_map name name true;
+      ret)
+    else (
+      let nw_name = make_unique_name name in
+      add_iden iden_map name nw_name false;
+      let name = C_ast.Identifier nw_name in
+      let init = Option.map (resolve_expression iden_map) init in
+      C_ast.{ name; init; storage })
 ;;
 
-let resolve_variable_decl iden_map = function
-  | C_ast.{ name; init } ->
-    let name = resolve_variable_name iden_map name in
-    let init = Option.map (resolve_expression iden_map) init in
-    C_ast.{ name; init }
+let resolve_file_scope_variable_decl iden_map = function
+  | C_ast.{ name = C_ast.Identifier name; init; storage } ->
+    add_iden iden_map name name true;
+    C_ast.{ name = C_ast.Identifier name; init; storage }
 ;;
 
 let resolve_for_init iden_map = function
-  | C_ast.InitDecl d -> C_ast.InitDecl (resolve_variable_decl iden_map d)
+  | C_ast.InitDecl d -> C_ast.InitDecl (resolve_block_scope_variable_decl iden_map d)
   | C_ast.InitExp e ->
     let e = Option.map (resolve_expression iden_map) e in
     C_ast.InitExp e
@@ -137,36 +144,50 @@ let rec resolve_statement iden_map = function
 
 and resolve_block_item iden_map = function
   | C_ast.S s -> C_ast.S (resolve_statement iden_map s)
-  | C_ast.D d -> C_ast.D (resolve_declaration iden_map d)
+  | C_ast.D d -> C_ast.D (resolve_declaration iden_map true d)
 
 and resolve_block iden_map = function
   | C_ast.Block items -> C_ast.Block (List.map (resolve_block_item iden_map) items)
 
 and resolve_function_decl iden_map nested = function
-  | C_ast.{ name = C_ast.Identifier iden; params; body } ->
+  | C_ast.{ name = C_ast.Identifier iden; params; body; storage } ->
     if nested && Option.is_some body
     then raise (SemanticError ("Nested function definition - " ^ iden));
+    if nested && storage = Some C_ast.Static
+    then raise (SemanticError ("Nested static function - " ^ iden));
     let info = Hashtbl.find_opt iden_map iden in
     (match info with
      | Some { from_curr_scope = true; has_linkage = false; _ } ->
        raise (SemanticError ("Duplicate identifier - " ^ iden))
      | _ -> ());
-    add_fun_iden iden_map iden iden;
+    add_iden iden_map iden iden true;
     let inner_map = copy_iden_map iden_map in
-    let params = List.map (resolve_variable_name inner_map) params in
+    let resolve_param iden_map = function
+      | C_ast.Identifier name ->
+        if exists_var_iden iden_map name
+        then raise (SemanticError ("Duplicate function param - " ^ name));
+        let nw_name = make_unique_name name in
+        add_iden iden_map name nw_name false;
+        C_ast.Identifier nw_name
+    in
+    let params = List.map (resolve_param inner_map) params in
     C_ast.
       { name = C_ast.Identifier iden
       ; params
       ; body = Option.map (resolve_block inner_map) body
+      ; storage
       }
 
-and resolve_declaration iden_map = function
-  | C_ast.FunDecl f -> C_ast.FunDecl (resolve_function_decl iden_map true f)
-  | C_ast.VarDecl v -> C_ast.VarDecl (resolve_variable_decl iden_map v)
+and resolve_declaration iden_map nested = function
+  | C_ast.FunDecl f -> C_ast.FunDecl (resolve_function_decl iden_map nested f)
+  | C_ast.VarDecl v ->
+    if nested
+    then C_ast.VarDecl (resolve_block_scope_variable_decl iden_map v)
+    else C_ast.VarDecl (resolve_file_scope_variable_decl iden_map v)
 ;;
 
 let resolve_program = function
-  | C_ast.Program fns ->
+  | C_ast.Program dns ->
     let iden_map : iden_map_type = Hashtbl.create 10 in
-    C_ast.Program (List.map (resolve_function_decl iden_map false) fns)
+    C_ast.Program (List.map (resolve_declaration iden_map false) dns)
 ;;

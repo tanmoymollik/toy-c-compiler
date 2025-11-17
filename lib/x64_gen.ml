@@ -67,7 +67,11 @@ let gen_stack_for_var fun_name = function
 
 let gen_value fun_name = function
   | Tacky.Constant c -> X64_ast.Imm c, X64_ast.DWord
-  | Tacky.Var var -> gen_stack_for_var fun_name var
+  | Tacky.Var (Tacky.Identifier iden) ->
+    (match Hashtbl.find_opt Core.symbol_map iden with
+     | Some Core.{ attrs = Core.StaticAttr _; _ } ->
+       X64_ast.Data (X64_ast.Identifier iden), X64_ast.DWord
+     | _ -> gen_stack_for_var fun_name (Tacky.Identifier iden))
 ;;
 
 let gen_instruction fun_name = function
@@ -186,11 +190,12 @@ let gen_instruction fun_name = function
 let fix_ins_cmp = function
   (* It is helpful to consider lhs as dst and rhs as src to better understand the semantics. *)
   | X64_ast.Cmp { lhs; rhs } as ret ->
-    (match lhs, rhs with
-     | (X64_ast.Imm _, sz), _ ->
+    (match rhs, lhs with
+     | _, (X64_ast.Imm _, sz) ->
        let tmp_lhs = X64_ast.Reg X64_ast.R11, sz in
        [ X64_ast.Mov { src = lhs; dst = tmp_lhs }; X64_ast.Cmp { lhs = tmp_lhs; rhs } ]
-     | _, (Stack _, sz) ->
+     | (X64_ast.Stack _, sz | X64_ast.Data _, sz), (X64_ast.Stack _, _ | X64_ast.Data _, _)
+       ->
        let tmp_rhs = X64_ast.Reg X64_ast.R10, sz in
        [ X64_ast.Mov { src = rhs; dst = tmp_rhs }; X64_ast.Cmp { lhs; rhs = tmp_rhs } ]
      | _ -> [ ret ])
@@ -200,7 +205,8 @@ let fix_ins_cmp = function
 let fix_instruction = function
   | X64_ast.Mov { src; dst } as ret ->
     (match src, dst with
-     | (X64_ast.Stack _, sz), (X64_ast.Stack _, _) ->
+     | (X64_ast.Stack _, sz | X64_ast.Data _, sz), (X64_ast.Stack _, _ | X64_ast.Data _, _)
+       ->
        let tmp_src = X64_ast.Reg X64_ast.R10, sz in
        [ X64_ast.Mov { src; dst = tmp_src }; X64_ast.Mov { src = tmp_src; dst } ]
      | _ -> [ ret ])
@@ -208,17 +214,17 @@ let fix_instruction = function
   | X64_ast.Binary { bop; src; dst } as ret ->
     (match bop, src, dst with
      | ( (X64_ast.Add | X64_ast.Sub | X64_ast.And | X64_ast.Or | X64_ast.Xor)
-       , (X64_ast.Stack _, sz)
-       , (X64_ast.Stack _, _) ) ->
+       , (X64_ast.Stack _, sz | X64_ast.Data _, sz)
+       , (X64_ast.Stack _, _ | X64_ast.Data _, _) ) ->
        let tmp_src = X64_ast.Reg X64_ast.R10, sz in
        [ X64_ast.Mov { src; dst = tmp_src }; X64_ast.Binary { bop; src = tmp_src; dst } ]
-     | X64_ast.Imul, _, (X64_ast.Stack _, sz) ->
+     | X64_ast.Imul, _, (X64_ast.Stack _, sz | X64_ast.Data _, sz) ->
        let tmp_dst = X64_ast.Reg X64_ast.R11, sz in
        [ X64_ast.Mov { src = dst; dst = tmp_dst }
        ; X64_ast.Binary { bop; src; dst = tmp_dst }
        ; X64_ast.Mov { src = tmp_dst; dst }
        ]
-     | _, _, _ -> [ ret ])
+     | _ -> [ ret ])
   | X64_ast.Idiv src as ret ->
     (match src with
      | X64_ast.Imm _, sz ->
@@ -228,8 +234,8 @@ let fix_instruction = function
   | _ as ret -> [ ret ]
 ;;
 
-let gen_function_def = function
-  | Tacky.Function { name = Tacky.Identifier name; params; body } ->
+let gen_top_level = function
+  | Tacky.Function { name = Tacky.Identifier name; global; params; body } ->
     let arg_regs = X64_ast.arg_regs in
     let arg_regs_len = X64_ast.arg_regs_len in
     let reg_params, stk_params =
@@ -255,9 +261,12 @@ let gen_function_def = function
     let alloc_stack = if alloc_stack > 0 then 16 * ((alloc_stack / 16) + 1) else 0 in
     let ins = if alloc_stack > 0 then X64_ast.AllocStack alloc_stack :: body else body in
     let body = List.concat_map fix_instruction ins in
-    X64_ast.Function { name = X64_ast.Identifier name; body }
+    X64_ast.Function { name = X64_ast.Identifier name; global; body }
+  | Tacky.StaticVar { name; global; init } ->
+    let name = gen_identifier name in
+    X64_ast.StaticVar { name; global; init }
 ;;
 
 let gen_program = function
-  | Tacky.Program fns -> X64_ast.Program (List.map gen_function_def fns)
+  | Tacky.Program tpns -> X64_ast.Program (List.map gen_top_level tpns)
 ;;

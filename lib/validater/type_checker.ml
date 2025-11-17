@@ -30,19 +30,91 @@ let rec typecheck_expression symbol_map = function
     ()
 ;;
 
-let typecheck_variable symbol_map = function
-  | C_ast.Identifier name -> Hashtbl.add symbol_map name Core.{ tp = Int; defined = true }
+let typecheck_file_scope_variable_decl symbol_map = function
+  | C_ast.{ name = C_ast.Identifier iden; init; storage } ->
+    (* init is a constant. No need to typecheck expression later. *)
+    let initial_value =
+      ref
+        (match init with
+         | Some (C_ast.Constant i) -> Core.Initial i
+         | None -> if storage = Some C_ast.Extern then Core.NoInitial else Core.Tentative
+         | _ ->
+           raise
+             (SemanticError ("Non-constant initializer for file-scope variable - " ^ iden)))
+    in
+    let global = ref (storage <> Some C_ast.Static) in
+    (match Hashtbl.find_opt symbol_map iden with
+     | Some Core.{ tp; attrs } ->
+       if tp <> Core.Int
+       then raise (SemanticError ("Function declared as variable - " ^ iden));
+       (match attrs with
+        | StaticAttr attrs ->
+          if storage = Some C_ast.Extern
+          then global := attrs.global
+          else if attrs.global <> !global
+          then raise (SemanticError ("Conflicting variable linkage - " ^ iden));
+          let is_constant init =
+            match init with
+            | Core.Initial _ -> true
+            | _ -> false
+          in
+          if is_constant attrs.init
+          then
+            if is_constant !initial_value
+            then raise (SemanticError ("Redefinition of constant variable - " ^ iden))
+            else initial_value := attrs.init
+          else if (not (is_constant !initial_value)) && attrs.init = Core.Tentative
+          then initial_value := Core.Tentative
+        | _ -> assert false)
+     | _ -> ());
+    let attrs = Core.StaticAttr { init = !initial_value; global = !global } in
+    let info = Core.{ tp = Core.Int; attrs } in
+    Hashtbl.replace symbol_map iden info
 ;;
 
-let typecheck_variable_decl symbol_map = function
-  | C_ast.{ name; init } ->
-    typecheck_variable symbol_map name;
-    let _ = Option.map (typecheck_expression symbol_map) init in
-    ()
+let typecheck_block_scope_variable_decl symbol_map = function
+  | C_ast.{ name = C_ast.Identifier iden; init; storage } ->
+    (match storage with
+     | Some C_ast.Extern ->
+       if init <> None
+       then
+         raise
+           (SemanticError ("Initializer for local extern variable declaration - " ^ iden));
+       (match Hashtbl.find_opt symbol_map iden with
+        | Some Core.{ tp; _ } ->
+          if tp <> Core.Int
+          then raise (SemanticError ("Function declared as variable - " ^ iden))
+        | None ->
+          let info =
+            Core.{ tp = Core.Int; attrs = StaticAttr { init = NoInitial; global = true } }
+          in
+          Hashtbl.replace symbol_map iden info)
+     | Some C_ast.Static ->
+       let initial_value =
+         match init with
+         | Some (C_ast.Constant i) -> Core.Initial i
+         | None -> Core.Initial 0
+         | _ ->
+           raise
+             (SemanticError
+                ("Non-constant initializer for local static variable - " ^ iden))
+       in
+       let info =
+         Core.
+           { tp = Core.Int; attrs = StaticAttr { init = initial_value; global = false } }
+       in
+       Hashtbl.replace symbol_map iden info
+     | None ->
+       let info = Core.{ tp = Core.Int; attrs = LocalAttr } in
+       Hashtbl.replace symbol_map iden info;
+       let _ = Option.map (typecheck_expression symbol_map) init in
+       ())
 ;;
 
 let typecheck_for_init symbol_map = function
-  | C_ast.InitDecl d -> typecheck_variable_decl symbol_map d
+  | C_ast.InitDecl d ->
+    if d.storage <> None then raise (SemanticError "Storage specifier in for-loop init");
+    typecheck_block_scope_variable_decl symbol_map d
   | C_ast.InitExp e ->
     let _ = Option.map (typecheck_expression symbol_map) e in
     ()
@@ -80,7 +152,7 @@ let rec typecheck_statement symbol_map = function
 
 and typecheck_block_item symbol_map = function
   | C_ast.S s -> typecheck_statement symbol_map s
-  | C_ast.D d -> typecheck_declaration symbol_map d
+  | C_ast.D d -> typecheck_declaration symbol_map true d
 
 and typecheck_block symbol_map = function
   | C_ast.Block items ->
@@ -88,34 +160,51 @@ and typecheck_block symbol_map = function
     ()
 
 and typecheck_function_decl symbol_map = function
-  | C_ast.{ name = C_ast.Identifier iden; params; body } ->
+  | C_ast.{ name = C_ast.Identifier iden; params; body; storage } ->
     let fun_type = Core.FunType (List.length params) in
     let has_body = Option.is_some body in
     let already_defined = ref false in
+    let global = ref (storage <> Some C_ast.Static) in
     (match Hashtbl.find_opt symbol_map iden with
-     | Some Core.{ tp; defined } ->
+     | Some Core.{ tp; attrs } ->
        if fun_type <> tp
        then raise (SemanticError ("Incomplete function declaration - " ^ iden));
-       already_defined := defined;
-       if defined && has_body
-       then raise (SemanticError ("Function is defined more thand once - " ^ iden))
+       (match attrs with
+        | Core.FunAttr attrs ->
+          already_defined := attrs.defined;
+          if !already_defined && has_body
+          then raise (SemanticError ("Function is defined more thand once - " ^ iden));
+          if attrs.global && storage = Some C_ast.Static
+          then
+            raise
+              (SemanticError ("Static function declaration follows non-static - " ^ iden));
+          global := attrs.global
+        | _ -> assert false)
      | _ -> ());
-    let info = Core.{ tp = fun_type; defined = !already_defined || has_body } in
-    Hashtbl.add symbol_map iden info;
-    (match body with
-     | Some body ->
-       let _ = List.map (typecheck_variable symbol_map) params in
-       typecheck_block symbol_map body
-     | None -> ());
+    let attrs =
+      Core.FunAttr { defined = !already_defined || has_body; global = !global }
+    in
+    let info = Core.{ tp = fun_type; attrs } in
+    Hashtbl.replace symbol_map iden info;
+    let typecheck_param symbol_map = function
+      | C_ast.Identifier name ->
+        Hashtbl.replace symbol_map name Core.{ tp = Int; attrs = LocalAttr }
+    in
+    let _ = List.map (typecheck_param symbol_map) params in
+    let f body = typecheck_block symbol_map body in
+    let _ = Option.map f body in
     ()
 
-and typecheck_declaration symbol_map = function
+and typecheck_declaration symbol_map nested = function
   | C_ast.FunDecl f -> typecheck_function_decl symbol_map f
-  | C_ast.VarDecl v -> typecheck_variable_decl symbol_map v
+  | C_ast.VarDecl v ->
+    if nested
+    then typecheck_block_scope_variable_decl symbol_map v
+    else typecheck_file_scope_variable_decl symbol_map v
 ;;
 
 let typecheck_program = function
-  | C_ast.Program fns as ret ->
-    let _ = List.map (typecheck_function_decl Core.symbol_map) fns in
+  | C_ast.Program dns as ret ->
+    let _ = List.map (typecheck_declaration Core.symbol_map false) dns in
     ret
 ;;

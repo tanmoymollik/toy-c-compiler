@@ -49,6 +49,7 @@ type operand_type =
   | Imm of int
   | Reg of reg
   | Stack of int
+  | Data of identifier
 [@@deriving show]
 
 type operand_size =
@@ -88,11 +89,17 @@ type instruction =
   | Ret
 [@@deriving show]
 
-type function_def =
+type top_level =
   | Function of
       { name : identifier
+      ; global : bool
       ; body : instruction list
+      }
+  | StaticVar of
+      { name : identifier
+      ; global : bool
+      ; init : int
       }
 [@@deriving show]
 
-type program = Program of function_def list [@@deriving show]
+type program = Program of top_level list [@@deriving show]
