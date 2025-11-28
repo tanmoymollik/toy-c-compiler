@@ -100,33 +100,35 @@ let emit_operand = function
 ;;
 
 let emit_instruction = function
-  | Mov { src; dst } ->
-    Printf.sprintf "%smov %s, %s" indent (emit_operand dst) (emit_operand src)
-  | Unary (uop, src) -> Printf.sprintf "%s%s %s" indent (emit_uop uop) (emit_operand src)
-  | Binary { bop; src; dst } ->
+  | Mov { src; dst; sz } ->
+    Printf.sprintf "%smov %s, %s" indent (emit_operand (dst, sz)) (emit_operand (src, sz))
+  | Unary (uop, src, sz) ->
+    Printf.sprintf "%s%s %s" indent (emit_uop uop) (emit_operand (src, sz))
+  | Binary { bop; src; dst; sz } ->
+    let src_sz =
+      match bop with
+      | Sal | Sar -> Byte
+      | _ -> sz
+    in
     Printf.sprintf
       "%s%s %s, %s"
       indent
       (emit_bop bop)
-      (emit_operand dst)
-      (emit_operand src)
-  | Cmp { lhs; rhs } ->
-    Printf.sprintf "%scmp %s, %s" indent (emit_operand lhs) (emit_operand rhs)
-  | Idiv operand -> Printf.sprintf "%sidiv %s" indent (emit_operand operand)
+      (emit_operand (dst, sz))
+      (emit_operand (src, src_sz))
+  | Cmp { lhs; rhs; sz } ->
+    Printf.sprintf "%scmp %s, %s" indent (emit_operand (lhs, sz)) (emit_operand (rhs, sz))
+  | Idiv (operand, sz) -> Printf.sprintf "%sidiv %s" indent (emit_operand (operand, sz))
   | Cdq -> Printf.sprintf "%scdq" indent
   | Jmp iden -> Printf.sprintf "%sjmp .L%s" indent (emit_identifier iden)
   | JmpC (cc, iden) ->
     Printf.sprintf "%sj%s .L%s" indent (emit_cond_code cc) (emit_identifier iden)
-  | SetC (cc, (operand_type, _)) ->
-    Printf.sprintf
-      "%sset%s %s"
-      indent
-      (emit_cond_code cc)
-      (emit_operand (operand_type, Byte))
+  | SetC (cc, operand) ->
+    Printf.sprintf "%sset%s %s" indent (emit_cond_code cc) (emit_operand (operand, Byte))
   | Label iden -> Printf.sprintf ".L%s:" (emit_identifier iden)
   | AllocStack i -> Printf.sprintf "%ssub rsp, %d" indent i
   | DeallocStack i -> Printf.sprintf "%sadd rsp, %d" indent i
-  | Push operand -> Printf.sprintf "%spush %s" indent (emit_operand operand)
+  | Push operand -> Printf.sprintf "%spush %s" indent (emit_operand (operand, QWord))
   | Call (X64_ast.Identifier name) ->
     let platform_name = emit_platform_name name in
     let name =

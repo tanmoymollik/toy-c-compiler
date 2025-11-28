@@ -45,7 +45,7 @@ let is_arg_reg = function
   | _ -> false
 ;;
 
-type operand_type =
+type operand =
   | Imm of int
   | Reg of reg
   | Stack of int
@@ -59,24 +59,25 @@ type operand_size =
   | QWord
 [@@deriving show]
 
-type operand = operand_type * operand_size [@@deriving show]
-
 type instruction =
   | Mov of
       { src : operand
       ; dst : operand (* dst is always guaranteed to be Stack _. *)
+      ; sz : operand_size
       }
-  | Unary of unary_op * operand
+  | Unary of unary_op * operand * operand_size
   | Binary of
       { bop : binary_op
       ; src : operand
       ; dst : operand (* dst is always guaranteed to be Stack _. *)
+      ; sz : operand_size
       }
   | Cmp of
       { lhs : operand
       ; rhs : operand
+      ; sz : operand_size
       }
-  | Idiv of operand
+  | Idiv of operand * operand_size
   | Cdq
   | Jmp of identifier
   | JmpC of cond_code * identifier

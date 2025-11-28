@@ -62,22 +62,22 @@ let gen_cond_code = function
 let gen_stack_for_var fun_name = function
   | Tacky.Identifier iden ->
     let addr = get_stack_address fun_name iden in
-    X64_ast.Stack addr, X64_ast.DWord
+    X64_ast.Stack addr
 ;;
 
 let gen_value fun_name = function
-  | Tacky.Constant c -> X64_ast.Imm c, X64_ast.DWord
+  | Tacky.Constant c -> X64_ast.Imm c
   | Tacky.Var (Tacky.Identifier iden) ->
     (match Hashtbl.find_opt Core.symbol_map iden with
      | Some Core.{ attrs = Core.StaticAttr _; _ } ->
-       X64_ast.Data (X64_ast.Identifier iden), X64_ast.DWord
+       X64_ast.Data (X64_ast.Identifier iden)
      | _ -> gen_stack_for_var fun_name (Tacky.Identifier iden))
 ;;
 
 let gen_instruction fun_name = function
   | Tacky.Ret v ->
     [ X64_ast.Mov
-        { src = gen_value fun_name v; dst = X64_ast.Reg X64_ast.Ax, X64_ast.DWord }
+        { src = gen_value fun_name v; dst = X64_ast.Reg X64_ast.Ax; sz = X64_ast.DWord }
     ; X64_ast.Ret
     ]
   | Tacky.Unary { dst = Tacky.Constant _; _ } -> assert false
@@ -85,14 +85,18 @@ let gen_instruction fun_name = function
   | Tacky.Unary { uop; src; dst } ->
     (match uop with
      | Tacky.Complement | Tacky.Negate ->
-       [ X64_ast.Mov { src = gen_value fun_name src; dst = gen_value fun_name dst }
-       ; X64_ast.Unary (gen_uop uop, gen_value fun_name dst)
+       [ X64_ast.Mov
+           { src = gen_value fun_name src
+           ; dst = gen_value fun_name dst
+           ; sz = X64_ast.DWord
+           }
+       ; X64_ast.Unary (gen_uop uop, gen_value fun_name dst, X64_ast.DWord)
        ]
      | Tacky.Not ->
        let dst = gen_value fun_name dst in
-       let zr = X64_ast.Imm 0, X64_ast.DWord in
-       [ X64_ast.Cmp { lhs = gen_value fun_name src; rhs = zr }
-       ; X64_ast.Mov { src = zr; dst }
+       let zr = X64_ast.Imm 0 in
+       [ X64_ast.Cmp { lhs = gen_value fun_name src; rhs = zr; sz = X64_ast.DWord }
+       ; X64_ast.Mov { src = zr; dst; sz = X64_ast.DWord }
        ; X64_ast.SetC (E, dst)
        ])
   | Tacky.Binary { dst = Tacky.Constant _; _ } -> assert false
@@ -100,19 +104,25 @@ let gen_instruction fun_name = function
   | Tacky.Binary { bop; src1; src2; dst } ->
     (match bop with
      | Tacky.Div ->
-       let tmp_dst = X64_ast.Reg X64_ast.Ax, X64_ast.DWord in
-       [ X64_ast.Mov { src = gen_value fun_name src1; dst = tmp_dst }
+       let tmp_dst = X64_ast.Reg X64_ast.Ax in
+       [ X64_ast.Mov { src = gen_value fun_name src1; dst = tmp_dst; sz = X64_ast.DWord }
        ; X64_ast.Cdq
-       ; X64_ast.Idiv (gen_value fun_name src2)
-       ; X64_ast.Mov { src = tmp_dst; dst = gen_value fun_name dst }
+       ; X64_ast.Idiv (gen_value fun_name src2, X64_ast.DWord)
+       ; X64_ast.Mov { src = tmp_dst; dst = gen_value fun_name dst; sz = X64_ast.DWord }
        ]
      | Tacky.Rem ->
        [ X64_ast.Mov
-           { src = gen_value fun_name src1; dst = X64_ast.Reg X64_ast.Ax, X64_ast.DWord }
+           { src = gen_value fun_name src1
+           ; dst = X64_ast.Reg X64_ast.Ax
+           ; sz = X64_ast.DWord
+           }
        ; X64_ast.Cdq
-       ; X64_ast.Idiv (gen_value fun_name src2)
+       ; X64_ast.Idiv (gen_value fun_name src2, X64_ast.DWord)
        ; X64_ast.Mov
-           { src = X64_ast.Reg X64_ast.Dx, X64_ast.DWord; dst = gen_value fun_name dst }
+           { src = X64_ast.Reg X64_ast.Dx
+           ; dst = gen_value fun_name dst
+           ; sz = X64_ast.DWord
+           }
        ]
      | Tacky.Equal
      | Tacky.NEqual
@@ -121,35 +131,42 @@ let gen_instruction fun_name = function
      | Tacky.Greater
      | Tacky.GEqual ->
        let dst = gen_value fun_name dst in
-       let zr = X64_ast.Imm 0, X64_ast.DWord in
-       [ X64_ast.Cmp { lhs = gen_value fun_name src1; rhs = gen_value fun_name src2 }
-       ; X64_ast.Mov { src = zr; dst }
+       let zr = X64_ast.Imm 0 in
+       [ X64_ast.Cmp
+           { lhs = gen_value fun_name src1
+           ; rhs = gen_value fun_name src2
+           ; sz = X64_ast.DWord
+           }
+       ; X64_ast.Mov { src = zr; dst; sz = X64_ast.DWord }
        ; X64_ast.SetC (gen_cond_code bop, dst)
        ]
      | Tacky.Add | Tacky.Sub | Tacky.Mul | Tacky.And | Tacky.Or | Tacky.Xor ->
        let dst = gen_value fun_name dst in
-       [ X64_ast.Mov { src = gen_value fun_name src1; dst }
-       ; X64_ast.Binary { bop = gen_bop bop; src = gen_value fun_name src2; dst }
+       [ X64_ast.Mov { src = gen_value fun_name src1; dst; sz = X64_ast.DWord }
+       ; X64_ast.Binary
+           { bop = gen_bop bop; src = gen_value fun_name src2; dst; sz = X64_ast.DWord }
        ]
      | Tacky.Lsft | Tacky.Rsft ->
-       let src2_t, src2_s = gen_value fun_name src2 in
-       let tmp_src2_t = X64_ast.Reg X64_ast.Cx in
+       let src2 = gen_value fun_name src2 in
+       let tmp_src2 = X64_ast.Reg X64_ast.Cx in
        let dst = gen_value fun_name dst in
-       [ X64_ast.Mov { src = gen_value fun_name src1; dst }
-       ; X64_ast.Mov { src = src2_t, src2_s; dst = tmp_src2_t, src2_s }
-       ; X64_ast.Binary { bop = gen_bop bop; src = tmp_src2_t, X64_ast.Byte; dst }
+       [ X64_ast.Mov { src = gen_value fun_name src1; dst; sz = X64_ast.DWord }
+       ; X64_ast.Mov { src = src2; dst = tmp_src2; sz = X64_ast.DWord }
+       ; X64_ast.Binary { bop = gen_bop bop; src = tmp_src2; dst; sz = X64_ast.DWord }
        ])
   | Tacky.Copy { src; dst } ->
-    [ X64_ast.Mov { src = gen_value fun_name src; dst = gen_value fun_name dst } ]
+    [ X64_ast.Mov
+        { src = gen_value fun_name src; dst = gen_value fun_name dst; sz = X64_ast.DWord }
+    ]
   | Tacky.Jump iden -> [ X64_ast.Jmp (gen_identifier iden) ]
   | Tacky.JumpIfZero (cnd, tgt) ->
-    let zr = X64_ast.Imm 0, X64_ast.DWord in
-    [ X64_ast.Cmp { lhs = gen_value fun_name cnd; rhs = zr }
+    let zr = X64_ast.Imm 0 in
+    [ X64_ast.Cmp { lhs = gen_value fun_name cnd; rhs = zr; sz = X64_ast.DWord }
     ; X64_ast.JmpC (X64_ast.E, gen_identifier tgt)
     ]
   | Tacky.JumpIfNotZero (cnd, tgt) ->
-    let zr = X64_ast.Imm 0, X64_ast.DWord in
-    [ X64_ast.Cmp { lhs = gen_value fun_name cnd; rhs = zr }
+    let zr = X64_ast.Imm 0 in
+    [ X64_ast.Cmp { lhs = gen_value fun_name cnd; rhs = zr; sz = X64_ast.DWord }
     ; X64_ast.JmpC (X64_ast.NE, gen_identifier tgt)
     ]
   | Tacky.Label iden -> [ X64_ast.Label (gen_identifier iden) ]
@@ -160,20 +177,18 @@ let gen_instruction fun_name = function
     let stack_padding = if List.length stk_args mod 2 = 1 then 8 else 0 in
     let stack_alloc = if stack_padding <> 0 then [ X64_ast.AllocStack 8 ] else [] in
     let f ind arg =
-      let src_t, src_s = gen_value fun_name arg in
-      let dst = X64_ast.Reg (List.nth arg_regs ind), src_s in
-      X64_ast.Mov { src = src_t, src_s; dst }
+      let src = gen_value fun_name arg in
+      let dst = X64_ast.Reg (List.nth arg_regs ind) in
+      X64_ast.Mov { src; dst; sz = X64_ast.DWord }
     in
     let reg_arg_ins = List.mapi f reg_args in
     let f arg =
-      let src_t, src_s = gen_value fun_name arg in
-      match src_t with
-      | X64_ast.Imm _ | X64_ast.Reg _ -> [ X64_ast.Push (src_t, X64_ast.QWord) ]
+      let src = gen_value fun_name arg in
+      match src with
+      | X64_ast.Imm _ | X64_ast.Reg _ -> [ X64_ast.Push src ]
       | _ ->
-        let dst_t = X64_ast.Reg X64_ast.Ax in
-        [ X64_ast.Mov { src = src_t, src_s; dst = dst_t, src_s }
-        ; X64_ast.Push (dst_t, X64_ast.QWord)
-        ]
+        let dst = X64_ast.Reg X64_ast.Ax in
+        [ X64_ast.Mov { src; dst; sz = X64_ast.DWord }; X64_ast.Push dst ]
     in
     let stk_arg_ins = List.concat_map f (List.rev stk_args) in
     let fun_call = [ X64_ast.Call (gen_identifier name) ] in
@@ -181,55 +196,59 @@ let gen_instruction fun_name = function
     let stack_dealloc =
       if bytes_to_remove <> 0 then [ X64_ast.DeallocStack bytes_to_remove ] else []
     in
-    let dst_t, dst_s = gen_value fun_name dst in
-    let src = X64_ast.Reg X64_ast.Ax, dst_s in
-    let ret_ins = [ X64_ast.Mov { src; dst = dst_t, dst_s } ] in
+    let dst = gen_value fun_name dst in
+    let src = X64_ast.Reg X64_ast.Ax in
+    let ret_ins = [ X64_ast.Mov { src; dst; sz = DWord } ] in
     stack_alloc @ reg_arg_ins @ stk_arg_ins @ fun_call @ stack_dealloc @ ret_ins
 ;;
 
 let fix_ins_cmp = function
   (* It is helpful to consider lhs as dst and rhs as src to better understand the semantics. *)
-  | X64_ast.Cmp { lhs; rhs } as ret ->
+  | X64_ast.Cmp { lhs; rhs; sz } as ret ->
     (match rhs, lhs with
-     | _, (X64_ast.Imm _, sz) ->
-       let tmp_lhs = X64_ast.Reg X64_ast.R11, sz in
-       [ X64_ast.Mov { src = lhs; dst = tmp_lhs }; X64_ast.Cmp { lhs = tmp_lhs; rhs } ]
-     | (X64_ast.Stack _, sz | X64_ast.Data _, sz), (X64_ast.Stack _, _ | X64_ast.Data _, _)
-       ->
-       let tmp_rhs = X64_ast.Reg X64_ast.R10, sz in
-       [ X64_ast.Mov { src = rhs; dst = tmp_rhs }; X64_ast.Cmp { lhs; rhs = tmp_rhs } ]
+     | _, X64_ast.Imm _ ->
+       let tmp_lhs = X64_ast.Reg X64_ast.R11 in
+       [ X64_ast.Mov { src = lhs; dst = tmp_lhs; sz }
+       ; X64_ast.Cmp { lhs = tmp_lhs; rhs; sz }
+       ]
+     | (X64_ast.Stack _ | X64_ast.Data _), (X64_ast.Stack _ | X64_ast.Data _) ->
+       let tmp_rhs = X64_ast.Reg X64_ast.R10 in
+       [ X64_ast.Mov { src = rhs; dst = tmp_rhs; sz }
+       ; X64_ast.Cmp { lhs; rhs = tmp_rhs; sz }
+       ]
      | _ -> [ ret ])
   | _ -> assert false
 ;;
 
 let fix_instruction = function
-  | X64_ast.Mov { src; dst } as ret ->
+  | X64_ast.Mov { src; dst; sz } as ret ->
     (match src, dst with
-     | (X64_ast.Stack _, sz | X64_ast.Data _, sz), (X64_ast.Stack _, _ | X64_ast.Data _, _)
-       ->
-       let tmp_src = X64_ast.Reg X64_ast.R10, sz in
-       [ X64_ast.Mov { src; dst = tmp_src }; X64_ast.Mov { src = tmp_src; dst } ]
+     | (X64_ast.Stack _ | X64_ast.Data _), (X64_ast.Stack _ | X64_ast.Data _) ->
+       let tmp_src = X64_ast.Reg X64_ast.R10 in
+       [ X64_ast.Mov { src; dst = tmp_src; sz }; X64_ast.Mov { src = tmp_src; dst; sz } ]
      | _ -> [ ret ])
   | X64_ast.Cmp _ as ret -> fix_ins_cmp ret
-  | X64_ast.Binary { bop; src; dst } as ret ->
+  | X64_ast.Binary { bop; src; dst; sz } as ret ->
     (match bop, src, dst with
      | ( (X64_ast.Add | X64_ast.Sub | X64_ast.And | X64_ast.Or | X64_ast.Xor)
-       , (X64_ast.Stack _, sz | X64_ast.Data _, sz)
-       , (X64_ast.Stack _, _ | X64_ast.Data _, _) ) ->
-       let tmp_src = X64_ast.Reg X64_ast.R10, sz in
-       [ X64_ast.Mov { src; dst = tmp_src }; X64_ast.Binary { bop; src = tmp_src; dst } ]
-     | X64_ast.Imul, _, (X64_ast.Stack _, sz | X64_ast.Data _, sz) ->
-       let tmp_dst = X64_ast.Reg X64_ast.R11, sz in
-       [ X64_ast.Mov { src = dst; dst = tmp_dst }
-       ; X64_ast.Binary { bop; src; dst = tmp_dst }
-       ; X64_ast.Mov { src = tmp_dst; dst }
+       , (X64_ast.Stack _ | X64_ast.Data _)
+       , (X64_ast.Stack _ | X64_ast.Data _) ) ->
+       let tmp_src = X64_ast.Reg X64_ast.R10 in
+       [ X64_ast.Mov { src; dst = tmp_src; sz }
+       ; X64_ast.Binary { bop; src = tmp_src; dst; sz }
+       ]
+     | X64_ast.Imul, _, (X64_ast.Stack _ | X64_ast.Data _) ->
+       let tmp_dst = X64_ast.Reg X64_ast.R11 in
+       [ X64_ast.Mov { src = dst; dst = tmp_dst; sz }
+       ; X64_ast.Binary { bop; src; dst = tmp_dst; sz }
+       ; X64_ast.Mov { src = tmp_dst; dst; sz }
        ]
      | _ -> [ ret ])
-  | X64_ast.Idiv src as ret ->
+  | X64_ast.Idiv (src, sz) as ret ->
     (match src with
-     | X64_ast.Imm _, sz ->
-       let tmp_src = X64_ast.Reg X64_ast.R10, sz in
-       [ X64_ast.Mov { src; dst = tmp_src }; X64_ast.Idiv tmp_src ]
+     | X64_ast.Imm _ ->
+       let tmp_src = X64_ast.Reg X64_ast.R10 in
+       [ X64_ast.Mov { src; dst = tmp_src; sz }; X64_ast.Idiv (tmp_src, sz) ]
      | _ -> [ ret ])
   | _ as ret -> [ ret ]
 ;;
@@ -242,16 +261,15 @@ let gen_top_level = function
       List.take arg_regs_len params, List.drop arg_regs_len params
     in
     let f ind arg =
-      let dst_t, dst_s = gen_stack_for_var name arg in
-      let src_t = X64_ast.Reg (List.nth arg_regs ind) in
-      X64_ast.Mov { src = src_t, dst_s; dst = dst_t, dst_s }
+      let dst = gen_stack_for_var name arg in
+      let src = X64_ast.Reg (List.nth arg_regs ind) in
+      X64_ast.Mov { src; dst; sz = X64_ast.DWord }
     in
     let reg_param_ins = List.mapi f reg_params in
     let f ind arg =
-      let dst_t, _ = gen_stack_for_var name arg in
-      let src_t = X64_ast.Stack (-(16 + (8 * ind))) in
-      let src_s = X64_ast.DWord in
-      X64_ast.Mov { src = src_t, src_s; dst = dst_t, src_s }
+      let dst = gen_stack_for_var name arg in
+      let src = X64_ast.Stack (-(16 + (8 * ind))) in
+      X64_ast.Mov { src; dst; sz = X64_ast.DWord }
     in
     let stk_param_ins = List.mapi f stk_params in
     let body =
