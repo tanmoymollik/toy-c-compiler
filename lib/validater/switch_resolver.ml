@@ -60,8 +60,12 @@ let evaluate_binary_expression bop l r =
 ;;
 
 let rec evaluate_case_expression = function
-  | C_ast.Constant c -> c
+  | C_ast.Constant c ->
+    (match c with
+     | C_ast.ConstInt i -> i
+     | C_ast.ConstLong l -> Int64.to_int l)
   | C_ast.Var _ -> raise (SemanticError "Non-const value for switch-case")
+  | C_ast.Cast _ -> raise (SemanticError "Can't cast in switch-case")
   | C_ast.Unary (uop, exp) -> evaluate_unary_expression uop (evaluate_case_expression exp)
   | C_ast.TUnary _ -> raise (SemanticError "Non-const value for switch-case")
   | C_ast.Binary { bop; lexp; rexp } ->

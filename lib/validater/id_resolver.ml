@@ -44,6 +44,7 @@ let rec resolve_expression iden_map = function
   | C_ast.Constant _ as ret -> ret
   | C_ast.Var (C_ast.Identifier iden) ->
     C_ast.Var (C_ast.Identifier (get_iden iden_map iden))
+  | C_ast.Cast { tgt; exp } -> C_ast.Cast { tgt; exp = resolve_expression iden_map exp }
   | C_ast.Unary (uop, exp) -> C_ast.Unary (uop, resolve_expression iden_map exp)
   | C_ast.TUnary (tuop, prefix, lval) ->
     (match lval with

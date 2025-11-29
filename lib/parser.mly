@@ -1,7 +1,43 @@
+%{
+
+exception Error
+
+type specifier =
+  | IntSpec
+  | LongSpec
+  | StaticSpec
+  | ExternSpec
+  
+let storage specs =
+  let idx_of = function
+    | IntSpec -> 0
+    | LongSpec -> 1
+    | StaticSpec -> 2
+    | ExternSpec -> 3
+  in
+  let cnt = Array.make 4 0 in
+  let f spec = cnt.(idx_of spec) <- cnt.(idx_of spec) + 1 in
+  List.iter f specs;
+  if not (Array.for_all (fun x -> x <= 1) cnt)
+  then raise Error;
+  if cnt.(0) + cnt.(1) = 0
+  then raise Error;
+  if cnt.(2) + cnt.(3) > 1
+  then raise Error;
+  if cnt.(2) = 1
+  then Some C_ast.Static
+  else if cnt.(3) = 1
+  then Some C_ast.Extern
+  else None
+;;
+
+%}
+
 // Token Definitions
 %token <string> IDENT
-%token <int> CONST
-%token INT VOID
+%token <int> CONST_INT
+%token <int64> CONST_LONG
+%token INT LONG VOID
 %token RETURN
 %token IF ELSE
 %token <string> GOTO
@@ -23,7 +59,11 @@
 %token EXCLAMATION
 %token LESS GREATER
 %token DEQUAL NEQUAL LEQUAL GEQUAL
-%token EQUAL PLUS_EQ MINUS_EQ ASTERISK_EQ FSLASH_EQ PERCENT_EQ LSHIFT_EQ RSHIFT_EQ AMPERSAND_EQ PIPE_EQ CARET_EQ
+%token EQUAL
+       PLUS_EQ MINUS_EQ
+       ASTERISK_EQ FSLASH_EQ PERCENT_EQ
+       LSHIFT_EQ RSHIFT_EQ
+       AMPERSAND_EQ PIPE_EQ CARET_EQ
 %token EOF
 
 // Precedence and associativity
@@ -56,31 +96,32 @@ declaration:
   | f = function_decl { C_ast.FunDecl f }
 
 variable_decl:
-  storage = specifier; name = identifier; init = option(pair(EQUAL, expression)); SEMICOLON
+  specs = nonempty_list(specifier); name = identifier; init = option(pair(EQUAL, expression)); SEMICOLON
     {
-      let init = Option.map (fun (_, exp) -> exp) init in C_ast.{ name; init; storage }
+      let init = Option.map (fun (_, exp) -> exp) init in C_ast.{ name; init; storage = storage specs; }
     }
   
-specifier:
-  | INT; storage = option(storage_class)
-    { storage }
-  | storage = option(storage_class); INT
-    { storage }
-    
-%inline storage_class:
-  | STATIC   { C_ast.Static }
-  | EXTERN   { C_ast.Extern }
+%inline specifier:
+  | INT    { IntSpec }
+  | LONG   { LongSpec }
+  | EXTERN { ExternSpec }
+  | STATIC { StaticSpec }
+
+%inline type_specifier:
+  | INT; LONG         { C_ast.Long }
+  | LONG; option(INT) { C_ast.Long }
+  | INT               { C_ast.Int }
 
 function_decl:
-  | storage = specifier; name = identifier; LPAREN; params = param_list; RPAREN; body = block
-    { C_ast.{ name; params; body = Some body; storage; } }
-  | storage = specifier; name = identifier; LPAREN; params = param_list; RPAREN; SEMICOLON
-    { C_ast.{ name; params; body = None; storage; } }
+  | specs = nonempty_list(specifier); name = identifier; LPAREN; params = param_list; RPAREN; body = block
+    { C_ast.{ name; params; body = Some body; storage = storage specs; } }
+  | specs = nonempty_list(specifier); name = identifier; LPAREN; params = param_list; RPAREN; SEMICOLON
+    { C_ast.{ name; params; body = None; storage = storage specs; } }
 
 param_list:
   | VOID
     { [] }
-  | params = separated_nonempty_list(COMMA, pair(INT, identifier))
+  | params = separated_nonempty_list(COMMA, pair(type_specifier, identifier))
     { List.map (fun (_, id) -> id) params }
 
 block:
@@ -139,14 +180,20 @@ expression:
     { C_ast.Conditional { cnd; lhs; rhs } }
 
 factor:
-  | i = CONST                         { C_ast.Constant i }
+  | c = const                         { C_ast.Constant c }
   | id = identifier                   { C_ast.Var id }
+  | LPAREN; tgt = type_specifier; RPAREN; exp = factor
+    { C_ast.Cast { tgt; exp } }
   | uop = uop; exp = factor           { C_ast.Unary (uop, exp) }
   | tuop = tuop; exp = factor         { C_ast.TUnary (tuop, true, exp) }
   | exp = factor; tuop = tuop         { C_ast.TUnary (tuop, false, exp) }
   | LPAREN; exp = expression; RPAREN  { exp }
   | id = identifier; LPAREN; args = separated_list(COMMA, expression); RPAREN
     { C_ast.FunctionCall (id, args) }
+
+%inline const:
+  | i = CONST_INT  { C_ast.ConstInt i }
+  | l = CONST_LONG { C_ast.ConstLong l }
 
 %inline uop:
   | MINUS        { C_ast.Negate }

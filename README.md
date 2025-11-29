@@ -52,3 +52,4 @@ Loop labels are set as dummy when parsing and resolved in semantic analysis pass
 Case and Default statements converted to Label statements in semantic analysis pass.
 - This implementation lexes and parses at the same time. So just stopping after lex
   stage is not possible. --lex option does nothing.
+- Implementation assumes x64 architecture. Both int and long in c are parsed as ocaml int.

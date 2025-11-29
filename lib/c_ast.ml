@@ -46,9 +46,27 @@ type assign_op =
   | RsftEq
 [@@deriving show]
 
+type c_type =
+  | Int
+  | Long
+  | FunType of
+      { params : c_type list
+      ; ret : c_type
+      }
+[@@deriving show]
+
+type const =
+  | ConstInt of int
+  | ConstLong of int64
+[@@deriving show]
+
 type expression =
-  | Constant of int
+  | Constant of const
   | Var of identifier
+  | Cast of
+      { tgt : c_type
+      ; exp : expression
+      }
   | Unary of unary_op * expression
   | TUnary of tunary_op * bool * expression
   | Binary of

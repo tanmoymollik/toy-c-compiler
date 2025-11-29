@@ -51,8 +51,12 @@ let make_tmp_dst () =
 let make_label prefix = Tacky.Identifier (Core.make_unique_label prefix)
 
 let rec gen_expression stk = function
-  | C_ast.Constant c -> Tacky.Constant c
+  | C_ast.Constant c ->
+    (match c with
+     | C_ast.ConstInt i -> Tacky.Constant i
+     | C_ast.ConstLong l -> Tacky.Constant (Int64.to_int l))
   | C_ast.Var iden -> Tacky.Var (gen_identifier iden)
+  | C_ast.Cast { exp; _ } -> gen_expression stk exp
   | C_ast.Unary (uop, exp) ->
     let uop = gen_uop uop in
     let src = gen_expression stk exp in

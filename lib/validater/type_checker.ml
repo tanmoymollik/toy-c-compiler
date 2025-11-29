@@ -1,11 +1,17 @@
 exception SemanticError = Common.SemanticError
 
+let tmp_inner_const = function
+  | C_ast.ConstInt i -> i
+  | C_ast.ConstLong l -> Int64.to_int l
+;;
+
 let rec typecheck_expression symbol_map = function
   | C_ast.Constant _ -> ()
   | C_ast.Var (C_ast.Identifier iden) ->
     (match Hashtbl.find_opt symbol_map iden with
      | Some Core.{ tp = Core.Int; _ } -> ()
      | _ -> raise (SemanticError ("Function name used as variable - " ^ iden)))
+  | C_ast.Cast { exp; _ } -> typecheck_expression symbol_map exp
   | C_ast.Unary (_, exp) -> typecheck_expression symbol_map exp
   | C_ast.TUnary (_, _, lval) -> typecheck_expression symbol_map lval
   | C_ast.Binary { lexp; rexp; _ } ->
@@ -36,7 +42,7 @@ let typecheck_file_scope_variable_decl symbol_map = function
     let initial_value =
       ref
         (match init with
-         | Some (C_ast.Constant i) -> Core.Initial i
+         | Some (C_ast.Constant c) -> Core.Initial (tmp_inner_const c)
          | None -> if storage = Some C_ast.Extern then Core.NoInitial else Core.Tentative
          | _ ->
            raise
@@ -92,7 +98,7 @@ let typecheck_block_scope_variable_decl symbol_map = function
      | Some C_ast.Static ->
        let initial_value =
          match init with
-         | Some (C_ast.Constant i) -> Core.Initial i
+         | Some (C_ast.Constant c) -> Core.Initial (tmp_inner_const c)
          | None -> Core.Initial 0
          | _ ->
            raise
