@@ -66,7 +66,10 @@ let gen_stack_for_var fun_name = function
 ;;
 
 let gen_value fun_name = function
-  | Tacky.Constant c -> X64_ast.Imm c
+  | Tacky.Constant c ->
+    (match c with
+     | Tacky.ConstInt i -> X64_ast.Imm (Int32.to_int i)
+     | Tacky.ConstLong l -> X64_ast.Imm (Int64.to_int l))
   | Tacky.Var (Tacky.Identifier iden) ->
     (match Hashtbl.find_opt Core.symbol_map iden with
      | Some Core.{ attrs = Core.StaticAttr _; _ } ->
@@ -200,6 +203,7 @@ let gen_instruction fun_name = function
     let src = X64_ast.Reg X64_ast.Ax in
     let ret_ins = [ X64_ast.Mov { src; dst; sz = DWord } ] in
     stack_alloc @ reg_arg_ins @ stk_arg_ins @ fun_call @ stack_dealloc @ ret_ins
+  | _ -> assert false
 ;;
 
 let fix_ins_cmp = function

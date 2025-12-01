@@ -25,8 +25,13 @@ type binary_op =
   | GEqual
 [@@deriving show]
 
+type const =
+  | ConstInt of int32
+  | ConstLong of int64
+[@@deriving show]
+
 type value =
-  | Constant of int
+  | Constant of const
   | Var of identifier
 [@@deriving show]
 
@@ -54,6 +59,14 @@ type instruction =
   | FunCall of
       { name : identifier
       ; args : value list
+      ; dst : value
+      }
+  | SignExtend of
+      { src : value
+      ; dst : value
+      }
+  | Truncate of
+      { src : value
       ; dst : value
       }
 [@@deriving show]

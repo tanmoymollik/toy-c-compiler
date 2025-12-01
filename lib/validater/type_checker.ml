@@ -1,21 +1,9 @@
 exception SemanticError = Common.SemanticError
 
-let get_type = function
-  | C_ast.Constant (_, tp) -> tp
-  | C_ast.Var (_, tp) -> tp
-  | C_ast.Cast { etp; _ } -> etp
-  | C_ast.Unary (_, _, etp) -> etp
-  | C_ast.TUnary (_, _, _, etp) -> etp
-  | C_ast.Binary { etp; _ } -> etp
-  | C_ast.Assignment { etp; _ } -> etp
-  | C_ast.Conditional { etp; _ } -> etp
-  | C_ast.FunctionCall (_, _, etp) -> etp
-;;
-
 let get_common_type t1 t2 = if t1 = t2 then t1 else C_ast.Long
 
 let convert_to t exp =
-  if get_type exp = t then exp else C_ast.Cast { tgt = t; exp; etp = t }
+  if C_ast.get_type exp = t then exp else C_ast.Cast { tgt = t; exp; etp = t }
 ;;
 
 let rec typecheck_expression symbol_map = function
@@ -36,18 +24,18 @@ let rec typecheck_expression symbol_map = function
     let etp =
       match uop with
       | C_ast.Not -> C_ast.Int
-      | _ -> get_type exp
+      | _ -> C_ast.get_type exp
     in
     C_ast.Unary (uop, exp, etp)
   | C_ast.TUnary (uop, p, lval, _) ->
     let lval = typecheck_expression symbol_map lval in
-    C_ast.TUnary (uop, p, lval, get_type lval)
+    C_ast.TUnary (uop, p, lval, C_ast.get_type lval)
   | C_ast.Binary { bop; lexp; rexp; _ } ->
     let lexp = typecheck_expression symbol_map lexp in
     let rexp = typecheck_expression symbol_map rexp in
     let convert lexp rexp =
-      let t1 = get_type lexp in
-      let t2 = get_type rexp in
+      let t1 = C_ast.get_type lexp in
+      let t2 = C_ast.get_type rexp in
       let common_t = get_common_type t1 t2 in
       convert_to common_t lexp, convert_to common_t rexp
     in
@@ -62,8 +50,9 @@ let rec typecheck_expression symbol_map = function
      | C_ast.BOr
      | C_ast.Xor ->
        let lexp, rexp = convert lexp rexp in
-       C_ast.Binary { bop; lexp; rexp; etp = get_type lexp }
-     | C_ast.Lsft | C_ast.Rsft -> C_ast.Binary { bop; lexp; rexp; etp = get_type lexp }
+       C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
+     | C_ast.Lsft | C_ast.Rsft ->
+       C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
      | C_ast.Equal
      | C_ast.NEqual
      | C_ast.LEqual
@@ -75,14 +64,14 @@ let rec typecheck_expression symbol_map = function
   | C_ast.Assignment { aop; lval; rval; _ } ->
     let lval = typecheck_expression symbol_map lval in
     let rval = typecheck_expression symbol_map rval in
-    let etp = get_type lval in
+    let etp = C_ast.get_type lval in
     let rval = convert_to etp rval in
     C_ast.Assignment { aop; lval; rval; etp }
   | C_ast.Conditional { cnd; lhs; rhs; _ } ->
     let lhs = typecheck_expression symbol_map lhs in
     let rhs = typecheck_expression symbol_map rhs in
-    let t1 = get_type lhs in
-    let t2 = get_type rhs in
+    let t1 = C_ast.get_type lhs in
+    let t2 = C_ast.get_type rhs in
     let common_t = get_common_type t1 t2 in
     let lhs = convert_to common_t lhs in
     let rhs = convert_to common_t rhs in
