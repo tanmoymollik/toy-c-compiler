@@ -9,7 +9,7 @@ let const_int str =
       Parser.CONST_LONG (Int64.of_string str))
     else (
       let v = Int64.of_string str in
-      if v > Int64.of_int32 Int32.max_int then Parser.CONST_LONG v else Parser.CONST_INT (Int64.to_int v))
+      if v > Int64.of_int32 Int32.max_int then Parser.CONST_LONG v else Parser.CONST_INT (Int64.to_int32 v))
   with
   | Failure msg ->
     print_endline msg;

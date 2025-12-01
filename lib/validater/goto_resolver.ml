@@ -58,10 +58,10 @@ and resolve_block fun_name = function
 ;;
 
 let resolve_function_decl = function
-  | C_ast.{ name = C_ast.Identifier iden; params; body; storage } ->
+  | C_ast.{ name = C_ast.Identifier iden; params; body; ftp; storage } ->
     let first_pass = Option.map (resolve_block (Some iden)) body in
     let body = Option.map (resolve_block None) first_pass in
-    C_ast.{ name = C_ast.Identifier iden; params; body; storage }
+    C_ast.{ name = C_ast.Identifier iden; params; body; ftp; storage }
 ;;
 
 let resolve_declaration = function

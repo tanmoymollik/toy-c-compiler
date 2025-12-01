@@ -7,8 +7,8 @@ type specifier =
   | LongSpec
   | StaticSpec
   | ExternSpec
-  
-let storage specs =
+
+let process_specs specs =
   let idx_of = function
     | IntSpec -> 0
     | LongSpec -> 1
@@ -18,12 +18,14 @@ let storage specs =
   let cnt = Array.make 4 0 in
   let f spec = cnt.(idx_of spec) <- cnt.(idx_of spec) + 1 in
   List.iter f specs;
-  if not (Array.for_all (fun x -> x <= 1) cnt)
-  then raise Error;
-  if cnt.(0) + cnt.(1) = 0
-  then raise Error;
-  if cnt.(2) + cnt.(3) > 1
-  then raise Error;
+  if not (Array.for_all (fun x -> x <= 1) cnt) then raise Error;
+  if cnt.(0) + cnt.(1) = 0 then raise Error;
+  if cnt.(2) + cnt.(3) > 1 then raise Error;
+  cnt
+;;
+
+let storage specs =
+  let cnt = process_specs specs in
   if cnt.(2) = 1
   then Some C_ast.Static
   else if cnt.(3) = 1
@@ -31,11 +33,16 @@ let storage specs =
   else None
 ;;
 
+let type_of specs =
+  let cnt = process_specs specs in
+  if cnt.(1) = 1 then C_ast.Long else C_ast.Int
+;;
+
 %}
 
 // Token Definitions
 %token <string> IDENT
-%token <int> CONST_INT
+%token <int32> CONST_INT
 %token <int64> CONST_LONG
 %token INT LONG VOID
 %token RETURN
@@ -98,7 +105,8 @@ declaration:
 variable_decl:
   specs = nonempty_list(specifier); name = identifier; init = option(pair(EQUAL, expression)); SEMICOLON
     {
-      let init = Option.map (fun (_, exp) -> exp) init in C_ast.{ name; init; storage = storage specs; }
+      let init = Option.map (fun (_, exp) -> exp) init in
+      C_ast.{ name; init; vtp = type_of specs; storage = storage specs; }
     }
   
 %inline specifier:
@@ -114,15 +122,37 @@ variable_decl:
 
 function_decl:
   | specs = nonempty_list(specifier); name = identifier; LPAREN; params = param_list; RPAREN; body = block
-    { C_ast.{ name; params; body = Some body; storage = storage specs; } }
+    {
+      let ptps = List.map (fun (tp, _) -> tp) params in
+      let rtp = type_of specs in
+      let params = List.map (fun (_, id) -> id) params in
+      C_ast.
+        { name
+        ; params
+        ; body = Some body
+        ; ftp = C_ast.FunType { params = ptps; ret = rtp }
+        ; storage = storage specs
+        }
+    }
   | specs = nonempty_list(specifier); name = identifier; LPAREN; params = param_list; RPAREN; SEMICOLON
-    { C_ast.{ name; params; body = None; storage = storage specs; } }
+    {
+      let ptps = List.map (fun (tp, _) -> tp) params in
+      let rtp = type_of specs in
+      let params = List.map (fun (_, id) -> id) params in
+      C_ast.
+        { name
+        ; params
+        ; body = None
+        ; ftp = C_ast.FunType { params = ptps; ret = rtp }
+        ; storage = storage specs
+        }
+    }
 
 param_list:
   | VOID
     { [] }
   | params = separated_nonempty_list(COMMA, pair(type_specifier, identifier))
-    { List.map (fun (_, id) -> id) params }
+    { params }
 
 block:
   LBRACE; items = list(block_item); RBRACE { C_ast.Block items }
@@ -173,23 +203,23 @@ for_init:
 expression:
   | f = factor { f }
   | lexp = expression; bop = bop; rexp = expression
-    { C_ast.Binary { bop; lexp; rexp } }
+    { C_ast.Binary { bop; lexp; rexp; etp = C_ast.Int } }
   | lval = expression; aop = aop; rval = expression
-    { C_ast.Assignment { aop; lval; rval } }
+    { C_ast.Assignment { aop; lval; rval; etp = C_ast.Int } }
   | cnd = expression; QUESTION; lhs = expression; COLON; rhs = expression
-    { C_ast.Conditional { cnd; lhs; rhs } }
+    { C_ast.Conditional { cnd; lhs; rhs; etp = C_ast.Int } }
 
 factor:
-  | c = const                         { C_ast.Constant c }
-  | id = identifier                   { C_ast.Var id }
+  | c = const                         { C_ast.Constant (c, C_ast.Int) }
+  | id = identifier                   { C_ast.Var (id, C_ast.Int) }
   | LPAREN; tgt = type_specifier; RPAREN; exp = factor
-    { C_ast.Cast { tgt; exp } }
-  | uop = uop; exp = factor           { C_ast.Unary (uop, exp) }
-  | tuop = tuop; exp = factor         { C_ast.TUnary (tuop, true, exp) }
-  | exp = factor; tuop = tuop         { C_ast.TUnary (tuop, false, exp) }
+    { C_ast.Cast { tgt; exp; etp = C_ast.Int } }
+  | uop = uop; exp = factor           { C_ast.Unary (uop, exp, C_ast.Int) }
+  | tuop = tuop; exp = factor         { C_ast.TUnary (tuop, true, exp, C_ast.Int) }
+  | exp = factor; tuop = tuop         { C_ast.TUnary (tuop, false, exp, C_ast.Int) }
   | LPAREN; exp = expression; RPAREN  { exp }
   | id = identifier; LPAREN; args = separated_list(COMMA, expression); RPAREN
-    { C_ast.FunctionCall (id, args) }
+    { C_ast.FunctionCall (id, args, C_ast.Int) }
 
 %inline const:
   | i = CONST_INT  { C_ast.ConstInt i }

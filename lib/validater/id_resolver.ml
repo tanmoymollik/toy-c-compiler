@@ -42,42 +42,46 @@ let make_unique_name iden =
 
 let rec resolve_expression iden_map = function
   | C_ast.Constant _ as ret -> ret
-  | C_ast.Var (C_ast.Identifier iden) ->
-    C_ast.Var (C_ast.Identifier (get_iden iden_map iden))
-  | C_ast.Cast { tgt; exp } -> C_ast.Cast { tgt; exp = resolve_expression iden_map exp }
-  | C_ast.Unary (uop, exp) -> C_ast.Unary (uop, resolve_expression iden_map exp)
-  | C_ast.TUnary (tuop, prefix, lval) ->
+  | C_ast.Var (C_ast.Identifier iden, etp) ->
+    C_ast.Var (C_ast.Identifier (get_iden iden_map iden), etp)
+  | C_ast.Cast { tgt; exp; etp } ->
+    C_ast.Cast { tgt; exp = resolve_expression iden_map exp; etp }
+  | C_ast.Unary (uop, exp, etp) -> C_ast.Unary (uop, resolve_expression iden_map exp, etp)
+  | C_ast.TUnary (tuop, prefix, lval, etp) ->
     (match lval with
-     | C_ast.Var _ -> C_ast.TUnary (tuop, prefix, resolve_expression iden_map lval)
+     | C_ast.Var _ -> C_ast.TUnary (tuop, prefix, resolve_expression iden_map lval, etp)
      | _ -> raise (SemanticError "Invalid lvalue of suffix/postfix operator"))
-  | C_ast.Binary { bop; lexp; rexp } ->
+  | C_ast.Binary { bop; lexp; rexp; etp } ->
     C_ast.Binary
       { bop
       ; lexp = resolve_expression iden_map lexp
       ; rexp = resolve_expression iden_map rexp
+      ; etp
       }
-  | C_ast.Assignment { aop; lval; rval } ->
+  | C_ast.Assignment { aop; lval; rval; etp } ->
     (match lval with
      | C_ast.Var _ ->
        C_ast.Assignment
          { aop
          ; lval = resolve_expression iden_map lval
          ; rval = resolve_expression iden_map rval
+         ; etp
          }
      | _ -> raise (SemanticError "Invalid lvalue of assignment operator"))
-  | C_ast.Conditional { cnd; lhs; rhs } ->
+  | C_ast.Conditional { cnd; lhs; rhs; etp } ->
     C_ast.Conditional
       { cnd = resolve_expression iden_map cnd
       ; lhs = resolve_expression iden_map lhs
       ; rhs = resolve_expression iden_map rhs
+      ; etp
       }
-  | C_ast.FunctionCall (C_ast.Identifier name, exps) ->
+  | C_ast.FunctionCall (C_ast.Identifier name, exps, etp) ->
     let name = C_ast.Identifier (get_iden iden_map name) in
-    C_ast.FunctionCall (name, List.map (resolve_expression iden_map) exps)
+    C_ast.FunctionCall (name, List.map (resolve_expression iden_map) exps, etp)
 ;;
 
 let resolve_block_scope_variable_decl iden_map = function
-  | C_ast.{ name = C_ast.Identifier name; init; storage } as ret ->
+  | C_ast.{ name = C_ast.Identifier name; init; vtp; storage } as ret ->
     (match Hashtbl.find_opt iden_map name with
      | Some prev_entry ->
        if
@@ -94,13 +98,13 @@ let resolve_block_scope_variable_decl iden_map = function
       add_iden iden_map name nw_name false;
       let name = C_ast.Identifier nw_name in
       let init = Option.map (resolve_expression iden_map) init in
-      C_ast.{ name; init; storage })
+      C_ast.{ name; init; vtp; storage })
 ;;
 
 let resolve_file_scope_variable_decl iden_map = function
-  | C_ast.{ name = C_ast.Identifier name; init; storage } ->
+  | C_ast.{ name = C_ast.Identifier name; init; vtp; storage } ->
     add_iden iden_map name name true;
-    C_ast.{ name = C_ast.Identifier name; init; storage }
+    C_ast.{ name = C_ast.Identifier name; init; vtp; storage }
 ;;
 
 let resolve_for_init iden_map = function
@@ -151,7 +155,7 @@ and resolve_block iden_map = function
   | C_ast.Block items -> C_ast.Block (List.map (resolve_block_item iden_map) items)
 
 and resolve_function_decl iden_map nested = function
-  | C_ast.{ name = C_ast.Identifier iden; params; body; storage } ->
+  | C_ast.{ name = C_ast.Identifier iden; params; body; ftp; storage } ->
     if nested && Option.is_some body
     then raise (SemanticError ("Nested function definition - " ^ iden));
     if nested && storage = Some C_ast.Static
@@ -176,6 +180,7 @@ and resolve_function_decl iden_map nested = function
       { name = C_ast.Identifier iden
       ; params
       ; body = Option.map (resolve_block inner_map) body
+      ; ftp
       ; storage
       }
 

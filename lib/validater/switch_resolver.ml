@@ -28,7 +28,6 @@ let exists_default (default_map : default_map_type) var =
 ;;
 
 let add_default (default_map : default_map_type) k = Hashtbl.add default_map k true
-let make_label prefix = C_ast.Identifier prefix
 
 let evaluate_unary_expression uop x =
   match uop with
@@ -60,21 +59,22 @@ let evaluate_binary_expression bop l r =
 ;;
 
 let rec evaluate_case_expression = function
-  | C_ast.Constant c ->
+  | C_ast.Constant (c, _) ->
     (match c with
-     | C_ast.ConstInt i -> i
-     | C_ast.ConstLong l -> Int64.to_int l)
+     | C_ast.ConstInt i -> Int32.to_int i
+     | C_ast.ConstLong _ -> assert false)
   | C_ast.Var _ -> raise (SemanticError "Non-const value for switch-case")
   | C_ast.Cast _ -> raise (SemanticError "Can't cast in switch-case")
-  | C_ast.Unary (uop, exp) -> evaluate_unary_expression uop (evaluate_case_expression exp)
+  | C_ast.Unary (uop, exp, _) ->
+    evaluate_unary_expression uop (evaluate_case_expression exp)
   | C_ast.TUnary _ -> raise (SemanticError "Non-const value for switch-case")
-  | C_ast.Binary { bop; lexp; rexp } ->
+  | C_ast.Binary { bop; lexp; rexp; _ } ->
     evaluate_binary_expression
       bop
       (evaluate_case_expression lexp)
       (evaluate_case_expression rexp)
   | C_ast.Assignment _ -> raise (SemanticError "Non-const value for switch-case")
-  | C_ast.Conditional { cnd; lhs; rhs } ->
+  | C_ast.Conditional { cnd; lhs; rhs; _ } ->
     let cnd = evaluate_case_expression cnd in
     let lhs = evaluate_case_expression lhs in
     let rhs = evaluate_case_expression rhs in
@@ -110,13 +110,13 @@ let rec resolve_statement label_map default_map = function
     if exists_label label_map lbl v
     then raise (SemanticError ("Case " ^ string_of_int v ^ " already exists."));
     let id = add_for_label label_map lbl v in
-    let lbl = make_label (Core.case_label id lbl) in
+    let lbl = C_ast.Identifier (Core.case_label id lbl) in
     C_ast.Label (lbl, resolve_statement label_map default_map stmt)
   | C_ast.Default (stmt, C_ast.Identifier lbl) ->
     if exists_default default_map lbl
     then raise (SemanticError "Two default case for a single switch statement");
     add_default default_map lbl;
-    let lbl = make_label (Core.default_label lbl) in
+    let lbl = C_ast.Identifier (Core.default_label lbl) in
     C_ast.Label (lbl, resolve_statement label_map default_map stmt)
   | ( C_ast.Return _
     | C_ast.Expression _
@@ -135,11 +135,11 @@ and resolve_block label_map default_map = function
 ;;
 
 let resolve_function_decl = function
-  | C_ast.{ name; params; body; storage } ->
+  | C_ast.{ name; params; body; ftp; storage } ->
     let label_map : label_map_type = Hashtbl.create 10 in
     let default_map : default_map_type = Hashtbl.create 2 in
     let body = Option.map (resolve_block label_map default_map) body in
-    C_ast.{ name; params; body; storage }
+    C_ast.{ name; params; body; ftp; storage }
 ;;
 
 let resolve_declaration = function

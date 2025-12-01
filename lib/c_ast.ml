@@ -1,5 +1,19 @@
 type identifier = Identifier of string [@@deriving show]
 
+type c_type =
+  | Int
+  | Long
+  | FunType of
+      { params : c_type list
+      ; ret : c_type
+      }
+[@@deriving show]
+
+type const =
+  | ConstInt of int32
+  | ConstLong of int64
+[@@deriving show]
+
 type unary_op =
   | Complement
   | Negate
@@ -46,45 +60,35 @@ type assign_op =
   | RsftEq
 [@@deriving show]
 
-type c_type =
-  | Int
-  | Long
-  | FunType of
-      { params : c_type list
-      ; ret : c_type
-      }
-[@@deriving show]
-
-type const =
-  | ConstInt of int
-  | ConstLong of int64
-[@@deriving show]
-
 type expression =
-  | Constant of const
-  | Var of identifier
+  | Constant of const * c_type
+  | Var of identifier * c_type
   | Cast of
       { tgt : c_type
       ; exp : expression
+      ; etp : c_type
       }
-  | Unary of unary_op * expression
-  | TUnary of tunary_op * bool * expression
+  | Unary of unary_op * expression * c_type
+  | TUnary of tunary_op * bool * expression * c_type
   | Binary of
       { bop : binary_op
       ; lexp : expression
       ; rexp : expression
+      ; etp : c_type
       }
   | Assignment of
       { aop : assign_op
       ; lval : expression
       ; rval : expression
+      ; etp : c_type
       }
   | Conditional of
       { cnd : expression
       ; lhs : expression
       ; rhs : expression
+      ; etp : c_type
       }
-  | FunctionCall of identifier * expression list
+  | FunctionCall of identifier * expression list * c_type
 [@@deriving show]
 
 type storage_class =
@@ -95,6 +99,7 @@ type storage_class =
 type variable_decl =
   { name : identifier
   ; init : expression option
+  ; vtp : c_type
   ; storage : storage_class option
   }
 [@@deriving show]
@@ -149,6 +154,7 @@ and function_decl =
   { name : identifier
   ; params : identifier list
   ; body : block option
+  ; ftp : c_type
   ; storage : storage_class option
   }
 [@@deriving show]

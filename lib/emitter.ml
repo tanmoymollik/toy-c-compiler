@@ -142,15 +142,6 @@ let emit_instruction = function
   | Ret -> Printf.sprintf "%sleave\n%sret" indent indent
 ;;
 
-let emit_static_var = function
-  | StaticVar { name = Identifier iden; global; init } ->
-    let iden = emit_platform_name iden in
-    (if global then "global " ^ iden ^ "\n" else "")
-    ^ (iden ^ ":\n")
-    ^ Printf.sprintf "%s%s dw %s" indent iden (string_of_int init)
-  | _ -> assert false
-;;
-
 let emit_top_level = function
   | Function { name = Identifier name; global; body } ->
     let name = emit_platform_name name in
@@ -164,22 +155,30 @@ let emit_top_level = function
       ^ (List.map emit_instruction body |> String.concat "\n")
     in
     Stack.push entry text_section
-  | StaticVar { name = Identifier iden; global; init = 0 } ->
-    let iden = emit_platform_name iden in
-    let entry =
-      (indent ^ "align 4\n")
-      ^ (if global then "global " ^ iden ^ "\n" else "")
-      ^ Printf.sprintf "%s%s resd 1" indent iden
-    in
-    Stack.push entry bss_section
   | StaticVar { name = Identifier iden; global; init } ->
     let iden = emit_platform_name iden in
-    let entry =
-      (indent ^ "align 4\n")
-      ^ (if global then "global " ^ iden ^ "\n" else "")
-      ^ Printf.sprintf "%s%s dd %s" indent iden (string_of_int init)
+    let size, specifier, value =
+      match init with
+      | Core.IntInit i -> 4, "d", Int32.to_string i
+      | Core.LongInit l -> 8, "q", Int64.to_string l
     in
-    Stack.push entry data_section
+    let is_zero =
+      match init with
+      | Core.IntInit 0l -> true
+      | Core.LongInit 0L -> true
+      | _ -> false
+    in
+    let decl =
+      if is_zero
+      then Printf.sprintf "%s%s res%s 1" indent iden specifier
+      else Printf.sprintf "%s%s d%s %s" indent iden specifier value
+    in
+    let entry =
+      Printf.sprintf "%salign %d\n" indent size
+      ^ (if global then indent ^ "global " ^ iden ^ "\n" else "")
+      ^ decl
+    in
+    if is_zero then Stack.push entry bss_section else Stack.push entry data_section
 ;;
 
 let emit_program plt = function

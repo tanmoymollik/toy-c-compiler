@@ -1,48 +1,117 @@
 exception SemanticError = Common.SemanticError
 
-let tmp_inner_const = function
-  | C_ast.ConstInt i -> i
-  | C_ast.ConstLong l -> Int64.to_int l
+let get_type = function
+  | C_ast.Constant (_, tp) -> tp
+  | C_ast.Var (_, tp) -> tp
+  | C_ast.Cast { etp; _ } -> etp
+  | C_ast.Unary (_, _, etp) -> etp
+  | C_ast.TUnary (_, _, _, etp) -> etp
+  | C_ast.Binary { etp; _ } -> etp
+  | C_ast.Assignment { etp; _ } -> etp
+  | C_ast.Conditional { etp; _ } -> etp
+  | C_ast.FunctionCall (_, _, etp) -> etp
+;;
+
+let get_common_type t1 t2 = if t1 = t2 then t1 else C_ast.Long
+
+let convert_to t exp =
+  if get_type exp = t then exp else C_ast.Cast { tgt = t; exp; etp = t }
 ;;
 
 let rec typecheck_expression symbol_map = function
-  | C_ast.Constant _ -> ()
-  | C_ast.Var (C_ast.Identifier iden) ->
+  | C_ast.Constant (c, _) ->
+    (match c with
+     | C_ast.ConstInt _ as ci -> C_ast.Constant (ci, C_ast.Int)
+     | C_ast.ConstLong _ as cl -> C_ast.Constant (cl, C_ast.Long))
+  | C_ast.Var (C_ast.Identifier iden, _) ->
     (match Hashtbl.find_opt symbol_map iden with
-     | Some Core.{ tp = Core.Int; _ } -> ()
-     | _ -> raise (SemanticError ("Function name used as variable - " ^ iden)))
-  | C_ast.Cast { exp; _ } -> typecheck_expression symbol_map exp
-  | C_ast.Unary (_, exp) -> typecheck_expression symbol_map exp
-  | C_ast.TUnary (_, _, lval) -> typecheck_expression symbol_map lval
-  | C_ast.Binary { lexp; rexp; _ } ->
-    typecheck_expression symbol_map lexp;
-    typecheck_expression symbol_map rexp
-  | C_ast.Assignment { lval; rval; _ } ->
-    typecheck_expression symbol_map lval;
-    typecheck_expression symbol_map rval
-  | C_ast.Conditional { cnd; lhs; rhs } ->
-    typecheck_expression symbol_map cnd;
-    typecheck_expression symbol_map lhs;
-    typecheck_expression symbol_map rhs
-  | C_ast.FunctionCall (C_ast.Identifier iden, exps) ->
+     | Some Core.{ tp = C_ast.FunType _; _ } ->
+       raise (SemanticError ("Function name used as variable - " ^ iden))
+     | Some Core.{ tp; _ } -> C_ast.Var (C_ast.Identifier iden, tp)
+     | None -> assert false)
+  | C_ast.Cast { tgt; exp; _ } ->
+    C_ast.Cast { tgt; exp = typecheck_expression symbol_map exp; etp = tgt }
+  | C_ast.Unary (uop, exp, _) ->
+    let exp = typecheck_expression symbol_map exp in
+    let etp =
+      match uop with
+      | C_ast.Not -> C_ast.Int
+      | _ -> get_type exp
+    in
+    C_ast.Unary (uop, exp, etp)
+  | C_ast.TUnary (uop, p, lval, _) ->
+    let lval = typecheck_expression symbol_map lval in
+    C_ast.TUnary (uop, p, lval, get_type lval)
+  | C_ast.Binary { bop; lexp; rexp; _ } ->
+    let lexp = typecheck_expression symbol_map lexp in
+    let rexp = typecheck_expression symbol_map rexp in
+    let convert lexp rexp =
+      let t1 = get_type lexp in
+      let t2 = get_type rexp in
+      let common_t = get_common_type t1 t2 in
+      convert_to common_t lexp, convert_to common_t rexp
+    in
+    (match bop with
+     | C_ast.And | C_ast.Or -> C_ast.Binary { bop; lexp; rexp; etp = C_ast.Int }
+     | C_ast.Add
+     | C_ast.Sub
+     | C_ast.Mul
+     | C_ast.Div
+     | C_ast.Rem
+     | C_ast.BAnd
+     | C_ast.BOr
+     | C_ast.Xor ->
+       let lexp, rexp = convert lexp rexp in
+       C_ast.Binary { bop; lexp; rexp; etp = get_type lexp }
+     | C_ast.Lsft | C_ast.Rsft -> C_ast.Binary { bop; lexp; rexp; etp = get_type lexp }
+     | C_ast.Equal
+     | C_ast.NEqual
+     | C_ast.LEqual
+     | C_ast.GEqual
+     | C_ast.Less
+     | C_ast.Greater ->
+       let lexp, rexp = convert lexp rexp in
+       C_ast.Binary { bop; lexp; rexp; etp = C_ast.Int })
+  | C_ast.Assignment { aop; lval; rval; _ } ->
+    let lval = typecheck_expression symbol_map lval in
+    let rval = typecheck_expression symbol_map rval in
+    let etp = get_type lval in
+    let rval = convert_to etp rval in
+    C_ast.Assignment { aop; lval; rval; etp }
+  | C_ast.Conditional { cnd; lhs; rhs; _ } ->
+    let lhs = typecheck_expression symbol_map lhs in
+    let rhs = typecheck_expression symbol_map rhs in
+    let t1 = get_type lhs in
+    let t2 = get_type rhs in
+    let common_t = get_common_type t1 t2 in
+    let lhs = convert_to common_t lhs in
+    let rhs = convert_to common_t rhs in
+    C_ast.Conditional
+      { cnd = typecheck_expression symbol_map cnd; lhs; rhs; etp = common_t }
+  | C_ast.FunctionCall (C_ast.Identifier iden, exps, _) ->
     (match Hashtbl.find_opt symbol_map iden with
-     | Some { tp = FunType c; _ } ->
-       if c <> List.length exps
+     | Some Core.{ tp = FunType { params; ret }; _ } ->
+       if List.length params <> List.length exps
        then
          raise
-           (SemanticError ("Function called with wrong number of arguments - " ^ iden))
-     | _ -> raise (SemanticError ("Variable used as function - " ^ iden)));
-    let _ = List.map (typecheck_expression symbol_map) exps in
-    ()
+           (SemanticError ("Function called with wrong number of arguments - " ^ iden));
+       let exps = List.map (typecheck_expression symbol_map) exps in
+       let converted_args = List.map2 convert_to params exps in
+       C_ast.FunctionCall (C_ast.Identifier iden, converted_args, ret)
+     | _ -> raise (SemanticError ("Variable used as function - " ^ iden)))
 ;;
 
 let typecheck_file_scope_variable_decl symbol_map = function
-  | C_ast.{ name = C_ast.Identifier iden; init; storage } ->
-    (* init is a constant. No need to typecheck expression later. *)
+  | C_ast.{ name = C_ast.Identifier iden; init; vtp; storage } ->
     let initial_value =
       ref
         (match init with
-         | Some (C_ast.Constant c) -> Core.Initial (tmp_inner_const c)
+         | Some (C_ast.Constant (c, _)) ->
+           (match vtp with
+            | C_ast.Int -> Core.Initial (Core.IntInit (Type_converter.convert_to_int c))
+            | C_ast.Long ->
+              Core.Initial (Core.LongInit (Type_converter.convert_to_long c))
+            | _ -> assert false)
          | None -> if storage = Some C_ast.Extern then Core.NoInitial else Core.Tentative
          | _ ->
            raise
@@ -51,8 +120,8 @@ let typecheck_file_scope_variable_decl symbol_map = function
     let global = ref (storage <> Some C_ast.Static) in
     (match Hashtbl.find_opt symbol_map iden with
      | Some Core.{ tp; attrs } ->
-       if tp <> Core.Int
-       then raise (SemanticError ("Function declared as variable - " ^ iden));
+       if tp <> vtp
+       then raise (SemanticError ("Variable declaration type mismatch - " ^ iden));
        (match attrs with
         | StaticAttr attrs ->
           if storage = Some C_ast.Extern
@@ -74,12 +143,13 @@ let typecheck_file_scope_variable_decl symbol_map = function
         | _ -> assert false)
      | _ -> ());
     let attrs = Core.StaticAttr { init = !initial_value; global = !global } in
-    let info = Core.{ tp = Core.Int; attrs } in
-    Hashtbl.replace symbol_map iden info
+    let info = Core.{ tp = vtp; attrs } in
+    Hashtbl.replace symbol_map iden info;
+    C_ast.{ name = C_ast.Identifier iden; init; vtp; storage }
 ;;
 
 let typecheck_block_scope_variable_decl symbol_map = function
-  | C_ast.{ name = C_ast.Identifier iden; init; storage } ->
+  | C_ast.{ name = C_ast.Identifier iden; init; vtp; storage } ->
     (match storage with
      | Some C_ast.Extern ->
        if init <> None
@@ -88,92 +158,107 @@ let typecheck_block_scope_variable_decl symbol_map = function
            (SemanticError ("Initializer for local extern variable declaration - " ^ iden));
        (match Hashtbl.find_opt symbol_map iden with
         | Some Core.{ tp; _ } ->
-          if tp <> Core.Int
-          then raise (SemanticError ("Function declared as variable - " ^ iden))
+          if tp <> vtp
+          then raise (SemanticError ("Variable declaration type mismatch - " ^ iden))
         | None ->
           let info =
-            Core.{ tp = Core.Int; attrs = StaticAttr { init = NoInitial; global = true } }
+            Core.{ tp = vtp; attrs = StaticAttr { init = NoInitial; global = true } }
           in
           Hashtbl.replace symbol_map iden info)
      | Some C_ast.Static ->
        let initial_value =
          match init with
-         | Some (C_ast.Constant c) -> Core.Initial (tmp_inner_const c)
-         | None -> Core.Initial 0
+         | Some (C_ast.Constant (c, _)) -> c
+         | None -> C_ast.ConstInt Int32.zero
          | _ ->
            raise
              (SemanticError
                 ("Non-constant initializer for local static variable - " ^ iden))
        in
+       let initial_value =
+         match vtp with
+         | C_ast.Int ->
+           Core.Initial (Core.IntInit (Type_converter.convert_to_int initial_value))
+         | C_ast.Long ->
+           Core.Initial (Core.LongInit (Type_converter.convert_to_long initial_value))
+         | _ -> assert false
+       in
        let info =
-         Core.
-           { tp = Core.Int; attrs = StaticAttr { init = initial_value; global = false } }
+         Core.{ tp = vtp; attrs = StaticAttr { init = initial_value; global = false } }
        in
        Hashtbl.replace symbol_map iden info
      | None ->
-       let info = Core.{ tp = Core.Int; attrs = LocalAttr } in
-       Hashtbl.replace symbol_map iden info;
-       let _ = Option.map (typecheck_expression symbol_map) init in
-       ())
+       let info = Core.{ tp = vtp; attrs = LocalAttr } in
+       Hashtbl.replace symbol_map iden info);
+    let init = Option.map (typecheck_expression symbol_map) init in
+    let init = Option.map (convert_to vtp) init in
+    C_ast.{ name = C_ast.Identifier iden; init; vtp; storage }
 ;;
 
 let typecheck_for_init symbol_map = function
   | C_ast.InitDecl d ->
     if d.storage <> None then raise (SemanticError "Storage specifier in for-loop init");
-    typecheck_block_scope_variable_decl symbol_map d
-  | C_ast.InitExp e ->
-    let _ = Option.map (typecheck_expression symbol_map) e in
-    ()
+    C_ast.InitDecl (typecheck_block_scope_variable_decl symbol_map d)
+  | C_ast.InitExp e -> C_ast.InitExp (Option.map (typecheck_expression symbol_map) e)
 ;;
 
-let rec typecheck_statement symbol_map = function
-  | C_ast.Return exp -> typecheck_expression symbol_map exp
-  | C_ast.Expression exp -> typecheck_expression symbol_map exp
+let rec typecheck_statement symbol_map ftp = function
+  | C_ast.Return exp ->
+    let exp = typecheck_expression symbol_map exp in
+    let exp = convert_to ftp exp in
+    C_ast.Return exp
+  | C_ast.Expression exp -> C_ast.Expression (typecheck_expression symbol_map exp)
   | C_ast.If { cnd; thn; els } ->
-    typecheck_expression symbol_map cnd;
-    typecheck_statement symbol_map thn;
-    let _ = Option.map (typecheck_statement symbol_map) els in
-    ()
-  | C_ast.Label (_, stmt) -> typecheck_statement symbol_map stmt
-  | C_ast.Compound block -> typecheck_block symbol_map block
-  | C_ast.While (exp, stmt, _) ->
-    typecheck_expression symbol_map exp;
-    typecheck_statement symbol_map stmt
-  | C_ast.DoWhile (stmt, exp, _) ->
-    typecheck_statement symbol_map stmt;
-    typecheck_expression symbol_map exp
-  | C_ast.For { init; cnd; post; body; _ } ->
-    typecheck_for_init symbol_map init;
-    let _ = Option.map (typecheck_expression symbol_map) cnd in
-    let _ = Option.map (typecheck_expression symbol_map) post in
-    typecheck_statement symbol_map body
-  | C_ast.Switch { cnd; body; _ } ->
-    typecheck_expression symbol_map cnd;
-    typecheck_statement symbol_map body
-  | C_ast.Case (exp, stmt, _) ->
-    typecheck_expression symbol_map exp;
-    typecheck_statement symbol_map stmt
-  | C_ast.Default (stmt, _) -> typecheck_statement symbol_map stmt
-  | C_ast.Goto _ | C_ast.Break _ | C_ast.Continue _ | C_ast.Null -> ()
+    let cnd = typecheck_expression symbol_map cnd in
+    let thn = typecheck_statement symbol_map ftp thn in
+    let els = Option.map (typecheck_statement symbol_map ftp) els in
+    C_ast.If { cnd; thn; els }
+  | C_ast.Label (lbl, stmt) -> C_ast.Label (lbl, typecheck_statement symbol_map ftp stmt)
+  | C_ast.Compound block -> C_ast.Compound (typecheck_block symbol_map ftp block)
+  | C_ast.While (exp, stmt, lbl) ->
+    let exp = typecheck_expression symbol_map exp in
+    let stmt = typecheck_statement symbol_map ftp stmt in
+    C_ast.While (exp, stmt, lbl)
+  | C_ast.DoWhile (stmt, exp, lbl) ->
+    let stmt = typecheck_statement symbol_map ftp stmt in
+    let exp = typecheck_expression symbol_map exp in
+    C_ast.DoWhile (stmt, exp, lbl)
+  | C_ast.For { init; cnd; post; body; label } ->
+    let init = typecheck_for_init symbol_map init in
+    let cnd = Option.map (typecheck_expression symbol_map) cnd in
+    let post = Option.map (typecheck_expression symbol_map) post in
+    let body = typecheck_statement symbol_map ftp body in
+    C_ast.For { init; cnd; post; body; label }
+  | C_ast.Switch { cnd; body; cases; default; label } ->
+    let cnd = typecheck_expression symbol_map cnd in
+    let body = typecheck_statement symbol_map ftp body in
+    C_ast.Switch { cnd; body; cases; default; label }
+  | C_ast.Case (exp, stmt, lbl) ->
+    let exp = typecheck_expression symbol_map exp in
+    let stmt = typecheck_statement symbol_map ftp stmt in
+    C_ast.Case (exp, stmt, lbl)
+  | C_ast.Default (stmt, lbl) ->
+    let stmt = typecheck_statement symbol_map ftp stmt in
+    C_ast.Default (stmt, lbl)
+  | (C_ast.Goto _ | C_ast.Break _ | C_ast.Continue _ | C_ast.Null) as ret -> ret
 
-and typecheck_block_item symbol_map = function
-  | C_ast.S s -> typecheck_statement symbol_map s
-  | C_ast.D d -> typecheck_declaration symbol_map true d
+and typecheck_block_item symbol_map ftp = function
+  | C_ast.S s -> C_ast.S (typecheck_statement symbol_map ftp s)
+  | C_ast.D d -> C_ast.D (typecheck_declaration symbol_map true d)
 
-and typecheck_block symbol_map = function
+and typecheck_block symbol_map ftp = function
   | C_ast.Block items ->
-    let _ = List.map (typecheck_block_item symbol_map) items in
-    ()
+    let items = List.map (typecheck_block_item symbol_map ftp) items in
+    C_ast.Block items
 
 and typecheck_function_decl symbol_map = function
-  | C_ast.{ name = C_ast.Identifier iden; params; body; storage } ->
-    let fun_type = Core.FunType (List.length params) in
+  | C_ast.{ name = C_ast.Identifier iden; params; body; ftp; storage } ->
     let has_body = Option.is_some body in
     let already_defined = ref false in
     let global = ref (storage <> Some C_ast.Static) in
     (match Hashtbl.find_opt symbol_map iden with
      | Some Core.{ tp; attrs } ->
-       if fun_type <> tp
+       if ftp <> tp
        then raise (SemanticError ("Incomplete function declaration - " ^ iden));
        (match attrs with
         | Core.FunAttr attrs ->
@@ -190,23 +275,27 @@ and typecheck_function_decl symbol_map = function
     let attrs =
       Core.FunAttr { defined = !already_defined || has_body; global = !global }
     in
-    let info = Core.{ tp = fun_type; attrs } in
+    let info = Core.{ tp = ftp; attrs } in
     Hashtbl.replace symbol_map iden info;
-    let typecheck_param symbol_map = function
+    let typecheck_param symbol_map ptp = function
       | C_ast.Identifier name ->
-        Hashtbl.replace symbol_map name Core.{ tp = Int; attrs = LocalAttr }
+        Hashtbl.replace symbol_map name Core.{ tp = ptp; attrs = LocalAttr }
     in
-    let _ = List.map (typecheck_param symbol_map) params in
-    let f body = typecheck_block symbol_map body in
-    let _ = Option.map f body in
-    ()
+    let ptps, rtp =
+      match ftp with
+      | C_ast.FunType { params; ret } -> params, ret
+      | _ -> assert false
+    in
+    let _ = List.map2 (typecheck_param symbol_map) ptps params in
+    let body = Option.map (typecheck_block symbol_map rtp) body in
+    C_ast.{ name = C_ast.Identifier iden; params; body; ftp; storage }
 
 and typecheck_declaration symbol_map nested = function
-  | C_ast.FunDecl f -> typecheck_function_decl symbol_map f
+  | C_ast.FunDecl f -> C_ast.FunDecl (typecheck_function_decl symbol_map f)
   | C_ast.VarDecl v ->
     if nested
-    then typecheck_block_scope_variable_decl symbol_map v
-    else typecheck_file_scope_variable_decl symbol_map v
+    then C_ast.VarDecl (typecheck_block_scope_variable_decl symbol_map v)
+    else C_ast.VarDecl (typecheck_file_scope_variable_decl symbol_map v)
 ;;
 
 let typecheck_program = function

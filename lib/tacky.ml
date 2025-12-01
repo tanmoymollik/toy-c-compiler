@@ -68,7 +68,7 @@ type top_level =
   | StaticVar of
       { name : identifier
       ; global : bool
-      ; init : int
+      ; init : Core.static_init
       }
 [@@deriving show]
 

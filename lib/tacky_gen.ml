@@ -51,20 +51,20 @@ let make_tmp_dst () =
 let make_label prefix = Tacky.Identifier (Core.make_unique_label prefix)
 
 let rec gen_expression stk = function
-  | C_ast.Constant c ->
+  | C_ast.Constant (c, _) ->
     (match c with
-     | C_ast.ConstInt i -> Tacky.Constant i
+     | C_ast.ConstInt i -> Tacky.Constant (Int32.to_int i)
      | C_ast.ConstLong l -> Tacky.Constant (Int64.to_int l))
-  | C_ast.Var iden -> Tacky.Var (gen_identifier iden)
+  | C_ast.Var (iden, _) -> Tacky.Var (gen_identifier iden)
   | C_ast.Cast { exp; _ } -> gen_expression stk exp
-  | C_ast.Unary (uop, exp) ->
+  | C_ast.Unary (uop, exp, _) ->
     let uop = gen_uop uop in
     let src = gen_expression stk exp in
     let dst = make_tmp_dst () in
     let u_ins = Tacky.Unary { uop; src; dst } in
     Stack.push u_ins stk;
     dst
-  | C_ast.TUnary (tuop, prefix, lval) ->
+  | C_ast.TUnary (tuop, prefix, lval, _) ->
     (match lval with
      | C_ast.Var _ ->
        let src = gen_expression stk lval in
@@ -79,7 +79,7 @@ let rec gen_expression stk = function
        Stack.push i stk;
        if prefix then src else dst
      | _ -> assert false)
-  | C_ast.Binary { bop; lexp; rexp } ->
+  | C_ast.Binary { bop; lexp; rexp; _ } ->
     (match bop with
      | C_ast.And | C_ast.Or ->
        let cnd1 = gen_expression stk lexp in
@@ -115,7 +115,7 @@ let rec gen_expression stk = function
        let b_ins = Tacky.Binary { bop; src1; src2; dst } in
        Stack.push b_ins stk;
        dst)
-  | C_ast.Assignment { aop; lval; rval } ->
+  | C_ast.Assignment { aop; lval; rval; _ } ->
     (match lval with
      | C_ast.Var _ ->
        let src = gen_expression stk rval in
@@ -127,7 +127,7 @@ let rec gen_expression stk = function
           Stack.push (Tacky.Binary { bop; src1 = dst; src2 = src; dst }) stk);
        dst
      | _ -> assert false)
-  | C_ast.Conditional { cnd; lhs; rhs } ->
+  | C_ast.Conditional { cnd; lhs; rhs; _ } ->
     let cnd = gen_expression stk cnd in
     let rhs_lbl = make_label ("other" ^ Core.conditional_label) in
     let en_lbl = make_label ("end" ^ Core.conditional_label) in
@@ -141,7 +141,7 @@ let rec gen_expression stk = function
     Stack.push (Tacky.Copy { src; dst }) stk;
     Stack.push (Tacky.Label en_lbl) stk;
     dst
-  | C_ast.FunctionCall (name, args) ->
+  | C_ast.FunctionCall (name, args, _) ->
     let name = gen_identifier name in
     let args = List.map (gen_expression stk) args in
     let dst = make_tmp_dst () in
@@ -150,7 +150,7 @@ let rec gen_expression stk = function
 ;;
 
 let gen_variable_decl stk = function
-  | C_ast.{ name; init = Some exp; storage = None } ->
+  | C_ast.{ name; init = Some exp; storage = None; _ } ->
     let exp_val = gen_expression stk exp in
     Stack.push (Tacky.Copy { src = exp_val; dst = Tacky.Var (gen_identifier name) }) stk
   | _ -> ()
@@ -310,9 +310,10 @@ let convert_symbols_to_tacky symbol_map acc =
        | Core.StaticAttr { init; global } ->
          let name = Tacky.Identifier iden in
          (match init with
-          | Initial i -> Tacky.StaticVar { name; global; init = i } :: acc
-          | Tentative -> Tacky.StaticVar { name; global; init = 0 } :: acc
-          | NoInitial -> acc)
+          | Core.Initial i -> Tacky.StaticVar { name; global; init = i } :: acc
+          | Core.Tentative ->
+            assert false (* Tacky.StaticVar { name; global; init = 0 } :: acc *)
+          | Core.NoInitial -> acc)
        | _ -> acc)
     symbol_map
     acc

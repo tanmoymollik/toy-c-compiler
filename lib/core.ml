@@ -25,14 +25,16 @@ let make_unique_label prefix =
   Printf.sprintf "%s#%d" prefix c
 ;;
 
-type symbol_type =
-  | Int
-  | FunType of int
+type static_init =
+  | IntInit of int32
+  | LongInit of int64
+[@@deriving show]
 
 type initial_value =
   | Tentative
-  | Initial of int
+  | Initial of static_init
   | NoInitial
+[@@deriving show]
 
 type identifier_attrs =
   | FunAttr of
@@ -44,11 +46,13 @@ type identifier_attrs =
       ; global : bool
       }
   | LocalAttr
+[@@deriving show]
 
 type symbol_info =
-  { tp : symbol_type
+  { tp : C_ast.c_type
   ; attrs : identifier_attrs
   }
+[@@deriving show]
 
 type symbol_map_type = (string, symbol_info) Hashtbl.t
 
