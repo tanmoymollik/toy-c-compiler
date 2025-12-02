@@ -1,12 +1,46 @@
 %{
 
-exception Error
-
 type specifier =
   | IntSpec
   | LongSpec
   | StaticSpec
   | ExternSpec
+
+type assign_op =
+  | Eq
+  | AEq
+  | SEq
+  | MEq
+  | DEq
+  | REq
+  | BAEq
+  | BOEq
+  | XEq
+  | LsftEq
+  | RsftEq
+
+let convert_aop_to_bop = function
+  | Eq -> assert false
+  | AEq -> C_ast.Add
+  | SEq -> C_ast.Sub
+  | MEq -> C_ast.Mul
+  | DEq -> C_ast.Div
+  | REq -> C_ast.Rem
+  | BAEq -> C_ast.BAnd
+  | BOEq -> C_ast.BOr
+  | XEq -> C_ast.Xor
+  | LsftEq -> C_ast.Lsft
+  | RsftEq -> C_ast.Rsft
+;;
+
+let assignment_ast aop lval rval =
+  match aop with
+  | Eq -> C_ast.Assignment { lval; rval; etp = C_ast.Int }
+  | AEq | SEq | MEq | DEq | REq | BAEq | BOEq | XEq | LsftEq | RsftEq ->
+    let bop = convert_aop_to_bop aop in
+    let bin = C_ast.Binary { bop; lexp = lval; rexp = rval; etp = C_ast.Int } in
+    C_ast.Assignment { lval; rval = bin; etp = C_ast.Int }
+;;
 
 let process_specs specs =
   let idx_of = function
@@ -18,9 +52,9 @@ let process_specs specs =
   let cnt = Array.make 4 0 in
   let f spec = cnt.(idx_of spec) <- cnt.(idx_of spec) + 1 in
   List.iter f specs;
-  if not (Array.for_all (fun x -> x <= 1) cnt) then raise Error;
-  if cnt.(0) + cnt.(1) = 0 then raise Error;
-  if cnt.(2) + cnt.(3) > 1 then raise Error;
+  if not (Array.for_all (fun x -> x <= 1) cnt) then raise Core.ParserError;
+  if cnt.(0) + cnt.(1) = 0 then raise Core.ParserError;
+  if cnt.(2) + cnt.(3) > 1 then raise Core.ParserError;
   cnt
 ;;
 
@@ -205,7 +239,7 @@ expression:
   | lexp = expression; bop = bop; rexp = expression
     { C_ast.Binary { bop; lexp; rexp; etp = C_ast.Int } }
   | lval = expression; aop = aop; rval = expression
-    { C_ast.Assignment { aop; lval; rval; etp = C_ast.Int } }
+    { assignment_ast aop lval rval }
   | cnd = expression; QUESTION; lhs = expression; COLON; rhs = expression
     { C_ast.Conditional { cnd; lhs; rhs; etp = C_ast.Int } }
 
@@ -255,17 +289,17 @@ factor:
   | GREATER    { C_ast.Greater }
 
 %inline aop:
-  | EQUAL        { C_ast.Eq } 
-  | PLUS_EQ      { C_ast.AEq }
-  | MINUS_EQ     { C_ast.SEq }
-  | ASTERISK_EQ  { C_ast.MEq }
-  | FSLASH_EQ    { C_ast.DEq }
-  | PERCENT_EQ   { C_ast.REq }
-  | LSHIFT_EQ    { C_ast.LsftEq }
-  | RSHIFT_EQ    { C_ast.RsftEq }
-  | AMPERSAND_EQ { C_ast.BAEq }
-  | PIPE_EQ      { C_ast.BOEq }
-  | CARET_EQ     { C_ast.XEq }
+  | EQUAL        { Eq } 
+  | PLUS_EQ      { AEq }
+  | MINUS_EQ     { SEq }
+  | ASTERISK_EQ  { MEq }
+  | FSLASH_EQ    { DEq }
+  | PERCENT_EQ   { REq }
+  | LSHIFT_EQ    { LsftEq }
+  | RSHIFT_EQ    { RsftEq }
+  | AMPERSAND_EQ { BAEq }
+  | PIPE_EQ      { BOEq }
+  | CARET_EQ     { XEq }
 
 identifier:
   id = IDENT { C_ast.Identifier id }

@@ -35,6 +35,7 @@ type reg =
   | R9
   | R10
   | R11
+  | Sp
 [@@deriving show]
 
 let arg_regs = [ Di; Si; Dx; Cx; R8; R9 ]
@@ -46,7 +47,7 @@ let is_arg_reg = function
 ;;
 
 type operand =
-  | Imm of int
+  | Imm of int64
   | Reg of reg
   | Stack of int
   | Data of identifier
@@ -65,6 +66,10 @@ type instruction =
       ; dst : operand (* dst is always guaranteed to be Stack _. *)
       ; sz : operand_size
       }
+  | Movsx of
+      { src : operand
+      ; dst : operand
+      }
   | Unary of unary_op * operand * operand_size
   | Binary of
       { bop : binary_op
@@ -78,7 +83,7 @@ type instruction =
       ; sz : operand_size
       }
   | Idiv of operand * operand_size
-  | Cdq
+  | Cdq of operand_size
   | Jmp of identifier
   | JmpC of cond_code * identifier
   | SetC of cond_code * operand

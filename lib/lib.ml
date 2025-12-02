@@ -29,7 +29,8 @@ end = struct
     try Some (Parser.prog Lexer.read lexbuf) with
     | Lexer.SyntaxError e ->
       raise (CompileError ("LexError: " ^ e ^ ": " ^ print_position lexbuf))
-    | Parser.Error -> raise (CompileError ("ParseError: " ^ print_position lexbuf))
+    | Parser.Error | Core.ParserError ->
+      raise (CompileError ("ParseError: " ^ print_position lexbuf))
   ;;
 
   let validate stage prog =
@@ -55,7 +56,7 @@ end = struct
     | `Tacky ->
       print_endline Tacky.(show_program prog);
       None
-    | _ -> Some (X64_gen.gen_program prog)
+    | _ -> Some (X64_gen.M.gen_program prog)
   ;;
 
   let codeemit stage platform prog =

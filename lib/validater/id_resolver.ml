@@ -58,12 +58,11 @@ let rec resolve_expression iden_map = function
       ; rexp = resolve_expression iden_map rexp
       ; etp
       }
-  | C_ast.Assignment { aop; lval; rval; etp } ->
+  | C_ast.Assignment { lval; rval; etp } ->
     (match lval with
      | C_ast.Var _ ->
        C_ast.Assignment
-         { aop
-         ; lval = resolve_expression iden_map lval
+         { lval = resolve_expression iden_map lval
          ; rval = resolve_expression iden_map rval
          ; etp
          }

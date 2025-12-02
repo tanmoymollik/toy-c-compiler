@@ -46,20 +46,6 @@ type binary_op =
   | Greater
 [@@deriving show]
 
-type assign_op =
-  | Eq
-  | AEq
-  | SEq
-  | MEq
-  | DEq
-  | REq
-  | BAEq
-  | BOEq
-  | XEq
-  | LsftEq
-  | RsftEq
-[@@deriving show]
-
 type expression =
   | Constant of const * c_type
   | Var of identifier * c_type
@@ -77,8 +63,7 @@ type expression =
       ; etp : c_type
       }
   | Assignment of
-      { aop : assign_op
-      ; lval : expression
+      { lval : expression
       ; rval : expression
       ; etp : c_type
       }
@@ -134,7 +119,7 @@ type statement =
   | Switch of
       { cnd : expression
       ; body : statement
-      ; cases : int list
+      ; cases : const list
       ; default : bool
       ; label : identifier
       }
@@ -167,8 +152,8 @@ and declaration =
 type program = Program of declaration list [@@deriving show]
 
 let get_type = function
-  | Constant (_, tp) -> tp
-  | Var (_, tp) -> tp
+  | Constant (_, etp) -> etp
+  | Var (_, etp) -> etp
   | Cast { etp; _ } -> etp
   | Unary (_, _, etp) -> etp
   | TUnary (_, _, _, etp) -> etp

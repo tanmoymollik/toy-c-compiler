@@ -1,5 +1,15 @@
 exception SemanticError = Common.SemanticError
 
+(* Maps switch labels to their condition type. *)
+let switch_label_map : (string, C_ast.c_type) Hashtbl.t = Hashtbl.create 100
+let add_for_label k v = Hashtbl.replace switch_label_map k v
+
+let get_for_label lbl =
+  match Hashtbl.find_opt switch_label_map lbl with
+  | Some v -> v
+  | None -> assert false
+;;
+
 let get_common_type t1 t2 = if t1 = t2 then t1 else C_ast.Long
 
 let convert_to t exp =
@@ -48,11 +58,7 @@ let rec typecheck_expression symbol_map = function
      | C_ast.Rem
      | C_ast.BAnd
      | C_ast.BOr
-     | C_ast.Xor ->
-       let lexp, rexp = convert lexp rexp in
-       C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
-     | C_ast.Lsft | C_ast.Rsft ->
-       C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
+     | C_ast.Xor
      | C_ast.Equal
      | C_ast.NEqual
      | C_ast.LEqual
@@ -60,13 +66,15 @@ let rec typecheck_expression symbol_map = function
      | C_ast.Less
      | C_ast.Greater ->
        let lexp, rexp = convert lexp rexp in
-       C_ast.Binary { bop; lexp; rexp; etp = C_ast.Int })
-  | C_ast.Assignment { aop; lval; rval; _ } ->
+       C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
+     | C_ast.Lsft | C_ast.Rsft ->
+       C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp })
+  | C_ast.Assignment { lval; rval; _ } ->
     let lval = typecheck_expression symbol_map lval in
     let rval = typecheck_expression symbol_map rval in
     let etp = C_ast.get_type lval in
     let rval = convert_to etp rval in
-    C_ast.Assignment { aop; lval; rval; etp }
+    C_ast.Assignment { lval; rval; etp }
   | C_ast.Conditional { cnd; lhs; rhs; _ } ->
     let lhs = typecheck_expression symbol_map lhs in
     let rhs = typecheck_expression symbol_map rhs in
@@ -133,12 +141,11 @@ let typecheck_file_scope_variable_decl symbol_map = function
      | _ -> ());
     let attrs = Core.StaticAttr { init = !initial_value; global = !global } in
     let info = Core.{ tp = vtp; attrs } in
-    Hashtbl.replace symbol_map iden info;
-    C_ast.{ name = C_ast.Identifier iden; init; vtp; storage }
+    Hashtbl.replace symbol_map iden info
 ;;
 
 let typecheck_block_scope_variable_decl symbol_map = function
-  | C_ast.{ name = C_ast.Identifier iden; init; vtp; storage } ->
+  | C_ast.{ name = C_ast.Identifier iden; init; vtp; storage } as ret ->
     (match storage with
      | Some C_ast.Extern ->
        if init <> None
@@ -153,7 +160,8 @@ let typecheck_block_scope_variable_decl symbol_map = function
           let info =
             Core.{ tp = vtp; attrs = StaticAttr { init = NoInitial; global = true } }
           in
-          Hashtbl.replace symbol_map iden info)
+          Hashtbl.replace symbol_map iden info);
+       ret
      | Some C_ast.Static ->
        let initial_value =
          match init with
@@ -175,13 +183,14 @@ let typecheck_block_scope_variable_decl symbol_map = function
        let info =
          Core.{ tp = vtp; attrs = StaticAttr { init = initial_value; global = false } }
        in
-       Hashtbl.replace symbol_map iden info
+       Hashtbl.replace symbol_map iden info;
+       ret
      | None ->
        let info = Core.{ tp = vtp; attrs = LocalAttr } in
-       Hashtbl.replace symbol_map iden info);
-    let init = Option.map (typecheck_expression symbol_map) init in
-    let init = Option.map (convert_to vtp) init in
-    C_ast.{ name = C_ast.Identifier iden; init; vtp; storage }
+       Hashtbl.replace symbol_map iden info;
+       let init = Option.map (typecheck_expression symbol_map) init in
+       let init = Option.map (convert_to vtp) init in
+       C_ast.{ name = C_ast.Identifier iden; init; vtp; storage })
 ;;
 
 let typecheck_for_init symbol_map = function
@@ -218,14 +227,17 @@ let rec typecheck_statement symbol_map ftp = function
     let post = Option.map (typecheck_expression symbol_map) post in
     let body = typecheck_statement symbol_map ftp body in
     C_ast.For { init; cnd; post; body; label }
-  | C_ast.Switch { cnd; body; cases; default; label } ->
+  | C_ast.Switch { cnd; body; cases; default; label = C_ast.Identifier label } ->
     let cnd = typecheck_expression symbol_map cnd in
+    add_for_label label (C_ast.get_type cnd);
     let body = typecheck_statement symbol_map ftp body in
-    C_ast.Switch { cnd; body; cases; default; label }
-  | C_ast.Case (exp, stmt, lbl) ->
+    C_ast.Switch { cnd; body; cases; default; label = C_ast.Identifier label }
+  | C_ast.Case (exp, stmt, C_ast.Identifier lbl) ->
     let exp = typecheck_expression symbol_map exp in
+    let etp = get_for_label lbl in
+    let exp = convert_to etp exp in
     let stmt = typecheck_statement symbol_map ftp stmt in
-    C_ast.Case (exp, stmt, lbl)
+    C_ast.Case (exp, stmt, C_ast.Identifier lbl)
   | C_ast.Default (stmt, lbl) ->
     let stmt = typecheck_statement symbol_map ftp stmt in
     C_ast.Default (stmt, lbl)
@@ -284,11 +296,12 @@ and typecheck_declaration symbol_map nested = function
   | C_ast.VarDecl v ->
     if nested
     then C_ast.VarDecl (typecheck_block_scope_variable_decl symbol_map v)
-    else C_ast.VarDecl (typecheck_file_scope_variable_decl symbol_map v)
+    else (
+      typecheck_file_scope_variable_decl symbol_map v;
+      C_ast.VarDecl v)
 ;;
 
 let typecheck_program = function
-  | C_ast.Program dns as ret ->
-    let _ = List.map (typecheck_declaration Core.symbol_map false) dns in
-    ret
+  | C_ast.Program dns ->
+    C_ast.Program (List.map (typecheck_declaration Core.symbol_map false) dns)
 ;;

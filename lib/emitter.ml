@@ -47,6 +47,7 @@ let emit_reg_name = function
   | R9 -> "r9"
   | R10 -> "r10"
   | R11 -> "r11"
+  | Sp -> "sp"
 ;;
 
 let emit_reg r = function
@@ -54,24 +55,25 @@ let emit_reg r = function
     let name = emit_reg_name r in
     (match r with
      | Ax | Cx | Dx | Di | Si -> name ^ "l"
-     | R8 | R9 | R10 | R11 -> name ^ "b")
+     | R8 | R9 | R10 | R11 -> name ^ "b"
+     | Sp -> assert false)
   | Word ->
     let name = emit_reg_name r in
     (match r with
      | Ax | Cx | Dx -> name ^ "x"
-     | Di | Si -> name
+     | Di | Si | Sp -> name
      | R8 | R9 | R10 | R11 -> name ^ "w")
   | DWord ->
     let name = emit_reg_name r in
     (match r with
      | Ax | Cx | Dx -> "e" ^ name ^ "x"
-     | Di | Si -> "e" ^ name
+     | Di | Si | Sp -> "e" ^ name
      | R8 | R9 | R10 | R11 -> name ^ "d")
   | QWord ->
     let name = emit_reg_name r in
     (match r with
      | Ax | Cx | Dx -> "r" ^ name ^ "x"
-     | Di | Si -> "r" ^ name
+     | Di | Si | Sp -> "r" ^ name
      | R8 | R9 | R10 | R11 -> name)
 ;;
 
@@ -83,7 +85,7 @@ let emit_operand_size = function
 ;;
 
 let emit_operand = function
-  | Imm i, sz -> Printf.sprintf "%s %d" (emit_operand_size sz) i
+  | Imm i, sz -> Printf.sprintf "%s %s" (emit_operand_size sz) (Int64.to_string i)
   | Reg r, sz -> emit_reg r sz
   | Stack i, sz ->
     if i >= 0
@@ -96,12 +98,18 @@ let emit_operand = function
      | None | Some Core.{ attrs = StaticAttr { init = NoInitial; _ }; _ } ->
        Hashtbl.replace extern_decls platform_name true
      | _ -> ());
-    Printf.sprintf "[rel %s %s]" (emit_operand_size sz) platform_name
+    Printf.sprintf "%s [rel %s]" (emit_operand_size sz) platform_name
 ;;
 
 let emit_instruction = function
   | Mov { src; dst; sz } ->
     Printf.sprintf "%smov %s, %s" indent (emit_operand (dst, sz)) (emit_operand (src, sz))
+  | Movsx { src; dst } ->
+    Printf.sprintf
+      "%smovsx %s, %s"
+      indent
+      (emit_operand (dst, X64_ast.QWord))
+      (emit_operand (src, X64_ast.DWord))
   | Unary (uop, src, sz) ->
     Printf.sprintf "%s%s %s" indent (emit_uop uop) (emit_operand (src, sz))
   | Binary { bop; src; dst; sz } ->
@@ -119,7 +127,14 @@ let emit_instruction = function
   | Cmp { lhs; rhs; sz } ->
     Printf.sprintf "%scmp %s, %s" indent (emit_operand (lhs, sz)) (emit_operand (rhs, sz))
   | Idiv (operand, sz) -> Printf.sprintf "%sidiv %s" indent (emit_operand (operand, sz))
-  | Cdq -> Printf.sprintf "%scdq" indent
+  | Cdq sz ->
+    let cmd =
+      match sz with
+      | X64_ast.DWord -> "cdq"
+      | X64_ast.QWord -> "cqo"
+      | _ -> assert false
+    in
+    Printf.sprintf "%s%s" indent cmd
   | Jmp iden -> Printf.sprintf "%sjmp .L%s" indent (emit_identifier iden)
   | JmpC (cc, iden) ->
     Printf.sprintf "%sj%s .L%s" indent (emit_cond_code cc) (emit_identifier iden)

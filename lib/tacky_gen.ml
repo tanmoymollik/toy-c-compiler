@@ -29,20 +29,6 @@ let gen_bop = function
   | C_ast.And | C_ast.Or -> assert false
 ;;
 
-let aop_to_bop = function
-  | C_ast.AEq -> Tacky.Add
-  | C_ast.SEq -> Tacky.Sub
-  | C_ast.MEq -> Tacky.Mul
-  | C_ast.DEq -> Tacky.Div
-  | C_ast.REq -> Tacky.Rem
-  | C_ast.BAEq -> Tacky.And
-  | C_ast.BOEq -> Tacky.Or
-  | C_ast.XEq -> Tacky.Xor
-  | C_ast.LsftEq -> Tacky.Lsft
-  | C_ast.RsftEq -> Tacky.Rsft
-  | C_ast.Eq -> assert false
-;;
-
 let make_tmp_dst vtp =
   let c = Core.get_var_count () in
   let name = Printf.sprintf "tmp.%d" c in
@@ -53,18 +39,20 @@ let make_tmp_dst vtp =
 
 let make_label prefix = Tacky.Identifier (Core.make_unique_label prefix)
 
+let gen_const = function
+  | C_ast.ConstInt i -> Tacky.Constant (Tacky.ConstInt i)
+  | C_ast.ConstLong l -> Tacky.Constant (Tacky.ConstLong l)
+;;
+
 let rec gen_expression stk = function
-  | C_ast.Constant (c, _) ->
-    (match c with
-     | C_ast.ConstInt i -> Tacky.Constant (Tacky.ConstInt i)
-     | C_ast.ConstLong l -> Tacky.Constant (Tacky.ConstLong l))
+  | C_ast.Constant (c, _) -> gen_const c
   | C_ast.Var (iden, _) -> Tacky.Var (gen_identifier iden)
-  | C_ast.Cast { tgt; exp; etp } ->
+  | C_ast.Cast { tgt; exp; _ } ->
     let src = gen_expression stk exp in
     if tgt = C_ast.get_type exp
     then src
     else (
-      let dst = make_tmp_dst etp in
+      let dst = make_tmp_dst tgt in
       if tgt = C_ast.Long
       then Stack.push (Tacky.SignExtend { src; dst }) stk
       else Stack.push (Tacky.Truncate { src; dst }) stk;
@@ -140,16 +128,12 @@ let rec gen_expression stk = function
        let b_ins = Tacky.Binary { bop; src1; src2; dst } in
        Stack.push b_ins stk;
        dst)
-  | C_ast.Assignment { aop; lval; rval; _ } ->
+  | C_ast.Assignment { lval; rval; _ } ->
     (match lval with
      | C_ast.Var _ ->
        let src = gen_expression stk rval in
        let dst = gen_expression stk lval in
-       (match aop with
-        | C_ast.Eq -> Stack.push (Tacky.Copy { src; dst }) stk
-        | aop ->
-          let bop = aop_to_bop aop in
-          Stack.push (Tacky.Binary { bop; src1 = dst; src2 = src; dst }) stk);
+       Stack.push (Tacky.Copy { src; dst }) stk;
        dst
      | _ -> assert false)
   | C_ast.Conditional { cnd; lhs; rhs; etp } ->
@@ -269,17 +253,10 @@ let rec gen_statement stk = function
     Stack.push (Tacky.Label brk_label) stk
   | C_ast.Switch { cnd; body; cases; default; label = C_ast.Identifier label } ->
     let src1 = gen_expression stk cnd in
-    let dst = make_tmp_dst C_ast.Int in
-    let calc_jmp ind v =
+    let dst = make_tmp_dst (C_ast.get_type cnd) in
+    let calc_jmp ind cn =
       let jmp_lbl = Tacky.Identifier (Core.case_label ind label) in
-      let jmp_ins =
-        Tacky.Binary
-          { bop = Tacky.Equal
-          ; src1
-          ; src2 = Tacky.Constant (Tacky.ConstInt (Int32.of_int v))
-          ; dst
-          }
-      in
+      let jmp_ins = Tacky.Binary { bop = Tacky.Equal; src1; src2 = gen_const cn; dst } in
       Stack.push jmp_ins stk;
       Stack.push (Tacky.JumpIfNotZero (dst, jmp_lbl)) stk
     in
