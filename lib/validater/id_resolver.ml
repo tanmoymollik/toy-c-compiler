@@ -1,4 +1,4 @@
-exception SemanticError = Common.SemanticError
+exception SemanticError = Errors.SemanticError
 
 type iden_info =
   { name : string

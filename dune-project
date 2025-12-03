@@ -21,7 +21,7 @@
  (name c_compiler)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml)
+ (depends ocaml stdint)
  (tags
   ("add topics" "to describe" your project)))
 

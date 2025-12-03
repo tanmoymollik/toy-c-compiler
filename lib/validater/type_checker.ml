@@ -1,4 +1,4 @@
-exception SemanticError = Common.SemanticError
+exception SemanticError = Errors.SemanticError
 
 (* Maps switch labels to their condition type. *)
 let switch_label_map : (string, C_ast.c_type) Hashtbl.t = Hashtbl.create 100
@@ -10,17 +10,39 @@ let get_for_label lbl =
   | None -> assert false
 ;;
 
-let get_common_type t1 t2 = if t1 = t2 then t1 else C_ast.Long
+(* size of type in bytes. *)
+let size = function
+  | C_ast.Int -> 4
+  | C_ast.UInt -> 4
+  | C_ast.Long -> 8
+  | C_ast.ULong -> 8
+  | C_ast.FunType _ -> assert false
+;;
+
+let signed = function
+  | C_ast.Int -> true
+  | C_ast.UInt -> false
+  | C_ast.Long -> true
+  | C_ast.ULong -> false
+  | C_ast.FunType _ -> assert false
+;;
+
+let get_common_type t1 t2 =
+  if t1 = t2
+  then t1
+  else if size t1 = size t2
+  then if signed t1 then t2 else t1
+  else if size t1 > size t2
+  then t1
+  else t2
+;;
 
 let convert_to t exp =
   if C_ast.get_type exp = t then exp else C_ast.Cast { tgt = t; exp; etp = t }
 ;;
 
 let rec typecheck_expression symbol_map = function
-  | C_ast.Constant (c, _) ->
-    (match c with
-     | C_ast.ConstInt _ as ci -> C_ast.Constant (ci, C_ast.Int)
-     | C_ast.ConstLong _ as cl -> C_ast.Constant (cl, C_ast.Long))
+  | C_ast.Constant (c, _) -> C_ast.Constant (c, Type_converter.const_type c)
   | C_ast.Var (C_ast.Identifier iden, _) ->
     (match Hashtbl.find_opt symbol_map iden with
      | Some Core.{ tp = C_ast.FunType _; _ } ->
@@ -106,9 +128,13 @@ let typecheck_file_scope_variable_decl symbol_map = function
          | Some (C_ast.Constant (c, _)) ->
            (match vtp with
             | C_ast.Int -> Core.Initial (Core.IntInit (Type_converter.convert_to_int c))
+            | C_ast.UInt ->
+              Core.Initial (Core.UIntInit (Type_converter.convert_to_uint c))
             | C_ast.Long ->
               Core.Initial (Core.LongInit (Type_converter.convert_to_long c))
-            | _ -> assert false)
+            | C_ast.ULong ->
+              Core.Initial (Core.ULongInit (Type_converter.convert_to_ulong c))
+            | C_ast.FunType _ -> assert false)
          | None -> if storage = Some C_ast.Extern then Core.NoInitial else Core.Tentative
          | _ ->
            raise

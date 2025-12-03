@@ -1,4 +1,4 @@
-exception SemanticError = Common.SemanticError
+exception SemanticError = Errors.SemanticError
 
 (* Maps switch labels to case expression lists. *)
 let label_map : (string, C_ast.const list) Hashtbl.t = Hashtbl.create 100

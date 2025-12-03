@@ -1,3 +1,4 @@
+open Stdint
 open X64_ast
 
 let indent = String.make 4 ' '
@@ -175,7 +176,9 @@ let emit_top_level = function
     let size, specifier, value =
       match init with
       | Core.IntInit i -> 4, "d", Int32.to_string i
+      | Core.UIntInit ui -> 4, "d", Uint32.to_string ui
       | Core.LongInit l -> 8, "q", Int64.to_string l
+      | Core.ULongInit ul -> 8, "q", Uint64.to_string ul
     in
     let is_zero =
       match init with

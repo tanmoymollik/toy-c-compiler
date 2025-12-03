@@ -40,7 +40,7 @@ end = struct
       None
     | _ ->
       (try Some (Validater.resolve_program prog) with
-       | Validater.SemanticError e -> raise (CompileError ("SemanticError: " ^ e)))
+       | Errors.SemanticError e -> raise (CompileError ("SemanticError: " ^ e)))
   ;;
 
   let tacky_gen stage prog =

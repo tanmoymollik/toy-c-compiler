@@ -1,18 +1,42 @@
+open Stdint
+
 let const_type = function
   | C_ast.ConstInt _ -> C_ast.Int
+  | C_ast.ConstUInt _ -> C_ast.UInt
   | C_ast.ConstLong _ -> C_ast.Long
+  | C_ast.ConstULong _ -> C_ast.ULong
 ;;
 
 (* Converts to c int which is 32 bits wide. *)
 let convert_to_int = function
   | C_ast.ConstInt i -> i
-  | C_ast.ConstLong l -> Int64.to_int32 l
+  | C_ast.ConstUInt ui -> Int32.of_uint32 ui
+  | C_ast.ConstLong l -> Int32.of_int64 l
+  | C_ast.ConstULong ul -> Int32.of_uint64 ul
+;;
+
+(* Converts to c unsigned int which is 32 bits wide. *)
+let convert_to_uint = function
+  | C_ast.ConstInt i -> Uint32.of_int32 i
+  | C_ast.ConstUInt ui -> ui
+  | C_ast.ConstLong l -> Uint32.of_int64 l
+  | C_ast.ConstULong ul -> Uint32.of_uint64 ul
 ;;
 
 (* Converts to c long which is 64 bits wide. *)
 let convert_to_long = function
   | C_ast.ConstInt i -> Int64.of_int32 i
+  | C_ast.ConstUInt ui -> Int64.of_uint32 ui
   | C_ast.ConstLong l -> l
+  | C_ast.ConstULong ul -> Int64.of_uint64 ul
+;;
+
+(* Converts to c unsigned long which is 64 bits wide. *)
+let convert_to_ulong = function
+  | C_ast.ConstInt i -> Uint64.of_int32 i
+  | C_ast.ConstUInt ui -> Uint64.of_uint32 ui
+  | C_ast.ConstLong l -> Uint64.of_int64 l
+  | C_ast.ConstULong ul -> ul
 ;;
 
 let evaluate_int32_binary_expression bop l r =

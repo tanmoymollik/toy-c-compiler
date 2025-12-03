@@ -67,9 +67,9 @@ let process_specs specs =
 
 let storage specs =
   let cnt = process_specs specs in
-  if cnt.(2) = 1
+  if cnt.(4) = 1
   then Some C_ast.Static
-  else if cnt.(3) = 1
+  else if cnt.(5) = 1
   then Some C_ast.Extern
   else None
 ;;
@@ -77,9 +77,9 @@ let storage specs =
 let type_of specs =
   let cnt = process_specs specs in
   if cnt.(3) + cnt.(1) = 2
-  then C_ast.Long (*C_ast.ULong*)
+  then C_ast.ULong
   else if cnt.(3) = 1
-  then C_ast.Int (*C_ast.UInt*)
+  then C_ast.UInt
   else if cnt.(1) = 1
   then C_ast.Long
   else C_ast.Int

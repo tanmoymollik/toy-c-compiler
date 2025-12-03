@@ -1,4 +1,4 @@
-exception SemanticError = Common.SemanticError
+exception SemanticError = Errors.SemanticError
 
 let null_label = ""
 let make_label prefix = C_ast.Identifier prefix

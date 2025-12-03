@@ -1,3 +1,5 @@
+open Stdint
+
 let tmp_var_count = ref 0
 
 let get_var_count () =
@@ -27,7 +29,11 @@ let make_unique_label prefix =
 
 type static_init =
   | IntInit of int32
+  | UIntInit of
+      (uint32[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint32.to_string v)])
   | LongInit of int64
+  | ULongInit of
+      (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
 [@@deriving show]
 
 type initial_value =

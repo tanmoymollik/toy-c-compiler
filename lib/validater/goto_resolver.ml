@@ -1,4 +1,4 @@
-exception SemanticError = Common.SemanticError
+exception SemanticError = Errors.SemanticError
 
 let label_map : (string, bool) Hashtbl.t = Hashtbl.create 100
 

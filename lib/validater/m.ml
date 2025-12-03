@@ -1,5 +1,3 @@
-exception SemanticError = Common.SemanticError
-
 let resolve_program prog =
   Id_resolver.resolve_program prog
   |> Loop_resolver.resolve_program

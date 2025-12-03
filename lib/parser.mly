@@ -189,9 +189,9 @@ factor:
 
 %inline const:
   | i = CONST_INT    { C_ast.ConstInt i }
-  | CONST_UINT  {  C_ast.ConstInt 0l }
+  | ui = CONST_UINT  { C_ast.ConstUInt ui }
   | l = CONST_LONG   { C_ast.ConstLong l }
-  | CONST_ULONG { C_ast.ConstLong 0L}
+  | ul = CONST_ULONG { C_ast.ConstULong ul }
 
 %inline uop:
   | MINUS        { C_ast.Negate }

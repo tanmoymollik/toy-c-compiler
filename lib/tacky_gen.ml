@@ -42,6 +42,7 @@ let make_label prefix = Tacky.Identifier (Core.make_unique_label prefix)
 let gen_const = function
   | C_ast.ConstInt i -> Tacky.Constant (Tacky.ConstInt i)
   | C_ast.ConstLong l -> Tacky.Constant (Tacky.ConstLong l)
+  | _ -> assert false
 ;;
 
 let rec gen_expression stk = function
