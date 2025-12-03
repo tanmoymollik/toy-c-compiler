@@ -53,7 +53,7 @@ type operand =
   | Data of identifier
 [@@deriving show]
 
-type operand_size =
+type asm_type =
   | Byte
   | Word
   | DWord
@@ -64,26 +64,26 @@ type instruction =
   | Mov of
       { src : operand
       ; dst : operand (* dst is always guaranteed to be Stack _. *)
-      ; sz : operand_size
+      ; sz : asm_type
       }
   | Movsx of
       { src : operand
       ; dst : operand
       }
-  | Unary of unary_op * operand * operand_size
+  | Unary of unary_op * operand * asm_type
   | Binary of
       { bop : binary_op
       ; src : operand
       ; dst : operand (* dst is always guaranteed to be Stack _. *)
-      ; sz : operand_size
+      ; sz : asm_type
       }
   | Cmp of
       { lhs : operand
       ; rhs : operand
-      ; sz : operand_size
+      ; sz : asm_type
       }
-  | Idiv of operand * operand_size
-  | Cdq of operand_size
+  | Idiv of operand * asm_type
+  | Cdq of asm_type
   | Jmp of identifier
   | JmpC of cond_code * identifier
   | SetC of cond_code * operand

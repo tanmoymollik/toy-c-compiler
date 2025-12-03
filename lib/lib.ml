@@ -14,6 +14,7 @@ module Impl : sig
   val compile : compile_args -> unit
 end = struct
   module Validater = Validater.M
+  module X64_gen = X64_gen.M
 
   let print_position lexbuf =
     let pos = Lexing.lexeme_start_p lexbuf in
@@ -56,7 +57,7 @@ end = struct
     | `Tacky ->
       print_endline Tacky.(show_program prog);
       None
-    | _ -> Some (X64_gen.M.gen_program prog)
+    | _ -> Some (X64_gen.gen_program prog)
   ;;
 
   let codeemit stage platform prog =

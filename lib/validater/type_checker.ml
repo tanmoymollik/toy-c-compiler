@@ -158,7 +158,7 @@ let typecheck_block_scope_variable_decl symbol_map = function
           then raise (SemanticError ("Variable declaration type mismatch - " ^ iden))
         | None ->
           let info =
-            Core.{ tp = vtp; attrs = StaticAttr { init = NoInitial; global = true } }
+            Core.{ tp = vtp; attrs = StaticAttr { init = Core.NoInitial; global = true } }
           in
           Hashtbl.replace symbol_map iden info);
        ret

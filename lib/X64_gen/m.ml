@@ -281,5 +281,8 @@ let gen_top_level = function
 ;;
 
 let gen_program = function
-  | Tacky.Program tpns -> X64_ast.Program (List.map gen_top_level tpns)
+  | Tacky.Program tpns ->
+    let ret = X64_ast.Program (List.map gen_top_level tpns) in
+    let () = Asm_smbl_map.convert_symbols_to_asm () in
+    ret
 ;;
