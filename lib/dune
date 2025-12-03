@@ -7,5 +7,6 @@
 
 (library
  (name lib)
+ (libraries stdint)
  (preprocess
   (pps ppx_deriving.show)))

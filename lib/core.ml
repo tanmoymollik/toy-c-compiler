@@ -1,5 +1,3 @@
-exception ParserError
-
 let tmp_var_count = ref 0
 
 let get_var_count () =

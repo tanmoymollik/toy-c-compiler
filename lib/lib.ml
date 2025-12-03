@@ -28,10 +28,9 @@ end = struct
 
   let parse lexbuf =
     try Some (Parser.prog Lexer.read lexbuf) with
-    | Lexer.SyntaxError e ->
+    | Errors.SyntaxError e ->
       raise (CompileError ("LexError: " ^ e ^ ": " ^ print_position lexbuf))
-    | Parser.Error | Core.ParserError ->
-      raise (CompileError ("ParseError: " ^ print_position lexbuf))
+    | Parser.Error -> raise (CompileError ("ParseError: " ^ print_position lexbuf))
   ;;
 
   let validate stage prog =

@@ -1,83 +1,16 @@
 %{
 
-type specifier =
-  | IntSpec
-  | LongSpec
-  | StaticSpec
-  | ExternSpec
-
-type assign_op =
-  | Eq
-  | AEq
-  | SEq
-  | MEq
-  | DEq
-  | REq
-  | BAEq
-  | BOEq
-  | XEq
-  | LsftEq
-  | RsftEq
-
-let convert_aop_to_bop = function
-  | Eq -> assert false
-  | AEq -> C_ast.Add
-  | SEq -> C_ast.Sub
-  | MEq -> C_ast.Mul
-  | DEq -> C_ast.Div
-  | REq -> C_ast.Rem
-  | BAEq -> C_ast.BAnd
-  | BOEq -> C_ast.BOr
-  | XEq -> C_ast.Xor
-  | LsftEq -> C_ast.Lsft
-  | RsftEq -> C_ast.Rsft
-;;
-
-let assignment_ast aop lval rval =
-  match aop with
-  | Eq -> C_ast.Assignment { lval; rval; etp = C_ast.Int }
-  | AEq | SEq | MEq | DEq | REq | BAEq | BOEq | XEq | LsftEq | RsftEq ->
-    let bop = convert_aop_to_bop aop in
-    let bin = C_ast.Binary { bop; lexp = lval; rexp = rval; etp = C_ast.Int } in
-    C_ast.Assignment { lval; rval = bin; etp = C_ast.Int }
-;;
-
-let process_specs specs =
-  let idx_of = function
-    | IntSpec -> 0
-    | LongSpec -> 1
-    | StaticSpec -> 2
-    | ExternSpec -> 3
-  in
-  let cnt = Array.make 4 0 in
-  let f spec = cnt.(idx_of spec) <- cnt.(idx_of spec) + 1 in
-  List.iter f specs;
-  if not (Array.for_all (fun x -> x <= 1) cnt) then raise Core.ParserError;
-  if cnt.(0) + cnt.(1) = 0 then raise Core.ParserError;
-  if cnt.(2) + cnt.(3) > 1 then raise Core.ParserError;
-  cnt
-;;
-
-let storage specs =
-  let cnt = process_specs specs in
-  if cnt.(2) = 1
-  then Some C_ast.Static
-  else if cnt.(3) = 1
-  then Some C_ast.Extern
-  else None
-;;
-
-let type_of specs =
-  let cnt = process_specs specs in
-  if cnt.(1) = 1 then C_ast.Long else C_ast.Int
-;;
+open Parser_utils
 
 %}
 
 // Token Definitions
 %token <string> IDENT
 %token <int32> CONST_INT
+%token <Stdint.uint32> CONST_UINT
 %token <int64> CONST_LONG
+%token <Stdint.uint64> CONST_ULONG
+%token SIGNED UNSIGNED STATIC EXTERN
 %token INT LONG VOID
 %token RETURN
 %token IF ELSE
@@ -85,7 +18,6 @@ let type_of specs =
 %token DO WHILE FOR
 %token BREAK CONTINUE
 %token SWITCH CASE DEFAULT 
-%token STATIC EXTERN
 %token LPAREN RPAREN
 %token LBRACE RBRACE
 %token SEMICOLON COMMA
@@ -144,15 +76,15 @@ variable_decl:
     }
   
 %inline specifier:
-  | INT    { IntSpec }
-  | LONG   { LongSpec }
-  | EXTERN { ExternSpec }
-  | STATIC { StaticSpec }
+  | ts = type_specifier { ts }
+  | EXTERN              { ExternSpec }
+  | STATIC              { StaticSpec }
 
 %inline type_specifier:
-  | INT; LONG         { C_ast.Long }
-  | LONG; option(INT) { C_ast.Long }
-  | INT               { C_ast.Int }
+  | INT       { IntSpec }
+  | LONG      { LongSpec }
+  | SIGNED    { SignedSpec }
+  | UNSIGNED  { UnsignedSpec }
 
 function_decl:
   | specs = nonempty_list(specifier); name = identifier; LPAREN; params = param_list; RPAREN; body = block
@@ -185,8 +117,8 @@ function_decl:
 param_list:
   | VOID
     { [] }
-  | params = separated_nonempty_list(COMMA, pair(type_specifier, identifier))
-    { params }
+  | params = separated_nonempty_list(COMMA, pair(nonempty_list(type_specifier), identifier))
+    { List.map (fun (specs, id) -> (type_of specs, id)) params }
 
 block:
   LBRACE; items = list(block_item); RBRACE { C_ast.Block items }
@@ -246,8 +178,8 @@ expression:
 factor:
   | c = const                         { C_ast.Constant (c, C_ast.Int) }
   | id = identifier                   { C_ast.Var (id, C_ast.Int) }
-  | LPAREN; tgt = type_specifier; RPAREN; exp = factor
-    { C_ast.Cast { tgt; exp; etp = C_ast.Int } }
+  | LPAREN; specs = nonempty_list(type_specifier); RPAREN; exp = factor
+    { C_ast.Cast { tgt = type_of specs; exp; etp = C_ast.Int } }
   | uop = uop; exp = factor           { C_ast.Unary (uop, exp, C_ast.Int) }
   | tuop = tuop; exp = factor         { C_ast.TUnary (tuop, true, exp, C_ast.Int) }
   | exp = factor; tuop = tuop         { C_ast.TUnary (tuop, false, exp, C_ast.Int) }
@@ -256,8 +188,10 @@ factor:
     { C_ast.FunctionCall (id, args, C_ast.Int) }
 
 %inline const:
-  | i = CONST_INT  { C_ast.ConstInt i }
-  | l = CONST_LONG { C_ast.ConstLong l }
+  | i = CONST_INT    { C_ast.ConstInt i }
+  | CONST_UINT  {  C_ast.ConstInt 0l }
+  | l = CONST_LONG   { C_ast.ConstLong l }
+  | CONST_ULONG { C_ast.ConstLong 0L}
 
 %inline uop:
   | MINUS        { C_ast.Negate }
