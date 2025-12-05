@@ -159,6 +159,7 @@ and declaration =
 
 type program = Program of declaration list [@@deriving show]
 
+(* Returns the type of the expression. *)
 let get_type = function
   | Constant (_, etp) -> etp
   | Var (_, etp) -> etp
@@ -170,3 +171,35 @@ let get_type = function
   | Conditional { etp; _ } -> etp
   | FunctionCall (_, _, etp) -> etp
 ;;
+
+(* Returns the size of type in bytes. *)
+let size = function
+  | Int -> 4
+  | UInt -> 4
+  | Long -> 8
+  | ULong -> 8
+  | FunType _ -> assert false
+;;
+
+(* Returns whether the type is signed. *)
+let signed = function
+  | Int -> true
+  | UInt -> false
+  | Long -> true
+  | ULong -> false
+  | FunType _ -> assert false
+;;
+
+(* Returns the type both t1 and t2 should be converted to. *)
+let get_common_type t1 t2 =
+  if t1 = t2
+  then t1
+  else if size t1 = size t2
+  then if signed t1 then t2 else t1
+  else if size t1 > size t2
+  then t1
+  else t2
+;;
+
+(* Converts the given expression to the given type. *)
+let convert_to t exp = if get_type exp = t then exp else Cast { tgt = t; exp; etp = t }

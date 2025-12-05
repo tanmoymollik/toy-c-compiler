@@ -27,6 +27,7 @@ let emit_bop = function
   | Xor -> "xor"
   | Sal -> "sal"
   | Sar -> "sar"
+  | Shr -> "shr"
 ;;
 
 let emit_cond_code = function
@@ -36,6 +37,10 @@ let emit_cond_code = function
   | LE -> "le"
   | G -> "g"
   | GE -> "ge"
+  | A -> "a"
+  | AE -> "ae"
+  | B -> "b"
+  | BE -> "be"
 ;;
 
 let emit_reg_name = function
@@ -86,7 +91,7 @@ let emit_operand_size = function
 ;;
 
 let emit_operand = function
-  | Imm i, sz -> Printf.sprintf "%s %s" (emit_operand_size sz) (Int64.to_string i)
+  | Imm i, sz -> Printf.sprintf "%s %s" (emit_operand_size sz) (Uint64.to_string i)
   | Reg r, sz -> emit_reg r sz
   | Stack i, sz ->
     if i >= 0
@@ -111,12 +116,13 @@ let emit_instruction = function
       indent
       (emit_operand (dst, X64_ast.QWord))
       (emit_operand (src, X64_ast.DWord))
+  | MovZeroExtend _ -> assert false
   | Unary (uop, src, sz) ->
     Printf.sprintf "%s%s %s" indent (emit_uop uop) (emit_operand (src, sz))
   | Binary { bop; src; dst; sz } ->
     let src_sz =
       match bop with
-      | Sal | Sar -> Byte
+      | Sal | Sar | Shr -> Byte
       | _ -> sz
     in
     Printf.sprintf
@@ -128,6 +134,7 @@ let emit_instruction = function
   | Cmp { lhs; rhs; sz } ->
     Printf.sprintf "%scmp %s, %s" indent (emit_operand (lhs, sz)) (emit_operand (rhs, sz))
   | Idiv (operand, sz) -> Printf.sprintf "%sidiv %s" indent (emit_operand (operand, sz))
+  | Div (operand, sz) -> Printf.sprintf "%sdiv %s" indent (emit_operand (operand, sz))
   | Cdq sz ->
     let cmd =
       match sz with
@@ -142,8 +149,6 @@ let emit_instruction = function
   | SetC (cc, operand) ->
     Printf.sprintf "%sset%s %s" indent (emit_cond_code cc) (emit_operand (operand, Byte))
   | Label iden -> Printf.sprintf ".L%s:" (emit_identifier iden)
-  | AllocStack i -> Printf.sprintf "%ssub rsp, %d" indent i
-  | DeallocStack i -> Printf.sprintf "%sadd rsp, %d" indent i
   | Push operand -> Printf.sprintf "%spush %s" indent (emit_operand (operand, QWord))
   | Call (X64_ast.Identifier name) ->
     let platform_name = emit_platform_name name in
@@ -183,7 +188,9 @@ let emit_top_level = function
     let is_zero =
       match init with
       | Core.IntInit 0l -> true
+      | Core.UIntInit ui -> ui = Uint32.zero
       | Core.LongInit 0L -> true
+      | Core.ULongInit ul -> ul = Uint64.zero
       | _ -> false
     in
     let decl =
@@ -191,8 +198,9 @@ let emit_top_level = function
       then Printf.sprintf "%s%s res%s 1" indent iden specifier
       else Printf.sprintf "%s%s d%s %s" indent iden specifier value
     in
+    let align = if is_zero then "alignb" else "align" in
     let entry =
-      Printf.sprintf "%salign %d\n" indent size
+      Printf.sprintf "%s%s %d\n" indent align size
       ^ (if global then indent ^ "global " ^ iden ^ "\n" else "")
       ^ decl
     in

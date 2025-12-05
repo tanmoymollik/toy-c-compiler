@@ -10,37 +10,6 @@ let get_for_label lbl =
   | None -> assert false
 ;;
 
-(* size of type in bytes. *)
-let size = function
-  | C_ast.Int -> 4
-  | C_ast.UInt -> 4
-  | C_ast.Long -> 8
-  | C_ast.ULong -> 8
-  | C_ast.FunType _ -> assert false
-;;
-
-let signed = function
-  | C_ast.Int -> true
-  | C_ast.UInt -> false
-  | C_ast.Long -> true
-  | C_ast.ULong -> false
-  | C_ast.FunType _ -> assert false
-;;
-
-let get_common_type t1 t2 =
-  if t1 = t2
-  then t1
-  else if size t1 = size t2
-  then if signed t1 then t2 else t1
-  else if size t1 > size t2
-  then t1
-  else t2
-;;
-
-let convert_to t exp =
-  if C_ast.get_type exp = t then exp else C_ast.Cast { tgt = t; exp; etp = t }
-;;
-
 let rec typecheck_expression symbol_map = function
   | C_ast.Constant (c, _) -> C_ast.Constant (c, Type_converter.const_type c)
   | C_ast.Var (C_ast.Identifier iden, _) ->
@@ -68,8 +37,8 @@ let rec typecheck_expression symbol_map = function
     let convert lexp rexp =
       let t1 = C_ast.get_type lexp in
       let t2 = C_ast.get_type rexp in
-      let common_t = get_common_type t1 t2 in
-      convert_to common_t lexp, convert_to common_t rexp
+      let common_t = C_ast.get_common_type t1 t2 in
+      C_ast.convert_to common_t lexp, C_ast.convert_to common_t rexp
     in
     (match bop with
      | C_ast.And | C_ast.Or -> C_ast.Binary { bop; lexp; rexp; etp = C_ast.Int }
@@ -95,16 +64,16 @@ let rec typecheck_expression symbol_map = function
     let lval = typecheck_expression symbol_map lval in
     let rval = typecheck_expression symbol_map rval in
     let etp = C_ast.get_type lval in
-    let rval = convert_to etp rval in
+    let rval = C_ast.convert_to etp rval in
     C_ast.Assignment { lval; rval; etp }
   | C_ast.Conditional { cnd; lhs; rhs; _ } ->
     let lhs = typecheck_expression symbol_map lhs in
     let rhs = typecheck_expression symbol_map rhs in
     let t1 = C_ast.get_type lhs in
     let t2 = C_ast.get_type rhs in
-    let common_t = get_common_type t1 t2 in
-    let lhs = convert_to common_t lhs in
-    let rhs = convert_to common_t rhs in
+    let common_t = C_ast.get_common_type t1 t2 in
+    let lhs = C_ast.convert_to common_t lhs in
+    let rhs = C_ast.convert_to common_t rhs in
     C_ast.Conditional
       { cnd = typecheck_expression symbol_map cnd; lhs; rhs; etp = common_t }
   | C_ast.FunctionCall (C_ast.Identifier iden, exps, _) ->
@@ -115,7 +84,7 @@ let rec typecheck_expression symbol_map = function
          raise
            (SemanticError ("Function called with wrong number of arguments - " ^ iden));
        let exps = List.map (typecheck_expression symbol_map) exps in
-       let converted_args = List.map2 convert_to params exps in
+       let converted_args = List.map2 C_ast.convert_to params exps in
        C_ast.FunctionCall (C_ast.Identifier iden, converted_args, ret)
      | _ -> raise (SemanticError ("Variable used as function - " ^ iden)))
 ;;
@@ -215,7 +184,7 @@ let typecheck_block_scope_variable_decl symbol_map = function
        let info = Core.{ tp = vtp; attrs = LocalAttr } in
        Hashtbl.replace symbol_map iden info;
        let init = Option.map (typecheck_expression symbol_map) init in
-       let init = Option.map (convert_to vtp) init in
+       let init = Option.map (C_ast.convert_to vtp) init in
        C_ast.{ name = C_ast.Identifier iden; init; vtp; storage })
 ;;
 
@@ -229,7 +198,7 @@ let typecheck_for_init symbol_map = function
 let rec typecheck_statement symbol_map ftp = function
   | C_ast.Return exp ->
     let exp = typecheck_expression symbol_map exp in
-    let exp = convert_to ftp exp in
+    let exp = C_ast.convert_to ftp exp in
     C_ast.Return exp
   | C_ast.Expression exp -> C_ast.Expression (typecheck_expression symbol_map exp)
   | C_ast.If { cnd; thn; els } ->
@@ -261,7 +230,7 @@ let rec typecheck_statement symbol_map ftp = function
   | C_ast.Case (exp, stmt, C_ast.Identifier lbl) ->
     let exp = typecheck_expression symbol_map exp in
     let etp = get_for_label lbl in
-    let exp = convert_to etp exp in
+    let exp = C_ast.convert_to etp exp in
     let stmt = typecheck_statement symbol_map ftp stmt in
     C_ast.Case (exp, stmt, C_ast.Identifier lbl)
   | C_ast.Default (stmt, lbl) ->

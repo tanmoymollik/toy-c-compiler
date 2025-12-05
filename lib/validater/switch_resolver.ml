@@ -32,13 +32,6 @@ let exists_default var =
 
 let add_default k = Hashtbl.add default_map k true
 
-let evaluate_unary_expression uop x =
-  match uop with
-  | C_ast.Complement -> lnot x
-  | C_ast.Negate -> -x
-  | C_ast.Not -> if x = 0 then 1 else 0
-;;
-
 let rec evaluate_case_expression = function
   | C_ast.Constant (c, _) -> c
   | C_ast.Var _ -> raise (SemanticError "Non-const value for switch-case")
@@ -46,8 +39,10 @@ let rec evaluate_case_expression = function
     let exp = evaluate_case_expression exp in
     (match tgt with
      | C_ast.Int -> C_ast.ConstInt (Type_converter.convert_to_int exp)
+     | C_ast.UInt -> C_ast.ConstUInt (Type_converter.convert_to_uint exp)
      | C_ast.Long -> C_ast.ConstLong (Type_converter.convert_to_long exp)
-     | _ -> assert false)
+     | C_ast.ULong -> C_ast.ConstULong (Type_converter.convert_to_ulong exp)
+     | C_ast.FunType _ -> assert false)
   | C_ast.Unary (uop, exp, _) ->
     Type_converter.evaluate_unary_expression uop (evaluate_case_expression exp)
   | C_ast.TUnary _ -> raise (SemanticError "Non-const value for switch-case")

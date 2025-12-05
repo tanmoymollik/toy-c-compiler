@@ -1,4 +1,6 @@
-let imm_out_of_range32 i = i > Int64.of_int32 Int32.max_int
+open Stdint
+
+let imm_out_of_range32 i = i > Uint64.of_int32 Int32.max_int
 
 let fix_ins_cmp = function
   (* It is helpful to consider lhs as dst and rhs as src to better understand the semantics. *)
@@ -90,7 +92,7 @@ let fix_ins_binary = function
          ; X64_ast.Mov { src = tmp_dst; dst; sz }
          ])
        else [ ret ]
-     | X64_ast.Sal | X64_ast.Sar -> [ ret ])
+     | X64_ast.Sal | X64_ast.Sar | X64_ast.Shr -> [ ret ])
   | _ -> assert false
 ;;
 
@@ -100,10 +102,10 @@ let fix_instruction = function
      | (X64_ast.Stack _ | X64_ast.Data _), (X64_ast.Stack _ | X64_ast.Data _) ->
        let tmp_src = X64_ast.Reg X64_ast.R10 in
        [ X64_ast.Mov { src; dst = tmp_src; sz }; X64_ast.Mov { src = tmp_src; dst; sz } ]
-     | X64_ast.Imm i, _ when i > Int64.of_int32 Int32.max_int && sz = X64_ast.DWord ->
-       [ X64_ast.Mov { src = X64_ast.Imm (Int64.of_int32 (Int64.to_int32 i)); dst; sz } ]
-     | X64_ast.Imm i, (X64_ast.Stack _ | X64_ast.Data _)
-       when i > Int64.of_int32 Int32.max_int ->
+     | X64_ast.Imm i, _ when imm_out_of_range32 i && sz = X64_ast.DWord ->
+       [ X64_ast.Mov { src = X64_ast.Imm (Uint64.of_int32 (Uint64.to_int32 i)); dst; sz }
+       ]
+     | X64_ast.Imm i, (X64_ast.Stack _ | X64_ast.Data _) when imm_out_of_range32 i ->
        let tmp_src = X64_ast.Reg X64_ast.R10 in
        [ X64_ast.Mov { src; dst = tmp_src; sz }; X64_ast.Mov { src = tmp_src; dst; sz } ]
      | _ -> [ ret ])
@@ -131,6 +133,15 @@ let fix_instruction = function
           ; X64_ast.Mov { src = tmp_dst; dst; sz = X64_ast.QWord }
           ]
         | _ -> [ ret ]))
+  | X64_ast.MovZeroExtend { src; dst } ->
+    (match dst with
+     | X64_ast.Reg _ -> [ X64_ast.Mov { src; dst; sz = X64_ast.DWord } ]
+     | X64_ast.Stack _ | X64_ast.Data _ ->
+       let tmp_dst = X64_ast.Reg X64_ast.R11 in
+       [ X64_ast.Mov { src; dst = tmp_dst; sz = X64_ast.DWord }
+       ; X64_ast.Mov { src = tmp_dst; dst; sz = X64_ast.QWord }
+       ]
+     | X64_ast.Imm _ -> assert false)
   | X64_ast.Cmp _ as ret -> fix_ins_cmp ret
   | X64_ast.Binary _ as ret -> fix_ins_binary ret
   | X64_ast.Idiv (src, sz) as ret ->
@@ -139,7 +150,13 @@ let fix_instruction = function
        let tmp_src = X64_ast.Reg X64_ast.R10 in
        [ X64_ast.Mov { src; dst = tmp_src; sz }; X64_ast.Idiv (tmp_src, sz) ]
      | _ -> [ ret ])
-  | X64_ast.Push (X64_ast.Imm i) when i > Int64.of_int32 Int32.max_int ->
+  | X64_ast.Div (src, sz) as ret ->
+    (match src with
+     | X64_ast.Imm _ ->
+       let tmp_src = X64_ast.Reg X64_ast.R10 in
+       [ X64_ast.Mov { src; dst = tmp_src; sz }; X64_ast.Div (tmp_src, sz) ]
+     | _ -> [ ret ])
+  | X64_ast.Push (X64_ast.Imm i) when imm_out_of_range32 i ->
     let tmp_src = X64_ast.Reg X64_ast.R10 in
     [ X64_ast.Mov { src = X64_ast.Imm i; dst = tmp_src; sz = X64_ast.QWord }
     ; X64_ast.Push tmp_src

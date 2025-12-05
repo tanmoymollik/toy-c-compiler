@@ -1,3 +1,5 @@
+open Stdint
+
 type identifier = Identifier of string [@@deriving show]
 
 type unary_op =
@@ -14,6 +16,7 @@ type binary_op =
   | Xor
   | Sal
   | Sar
+  | Shr
 [@@deriving show]
 
 type cond_code =
@@ -23,6 +26,10 @@ type cond_code =
   | GE
   | L
   | LE
+  | A
+  | AE
+  | B
+  | BE
 [@@deriving show]
 
 type reg =
@@ -47,7 +54,7 @@ let is_arg_reg = function
 ;;
 
 type operand =
-  | Imm of int64
+  | Imm of (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
   | Reg of reg
   | Stack of int
   | Data of identifier
@@ -70,6 +77,10 @@ type instruction =
       { src : operand
       ; dst : operand
       }
+  | MovZeroExtend of
+      { src : operand
+      ; dst : operand
+      }
   | Unary of unary_op * operand * asm_type
   | Binary of
       { bop : binary_op
@@ -83,13 +94,12 @@ type instruction =
       ; sz : asm_type
       }
   | Idiv of operand * asm_type
+  | Div of operand * asm_type
   | Cdq of asm_type
   | Jmp of identifier
   | JmpC of cond_code * identifier
   | SetC of cond_code * operand
   | Label of identifier
-  | AllocStack of int
-  | DeallocStack of int
   | Push of operand
   | Call of identifier
   | Ret

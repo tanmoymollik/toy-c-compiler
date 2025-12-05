@@ -1,3 +1,5 @@
+open Stdint
+
 let gen_identifier = function
   | C_ast.Identifier iden -> Tacky.Identifier iden
 ;;
@@ -41,8 +43,9 @@ let make_label prefix = Tacky.Identifier (Core.make_unique_label prefix)
 
 let gen_const = function
   | C_ast.ConstInt i -> Tacky.Constant (Tacky.ConstInt i)
+  | C_ast.ConstUInt ui -> Tacky.Constant (Tacky.ConstUInt ui)
   | C_ast.ConstLong l -> Tacky.Constant (Tacky.ConstLong l)
-  | _ -> assert false
+  | C_ast.ConstULong ul -> Tacky.Constant (Tacky.ConstULong ul)
 ;;
 
 let rec gen_expression stk = function
@@ -50,13 +53,18 @@ let rec gen_expression stk = function
   | C_ast.Var (iden, _) -> Tacky.Var (gen_identifier iden)
   | C_ast.Cast { tgt; exp; _ } ->
     let src = gen_expression stk exp in
-    if tgt = C_ast.get_type exp
+    let inner_tp = C_ast.get_type exp in
+    if tgt = inner_tp
     then src
     else (
       let dst = make_tmp_dst tgt in
-      if tgt = C_ast.Long
+      if C_ast.size tgt = C_ast.size inner_tp
+      then Stack.push (Tacky.Copy { src; dst }) stk
+      else if C_ast.size tgt < C_ast.size inner_tp
+      then Stack.push (Tacky.Truncate { src; dst }) stk
+      else if C_ast.signed inner_tp
       then Stack.push (Tacky.SignExtend { src; dst }) stk
-      else Stack.push (Tacky.Truncate { src; dst }) stk;
+      else Stack.push (Tacky.ZeroExtend { src; dst }) stk;
       dst)
   | C_ast.Unary (uop, exp, etp) ->
     let uop = gen_uop uop in
@@ -77,8 +85,10 @@ let rec gen_expression stk = function
        let const_one =
          match etp with
          | C_ast.Int -> Tacky.ConstInt 1l
+         | C_ast.UInt -> Tacky.ConstUInt 1i
          | C_ast.Long -> Tacky.ConstLong 1L
-         | _ -> assert false
+         | C_ast.ULong -> Tacky.ConstULong 1I
+         | C_ast.FunType _ -> assert false
        in
        let i =
          Tacky.Binary { bop; src1 = src; src2 = Tacky.Constant const_one; dst = src }
@@ -294,8 +304,10 @@ let gen_function_decl = function
       | C_ast.FunType { ret; _ } ->
         (match ret with
          | C_ast.Int -> Tacky.ConstInt 0l
+         | C_ast.UInt -> Tacky.ConstUInt 0i
          | C_ast.Long -> Tacky.ConstLong 0L
-         | _ -> assert false)
+         | C_ast.ULong -> Tacky.ConstULong 0I
+         | C_ast.FunType _ -> assert false)
       | _ -> assert false
     in
     Stack.push (Tacky.Ret (Tacky.Constant ret_val)) stk;
@@ -332,9 +344,13 @@ let convert_symbols_to_tacky symbol_map acc =
             (match tp with
              | C_ast.Int ->
                Tacky.StaticVar { name; global; init = Core.IntInit 0l } :: acc
+             | C_ast.UInt ->
+               Tacky.StaticVar { name; global; init = Core.UIntInit 0i } :: acc
              | C_ast.Long ->
                Tacky.StaticVar { name; global; init = Core.LongInit 0L } :: acc
-             | _ -> assert false)
+             | C_ast.ULong ->
+               Tacky.StaticVar { name; global; init = Core.ULongInit 0I } :: acc
+             | C_ast.FunType _ -> assert false)
           | Core.NoInitial -> acc)
        | _ -> acc)
     symbol_map
