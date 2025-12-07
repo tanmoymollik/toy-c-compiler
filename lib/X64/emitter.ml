@@ -1,5 +1,5 @@
 open Stdint
-open X64_ast
+open Ast
 
 let indent = String.make 4 ' '
 let platform = ref Platform.Mac
@@ -114,8 +114,8 @@ let emit_instruction = function
     Printf.sprintf
       "%smovsx %s, %s"
       indent
-      (emit_operand (dst, X64_ast.QWord))
-      (emit_operand (src, X64_ast.DWord))
+      (emit_operand (dst, QWord))
+      (emit_operand (src, DWord))
   | MovZeroExtend _ -> assert false
   | Unary (uop, src, sz) ->
     Printf.sprintf "%s%s %s" indent (emit_uop uop) (emit_operand (src, sz))
@@ -138,8 +138,8 @@ let emit_instruction = function
   | Cdq sz ->
     let cmd =
       match sz with
-      | X64_ast.DWord -> "cdq"
-      | X64_ast.QWord -> "cqo"
+      | DWord -> "cdq"
+      | QWord -> "cqo"
       | _ -> assert false
     in
     Printf.sprintf "%s%s" indent cmd
@@ -150,7 +150,7 @@ let emit_instruction = function
     Printf.sprintf "%sset%s %s" indent (emit_cond_code cc) (emit_operand (operand, Byte))
   | Label iden -> Printf.sprintf ".L%s:" (emit_identifier iden)
   | Push operand -> Printf.sprintf "%spush %s" indent (emit_operand (operand, QWord))
-  | Call (X64_ast.Identifier name) ->
+  | Call (Identifier name) ->
     let platform_name = emit_platform_name name in
     let name =
       match Hashtbl.find_opt Core.symbol_map name with
