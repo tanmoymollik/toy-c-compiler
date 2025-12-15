@@ -1,6 +1,5 @@
 open Stdint
-
-type identifier = Identifier of string [@@deriving show]
+open Common
 
 type unary_op =
   | Neg
@@ -60,13 +59,6 @@ type operand =
   | Data of identifier
 [@@deriving show]
 
-type asm_type =
-  | Byte
-  | Word
-  | DWord
-  | QWord
-[@@deriving show]
-
 type instruction =
   | Mov of
       { src : operand
@@ -114,7 +106,7 @@ type top_level =
   | StaticVar of
       { name : identifier
       ; global : bool
-      ; init : Core.static_init
+      ; init : const
       }
 [@@deriving show]
 

@@ -1,7 +1,7 @@
 exception SemanticError = Errors.SemanticError
 
 let null_label = ""
-let make_label prefix = C_ast.Identifier prefix
+let make_label prefix = Common.Identifier prefix
 
 let rec resolve_statement loop_lbl switch_lbl inner_loop = function
   | C_ast.If { cnd; thn; els } ->

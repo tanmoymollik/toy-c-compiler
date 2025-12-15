@@ -96,6 +96,7 @@ let fix_instruction = function
        let tmp_src = Reg R10 in
        [ Mov { src; dst = tmp_src; sz }; Mov { src = tmp_src; dst; sz } ]
      | Imm i, _ when imm_out_of_range32 i && sz = DWord ->
+       (* Truncate out of range imm value. *)
        [ Mov { src = Imm (Uint64.of_int32 (Uint64.to_int32 i)); dst; sz } ]
      | Imm i, (Stack _ | Data _) when imm_out_of_range32 i ->
        let tmp_src = Reg R10 in

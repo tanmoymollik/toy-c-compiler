@@ -1,9 +1,5 @@
 open Stdint
 
-let gen_identifier = function
-  | C_ast.Identifier iden -> Tacky.Identifier iden
-;;
-
 let gen_uop = function
   | C_ast.Complement -> Tacky.Complement
   | C_ast.Negate -> Tacky.Negate
@@ -34,23 +30,16 @@ let gen_bop = function
 let make_tmp_dst vtp =
   let c = Core.get_var_count () in
   let name = Printf.sprintf "tmp.%d" c in
-  let info = Core.{ tp = vtp; attrs = Core.LocalAttr } in
-  Hashtbl.replace Core.symbol_map name info;
-  Tacky.Var (Tacky.Identifier name)
+  let name = Common.Identifier name in
+  Symbol_map.add_local_var name vtp;
+  Tacky.Var name
 ;;
 
-let make_label prefix = Tacky.Identifier (Core.make_unique_label prefix)
-
-let gen_const = function
-  | C_ast.ConstInt i -> Tacky.Constant (Tacky.ConstInt i)
-  | C_ast.ConstUInt ui -> Tacky.Constant (Tacky.ConstUInt ui)
-  | C_ast.ConstLong l -> Tacky.Constant (Tacky.ConstLong l)
-  | C_ast.ConstULong ul -> Tacky.Constant (Tacky.ConstULong ul)
-;;
+let make_label prefix = Common.Identifier (Core.make_unique_label prefix)
 
 let rec gen_expression stk = function
-  | C_ast.Constant (c, _) -> gen_const c
-  | C_ast.Var (iden, _) -> Tacky.Var (gen_identifier iden)
+  | C_ast.Constant (c, _) -> Tacky.Constant c
+  | C_ast.Var (iden, _) -> Tacky.Var iden
   | C_ast.Cast { tgt; exp; _ } ->
     let src = gen_expression stk exp in
     let inner_tp = C_ast.get_type exp in
@@ -84,10 +73,10 @@ let rec gen_expression stk = function
        in
        let const_one =
          match etp with
-         | C_ast.Int -> Tacky.ConstInt 1l
-         | C_ast.UInt -> Tacky.ConstUInt 1i
-         | C_ast.Long -> Tacky.ConstLong 1L
-         | C_ast.ULong -> Tacky.ConstULong 1I
+         | C_ast.Int -> Common.ConstInt 1l
+         | C_ast.UInt -> Common.ConstUInt 1i
+         | C_ast.Long -> Common.ConstLong 1L
+         | C_ast.ULong -> Common.ConstULong 1I
          | C_ast.FunType _ -> assert false
        in
        let i =
@@ -122,12 +111,12 @@ let rec gen_expression stk = function
        let dst = make_tmp_dst C_ast.Int in
        Stack.push
          (Tacky.Copy
-            { src = Tacky.Constant (Tacky.ConstInt (Int32.of_int (1 lxor dflt))); dst })
+            { src = Tacky.Constant (Common.ConstInt (Int32.of_int (1 lxor dflt))); dst })
          stk;
        Stack.push (Tacky.Jump en_label) stk;
        Stack.push (Tacky.Label br_label) stk;
        Stack.push
-         (Tacky.Copy { src = Tacky.Constant (Tacky.ConstInt (Int32.of_int dflt)); dst })
+         (Tacky.Copy { src = Tacky.Constant (Common.ConstInt (Int32.of_int dflt)); dst })
          stk;
        Stack.push (Tacky.Label en_label) stk;
        dst
@@ -162,7 +151,6 @@ let rec gen_expression stk = function
     Stack.push (Tacky.Label en_lbl) stk;
     dst
   | C_ast.FunctionCall (name, args, etp) ->
-    let name = gen_identifier name in
     let args = List.map (gen_expression stk) args in
     let dst = make_tmp_dst etp in
     Stack.push (Tacky.FunCall { name; args; dst }) stk;
@@ -172,7 +160,7 @@ let rec gen_expression stk = function
 let gen_variable_decl stk = function
   | C_ast.{ name; init = Some exp; storage = None; _ } ->
     let exp_val = gen_expression stk exp in
-    Stack.push (Tacky.Copy { src = exp_val; dst = Tacky.Var (gen_identifier name) }) stk
+    Stack.push (Tacky.Copy { src = exp_val; dst = Tacky.Var name }) stk
   | _ -> ()
 ;;
 
@@ -198,7 +186,7 @@ let rec gen_statement stk = function
     let els_lbl =
       if els != None
       then make_label ("else@" ^ Core.if_label)
-      else Tacky.Identifier "not_used"
+      else Common.Identifier "not_used"
     in
     let en_lbl = make_label ("end@" ^ Core.if_label) in
     let to_go = if els != None then els_lbl else en_lbl in
@@ -212,43 +200,43 @@ let rec gen_statement stk = function
       ())
     else ();
     Stack.push (Tacky.Label en_lbl) stk
-  | C_ast.Goto label -> Stack.push (Tacky.Jump (gen_identifier label)) stk
+  | C_ast.Goto label -> Stack.push (Tacky.Jump label) stk
   | C_ast.Label (label, stmt) ->
-    Stack.push (Tacky.Label (gen_identifier label)) stk;
+    Stack.push (Tacky.Label label) stk;
     gen_statement stk stmt
   | C_ast.Compound block -> gen_block stk block
-  | C_ast.Break (C_ast.Identifier label) ->
-    let label = Tacky.Identifier (Core.break_label label) in
+  | C_ast.Break (Common.Identifier label) ->
+    let label = Common.Identifier (Core.break_label label) in
     Stack.push (Tacky.Jump label) stk;
     ()
-  | C_ast.Continue (C_ast.Identifier label) ->
-    let label = Tacky.Identifier (Core.continue_label label) in
+  | C_ast.Continue (Common.Identifier label) ->
+    let label = Common.Identifier (Core.continue_label label) in
     Stack.push (Tacky.Jump label) stk;
     ()
-  | C_ast.While (exp, stmt, C_ast.Identifier label) ->
-    let cont_label = Tacky.Identifier (Core.continue_label label) in
-    let brk_label = Tacky.Identifier (Core.break_label label) in
+  | C_ast.While (exp, stmt, Common.Identifier label) ->
+    let cont_label = Common.Identifier (Core.continue_label label) in
+    let brk_label = Common.Identifier (Core.break_label label) in
     Stack.push (Tacky.Label cont_label) stk;
     let cnd = gen_expression stk exp in
     Stack.push (Tacky.JumpIfZero (cnd, brk_label)) stk;
     gen_statement stk stmt;
     Stack.push (Tacky.Jump cont_label) stk;
     Stack.push (Tacky.Label brk_label) stk
-  | C_ast.DoWhile (stmt, exp, C_ast.Identifier label) ->
-    let start_label = Tacky.Identifier ("start@" ^ label) in
-    let cont_label = Tacky.Identifier (Core.continue_label label) in
-    let brk_label = Tacky.Identifier (Core.break_label label) in
+  | C_ast.DoWhile (stmt, exp, Common.Identifier label) ->
+    let start_label = Common.Identifier ("start@" ^ label) in
+    let cont_label = Common.Identifier (Core.continue_label label) in
+    let brk_label = Common.Identifier (Core.break_label label) in
     Stack.push (Tacky.Label start_label) stk;
     gen_statement stk stmt;
     Stack.push (Tacky.Label cont_label) stk;
     let cnd = gen_expression stk exp in
     Stack.push (Tacky.JumpIfNotZero (cnd, start_label)) stk;
     Stack.push (Tacky.Label brk_label) stk
-  | C_ast.For { init; cnd; post; body; label = C_ast.Identifier label } ->
+  | C_ast.For { init; cnd; post; body; label = Common.Identifier label } ->
     gen_for_init stk init;
-    let start_label = Tacky.Identifier ("start@" ^ label) in
-    let cont_label = Tacky.Identifier (Core.continue_label label) in
-    let brk_label = Tacky.Identifier (Core.break_label label) in
+    let start_label = Common.Identifier ("start@" ^ label) in
+    let cont_label = Common.Identifier (Core.continue_label label) in
+    let brk_label = Common.Identifier (Core.break_label label) in
     Stack.push (Tacky.Label start_label) stk;
     let f cnd =
       let cnd = gen_expression stk cnd in
@@ -262,20 +250,22 @@ let rec gen_statement stk = function
     ();
     Stack.push (Tacky.Jump start_label) stk;
     Stack.push (Tacky.Label brk_label) stk
-  | C_ast.Switch { cnd; body; cases; default; label = C_ast.Identifier label } ->
+  | C_ast.Switch { cnd; body; cases; default; label = Common.Identifier label } ->
     let src1 = gen_expression stk cnd in
     let dst = make_tmp_dst (C_ast.get_type cnd) in
     let calc_jmp ind cn =
-      let jmp_lbl = Tacky.Identifier (Core.case_label ind label) in
-      let jmp_ins = Tacky.Binary { bop = Tacky.Equal; src1; src2 = gen_const cn; dst } in
+      let jmp_lbl = Common.Identifier (Core.case_label ind label) in
+      let jmp_ins =
+        Tacky.Binary { bop = Tacky.Equal; src1; src2 = Tacky.Constant cn; dst }
+      in
       Stack.push jmp_ins stk;
       Stack.push (Tacky.JumpIfNotZero (dst, jmp_lbl)) stk
     in
     List.iteri calc_jmp cases;
-    let en_lbl = Tacky.Identifier (Core.break_label label) in
+    let en_lbl = Common.Identifier (Core.break_label label) in
     if default
     then (
-      let jmp_ins = Tacky.Identifier (Core.default_label label) in
+      let jmp_ins = Common.Identifier (Core.default_label label) in
       Stack.push (Tacky.Jump jmp_ins) stk)
     else Stack.push (Tacky.Jump en_lbl) stk;
     gen_statement stk body;
@@ -296,17 +286,16 @@ and gen_block stk = function
 
 let gen_function_decl = function
   | C_ast.{ name; params; body = Some body; ftp; _ } ->
-    let params = List.map gen_identifier params in
     let stk = Stack.create () in
     gen_block stk body;
     let ret_val =
       match ftp with
       | C_ast.FunType { ret; _ } ->
         (match ret with
-         | C_ast.Int -> Tacky.ConstInt 0l
-         | C_ast.UInt -> Tacky.ConstUInt 0i
-         | C_ast.Long -> Tacky.ConstLong 0L
-         | C_ast.ULong -> Tacky.ConstULong 0I
+         | C_ast.Int -> Common.ConstInt 0l
+         | C_ast.UInt -> Common.ConstUInt 0i
+         | C_ast.Long -> Common.ConstLong 0L
+         | C_ast.ULong -> Common.ConstULong 0I
          | C_ast.FunType _ -> assert false)
       | _ -> assert false
     in
@@ -314,13 +303,8 @@ let gen_function_decl = function
     (* The stack is effectively reversed here. *)
     let f acc a = a :: acc in
     let body = Stack.fold f [] stk in
-    let is_global (C_ast.Identifier name) =
-      match Hashtbl.find_opt Core.symbol_map name with
-      | Some Core.{ attrs = Core.FunAttr { global; _ }; _ } -> global
-      | _ -> assert false
-    in
     let tacky_f =
-      Tacky.Function { name = gen_identifier name; global = is_global name; params; body }
+      Tacky.Function { name; global = Symbol_map.is_global_fun name; params; body }
     in
     Some tacky_f
   (* Do nothing for empty function bodies. *)
@@ -332,33 +316,12 @@ let gen_declaration = function
   | C_ast.FunDecl f -> gen_function_decl f
 ;;
 
-let convert_symbols_to_tacky symbol_map acc =
-  Hashtbl.fold
-    (fun iden Core.{ tp; attrs } acc ->
-       match attrs with
-       | Core.StaticAttr { init; global } ->
-         let name = Tacky.Identifier iden in
-         (match init with
-          | Core.Initial i -> Tacky.StaticVar { name; global; init = i } :: acc
-          | Core.Tentative ->
-            (match tp with
-             | C_ast.Int ->
-               Tacky.StaticVar { name; global; init = Core.IntInit 0l } :: acc
-             | C_ast.UInt ->
-               Tacky.StaticVar { name; global; init = Core.UIntInit 0i } :: acc
-             | C_ast.Long ->
-               Tacky.StaticVar { name; global; init = Core.LongInit 0L } :: acc
-             | C_ast.ULong ->
-               Tacky.StaticVar { name; global; init = Core.ULongInit 0I } :: acc
-             | C_ast.FunType _ -> assert false)
-          | Core.NoInitial -> acc)
-       | _ -> acc)
-    symbol_map
-    acc
+let convert_symbols_to_tacky acc =
+  Symbol_map.fold (fun name global init -> Tacky.StaticVar { name; global; init }) acc
 ;;
 
 let gen_program = function
   | C_ast.Program dns ->
     let top_lvls = List.filter_map gen_declaration dns in
-    Tacky.Program (convert_symbols_to_tacky Core.symbol_map top_lvls)
+    Tacky.Program (convert_symbols_to_tacky top_lvls)
 ;;

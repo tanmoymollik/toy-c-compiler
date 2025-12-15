@@ -1,19 +1,22 @@
 module Stage = Stage
-module Platform = Platform
+module Arch = Arch
 
 exception CompileError of string
 
 type compile_args =
   { stage : Stage.stage
-  ; platform : Platform.platform
+  ; target : Arch.target
   ; infile : string
   ; outfile : string
+  ; dump : bool
   }
 
 module Impl : sig
   val compile : compile_args -> unit
 end = struct
   module Validater = Validater.M
+
+  let astdump = ref false
 
   let print_position lexbuf =
     let pos = Lexing.lexeme_start_p lexbuf in
@@ -35,7 +38,7 @@ end = struct
   let validate stage prog =
     match stage with
     | `Parse ->
-      print_endline C_ast.(show_program prog);
+      if !astdump then print_endline C_ast.(show_program prog);
       None
     | _ ->
       (try Some (Validater.resolve_program prog) with
@@ -45,29 +48,44 @@ end = struct
   let tacky_gen stage prog =
     match stage with
     | `Validate ->
-      print_endline C_ast.(show_program prog);
+      if !astdump then print_endline C_ast.(show_program prog);
       None
     | _ -> Some (Tacky_gen.gen_program prog)
   ;;
 
-  let x64_gen stage prog =
+  type asm_prog =
+    | X64 of X64.Ast.program
+    | Riscv64 of Riscv64.Ast.program
+
+  let code_gen stage target prog =
     match stage with
     | `Tacky ->
-      print_endline Tacky.(show_program prog);
+      if !astdump then print_endline Tacky.(show_program prog);
       None
-    | _ -> Some (X64.Gen.gen_program prog)
+    | _ ->
+      (match target with
+       | Arch.X86_64 -> Some (X64 (X64.Gen.gen_program prog))
+       | Arch.RISCV64 -> Some (Riscv64 (Riscv64.Gen.gen_program prog)))
   ;;
 
-  let codeemit stage platform prog =
+  let code_emit stage prog =
     match stage with
     | `CodeGen ->
-      print_endline X64.Ast.(show_program prog);
+      if !astdump
+      then (
+        match prog with
+        | X64 prog -> print_endline X64.Ast.(show_program prog)
+        | Riscv64 prog -> print_endline Riscv64.Ast.(show_program prog));
       None
-    | _ -> Some (X64.Emitter.emit_program platform prog)
+    | _ ->
+      (match prog with
+       | X64 prog -> Some (X64.Emitter.emit_program prog)
+       | Riscv64 prog -> Some (Riscv64.Emitter.emit_program prog))
   ;;
 
   let compile = function
-    | { stage; platform; infile; outfile } ->
+    | { stage; target; infile; outfile; dump } ->
+      astdump := dump;
       let inx = In_channel.open_text infile in
       let lexbuf = Lexing.from_channel inx in
       Lexing.set_filename lexbuf infile;
@@ -76,12 +94,11 @@ end = struct
         parse lexbuf
         >>= validate stage
         >>= tacky_gen stage
-        >>= x64_gen stage
-        >>= codeemit stage platform
+        >>= code_gen stage target
+        >>= code_emit stage
       in
       (match code with
        | Some v ->
-         if stage = `CodeEmit then print_endline v;
          let oc = open_out outfile in
          output_string oc v;
          close_out oc

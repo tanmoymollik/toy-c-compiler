@@ -1,5 +1,3 @@
-open Stdint
-
 let tmp_var_count = ref 0
 
 let get_var_count () =
@@ -26,40 +24,3 @@ let make_unique_label prefix =
   label_count := c + 1;
   Printf.sprintf "%s#%d" prefix c
 ;;
-
-type static_init =
-  | IntInit of int32
-  | UIntInit of
-      (uint32[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint32.to_string v)])
-  | LongInit of int64
-  | ULongInit of
-      (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
-[@@deriving show]
-
-type initial_value =
-  | Tentative
-  | Initial of static_init
-  | NoInitial
-[@@deriving show]
-
-type identifier_attrs =
-  | FunAttr of
-      { defined : bool
-      ; global : bool
-      }
-  | StaticAttr of
-      { init : initial_value
-      ; global : bool
-      }
-  | LocalAttr
-[@@deriving show]
-
-type symbol_info =
-  { tp : C_ast.c_type
-  ; attrs : identifier_attrs
-  }
-[@@deriving show]
-
-type symbol_map_type = (string, symbol_info) Hashtbl.t
-
-let symbol_map : symbol_map_type = Hashtbl.create 100

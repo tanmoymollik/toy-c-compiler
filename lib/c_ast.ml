@@ -1,7 +1,3 @@
-open Stdint
-
-type identifier = Identifier of string [@@deriving show]
-
 type c_type =
   | Int
   | UInt
@@ -11,15 +7,6 @@ type c_type =
       { params : c_type list
       ; ret : c_type
       }
-[@@deriving show]
-
-type const =
-  | ConstInt of int32
-  | ConstUInt of
-      (uint32[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint32.to_string v)])
-  | ConstLong of int64
-  | ConstULong of
-      (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
 [@@deriving show]
 
 type unary_op =
@@ -55,8 +42,8 @@ type binary_op =
 [@@deriving show]
 
 type expression =
-  | Constant of const * c_type
-  | Var of identifier * c_type
+  | Constant of Common.const * c_type
+  | Var of Common.identifier * c_type
   | Cast of
       { tgt : c_type
       ; exp : expression
@@ -81,7 +68,7 @@ type expression =
       ; rhs : expression
       ; etp : c_type
       }
-  | FunctionCall of identifier * expression list * c_type
+  | FunctionCall of Common.identifier * expression list * c_type
 [@@deriving show]
 
 type storage_class =
@@ -90,7 +77,7 @@ type storage_class =
 [@@deriving show]
 
 type variable_decl =
-  { name : identifier
+  { name : Common.identifier
   ; init : expression option
   ; vtp : c_type
   ; storage : storage_class option
@@ -110,29 +97,29 @@ type statement =
       ; thn : statement
       ; els : statement option
       }
-  | Goto of identifier
-  | Label of identifier * statement
+  | Goto of Common.identifier
+  | Label of Common.identifier * statement
   | Compound of block
-  | Break of identifier
-  | Continue of identifier
-  | While of expression * statement * identifier
-  | DoWhile of statement * expression * identifier
+  | Break of Common.identifier
+  | Continue of Common.identifier
+  | While of expression * statement * Common.identifier
+  | DoWhile of statement * expression * Common.identifier
   | For of
       { init : for_init
       ; cnd : expression option
       ; post : expression option
       ; body : statement
-      ; label : identifier
+      ; label : Common.identifier
       }
   | Switch of
       { cnd : expression
       ; body : statement
-      ; cases : const list
+      ; cases : Common.const list
       ; default : bool
-      ; label : identifier
+      ; label : Common.identifier
       }
-  | Case of expression * statement * identifier
-  | Default of statement * identifier
+  | Case of expression * statement * Common.identifier
+  | Default of statement * Common.identifier
   | Null
 [@@deriving show]
 
@@ -144,8 +131,8 @@ and block_item =
 and block = Block of block_item list [@@deriving show]
 
 and function_decl =
-  { name : identifier
-  ; params : identifier list
+  { name : Common.identifier
+  ; params : Common.identifier list
   ; body : block option
   ; ftp : c_type
   ; storage : storage_class option

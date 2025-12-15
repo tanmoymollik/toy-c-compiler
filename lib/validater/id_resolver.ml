@@ -42,8 +42,8 @@ let make_unique_name iden =
 
 let rec resolve_expression iden_map = function
   | C_ast.Constant _ as ret -> ret
-  | C_ast.Var (C_ast.Identifier iden, etp) ->
-    C_ast.Var (C_ast.Identifier (get_iden iden_map iden), etp)
+  | C_ast.Var (Common.Identifier iden, etp) ->
+    C_ast.Var (Common.Identifier (get_iden iden_map iden), etp)
   | C_ast.Cast { tgt; exp; etp } ->
     C_ast.Cast { tgt; exp = resolve_expression iden_map exp; etp }
   | C_ast.Unary (uop, exp, etp) -> C_ast.Unary (uop, resolve_expression iden_map exp, etp)
@@ -74,13 +74,13 @@ let rec resolve_expression iden_map = function
       ; rhs = resolve_expression iden_map rhs
       ; etp
       }
-  | C_ast.FunctionCall (C_ast.Identifier name, exps, etp) ->
-    let name = C_ast.Identifier (get_iden iden_map name) in
+  | C_ast.FunctionCall (Common.Identifier name, exps, etp) ->
+    let name = Common.Identifier (get_iden iden_map name) in
     C_ast.FunctionCall (name, List.map (resolve_expression iden_map) exps, etp)
 ;;
 
 let resolve_block_scope_variable_decl iden_map = function
-  | C_ast.{ name = C_ast.Identifier name; init; vtp; storage } as ret ->
+  | C_ast.{ name = Common.Identifier name; init; vtp; storage } as ret ->
     (match Hashtbl.find_opt iden_map name with
      | Some prev_entry ->
        if
@@ -95,15 +95,15 @@ let resolve_block_scope_variable_decl iden_map = function
     else (
       let nw_name = make_unique_name name in
       add_iden iden_map name nw_name false;
-      let name = C_ast.Identifier nw_name in
+      let name = Common.Identifier nw_name in
       let init = Option.map (resolve_expression iden_map) init in
       C_ast.{ name; init; vtp; storage })
 ;;
 
 let resolve_file_scope_variable_decl iden_map = function
-  | C_ast.{ name = C_ast.Identifier name; init; vtp; storage } ->
+  | C_ast.{ name = Common.Identifier name; init; vtp; storage } ->
     add_iden iden_map name name true;
-    C_ast.{ name = C_ast.Identifier name; init; vtp; storage }
+    C_ast.{ name = Common.Identifier name; init; vtp; storage }
 ;;
 
 let resolve_for_init iden_map = function
@@ -154,7 +154,7 @@ and resolve_block iden_map = function
   | C_ast.Block items -> C_ast.Block (List.map (resolve_block_item iden_map) items)
 
 and resolve_function_decl iden_map nested = function
-  | C_ast.{ name = C_ast.Identifier iden; params; body; ftp; storage } ->
+  | C_ast.{ name = Common.Identifier iden; params; body; ftp; storage } ->
     if nested && Option.is_some body
     then raise (SemanticError ("Nested function definition - " ^ iden));
     if nested && storage = Some C_ast.Static
@@ -167,16 +167,16 @@ and resolve_function_decl iden_map nested = function
     add_iden iden_map iden iden true;
     let inner_map = copy_iden_map iden_map in
     let resolve_param iden_map = function
-      | C_ast.Identifier name ->
+      | Common.Identifier name ->
         if exists_var_iden iden_map name
         then raise (SemanticError ("Duplicate function param - " ^ name));
         let nw_name = make_unique_name name in
         add_iden iden_map name nw_name false;
-        C_ast.Identifier nw_name
+        Common.Identifier nw_name
     in
     let params = List.map (resolve_param inner_map) params in
     C_ast.
-      { name = C_ast.Identifier iden
+      { name = Common.Identifier iden
       ; params
       ; body = Option.map (resolve_block inner_map) body
       ; ftp

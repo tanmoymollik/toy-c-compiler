@@ -17,22 +17,22 @@ let rec resolve_statement fun_name = function
       ; thn = resolve_statement fun_name thn
       ; els = Option.map (resolve_statement fun_name) els
       }
-  | C_ast.Goto (C_ast.Identifier label) as ret ->
+  | C_ast.Goto (Common.Identifier label) as ret ->
     (match fun_name with
      | Some fun_name ->
        let label = Core.goto_label label fun_name in
-       C_ast.Goto (C_ast.Identifier label)
+       C_ast.Goto (Common.Identifier label)
      | None ->
        if not (exists_label label)
        then raise (SemanticError ("goto label doesn't exist: " ^ label));
        ret)
-  | C_ast.Label (C_ast.Identifier label, stmt) as ret ->
+  | C_ast.Label (Common.Identifier label, stmt) as ret ->
     (match fun_name with
      | Some f_name ->
        let label = Core.goto_label label f_name in
        if exists_label label then raise (SemanticError ("Duplicate label: " ^ label));
        add_label label;
-       C_ast.Label (C_ast.Identifier label, resolve_statement fun_name stmt)
+       C_ast.Label (Common.Identifier label, resolve_statement fun_name stmt)
      | None -> ret)
   | C_ast.Compound block -> C_ast.Compound (resolve_block fun_name block)
   | C_ast.While (exp, stmt, iden) ->
@@ -58,10 +58,10 @@ and resolve_block fun_name = function
 ;;
 
 let resolve_function_decl = function
-  | C_ast.{ name = C_ast.Identifier iden; params; body; ftp; storage } ->
+  | C_ast.{ name = Common.Identifier iden; params; body; ftp; storage } ->
     let first_pass = Option.map (resolve_block (Some iden)) body in
     let body = Option.map (resolve_block None) first_pass in
-    C_ast.{ name = C_ast.Identifier iden; params; body; ftp; storage }
+    C_ast.{ name = Common.Identifier iden; params; body; ftp; storage }
 ;;
 
 let resolve_declaration = function

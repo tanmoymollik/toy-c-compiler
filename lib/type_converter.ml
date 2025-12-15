@@ -1,42 +1,42 @@
 open Stdint
 
 let const_type = function
-  | C_ast.ConstInt _ -> C_ast.Int
-  | C_ast.ConstUInt _ -> C_ast.UInt
-  | C_ast.ConstLong _ -> C_ast.Long
-  | C_ast.ConstULong _ -> C_ast.ULong
+  | Common.ConstInt _ -> C_ast.Int
+  | Common.ConstUInt _ -> C_ast.UInt
+  | Common.ConstLong _ -> C_ast.Long
+  | Common.ConstULong _ -> C_ast.ULong
 ;;
 
 (* Converts to c int which is 32 bits wide. *)
 let convert_to_int = function
-  | C_ast.ConstInt i -> i
-  | C_ast.ConstUInt ui -> Int32.of_uint32 ui
-  | C_ast.ConstLong l -> Int32.of_int64 l
-  | C_ast.ConstULong ul -> Int32.of_uint64 ul
+  | Common.ConstInt i -> i
+  | Common.ConstUInt ui -> Int32.of_uint32 ui
+  | Common.ConstLong l -> Int32.of_int64 l
+  | Common.ConstULong ul -> Int32.of_uint64 ul
 ;;
 
 (* Converts to c unsigned int which is 32 bits wide. *)
 let convert_to_uint = function
-  | C_ast.ConstInt i -> Uint32.of_int32 i
-  | C_ast.ConstUInt ui -> ui
-  | C_ast.ConstLong l -> Uint32.of_int64 l
-  | C_ast.ConstULong ul -> Uint32.of_uint64 ul
+  | Common.ConstInt i -> Uint32.of_int32 i
+  | Common.ConstUInt ui -> ui
+  | Common.ConstLong l -> Uint32.of_int64 l
+  | Common.ConstULong ul -> Uint32.of_uint64 ul
 ;;
 
 (* Converts to c long which is 64 bits wide. *)
 let convert_to_long = function
-  | C_ast.ConstInt i -> Int64.of_int32 i
-  | C_ast.ConstUInt ui -> Int64.of_uint32 ui
-  | C_ast.ConstLong l -> l
-  | C_ast.ConstULong ul -> Int64.of_uint64 ul
+  | Common.ConstInt i -> Int64.of_int32 i
+  | Common.ConstUInt ui -> Int64.of_uint32 ui
+  | Common.ConstLong l -> l
+  | Common.ConstULong ul -> Int64.of_uint64 ul
 ;;
 
 (* Converts to c unsigned long which is 64 bits wide. *)
 let convert_to_ulong = function
-  | C_ast.ConstInt i -> Uint64.of_int32 i
-  | C_ast.ConstUInt ui -> Uint64.of_uint32 ui
-  | C_ast.ConstLong l -> Uint64.of_int64 l
-  | C_ast.ConstULong ul -> ul
+  | Common.ConstInt i -> Uint64.of_int32 i
+  | Common.ConstUInt ui -> Uint64.of_uint32 ui
+  | Common.ConstLong l -> Uint64.of_int64 l
+  | Common.ConstULong ul -> ul
 ;;
 
 let evaluate_int32_binary_expression bop l r =
@@ -132,16 +132,16 @@ let evaluate_binary_expression bop l r =
   let ctp = const_type l in
   match ctp with
   | C_ast.Int ->
-    C_ast.ConstInt
+    Common.ConstInt
       (evaluate_int32_binary_expression bop (convert_to_int l) (convert_to_int r))
   | C_ast.UInt ->
-    C_ast.ConstUInt
+    Common.ConstUInt
       (evaluate_uint32_binary_expression bop (convert_to_uint l) (convert_to_uint r))
   | C_ast.Long ->
-    C_ast.ConstLong
+    Common.ConstLong
       (evaluate_int64_binary_expression bop (convert_to_long l) (convert_to_long r))
   | C_ast.ULong ->
-    C_ast.ConstULong
+    Common.ConstULong
       (evaluate_uint64_binary_expression bop (convert_to_ulong l) (convert_to_ulong r))
   | C_ast.FunType _ -> assert false
 ;;
@@ -177,13 +177,13 @@ let evaluate_uint64_unary_expression uop x =
 let evaluate_unary_expression uop x =
   let ctp = const_type x in
   match ctp with
-  | C_ast.Int -> C_ast.ConstInt (evaluate_int32_unary_expression uop (convert_to_int x))
+  | C_ast.Int -> Common.ConstInt (evaluate_int32_unary_expression uop (convert_to_int x))
   | C_ast.UInt ->
-    C_ast.ConstUInt (evaluate_uint32_unary_expression uop (convert_to_uint x))
+    Common.ConstUInt (evaluate_uint32_unary_expression uop (convert_to_uint x))
   | C_ast.Long ->
-    C_ast.ConstLong (evaluate_int64_unary_expression uop (convert_to_long x))
+    Common.ConstLong (evaluate_int64_unary_expression uop (convert_to_long x))
   | C_ast.ULong ->
-    C_ast.ConstULong (evaluate_uint64_unary_expression uop (convert_to_ulong x))
+    Common.ConstULong (evaluate_uint64_unary_expression uop (convert_to_ulong x))
   | C_ast.FunType _ -> assert false
 ;;
 
@@ -192,10 +192,10 @@ let evaluate_conditional_expression cnd lhs rhs =
   let ctp = const_type cnd in
   let zr =
     match ctp with
-    | C_ast.Int -> C_ast.ConstInt 0l
-    | C_ast.UInt -> C_ast.ConstUInt 0i
-    | C_ast.Long -> C_ast.ConstLong 0L
-    | C_ast.ULong -> C_ast.ConstULong 0I
+    | C_ast.Int -> Common.ConstInt 0l
+    | C_ast.UInt -> Common.ConstUInt 0i
+    | C_ast.Long -> Common.ConstLong 0L
+    | C_ast.ULong -> Common.ConstULong 0I
     | C_ast.FunType _ -> assert false
   in
   if cnd <> zr then lhs else rhs

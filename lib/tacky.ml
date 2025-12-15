@@ -1,7 +1,3 @@
-open Stdint
-
-type identifier = Identifier of string [@@deriving show]
-
 type unary_op =
   | Complement
   | Negate
@@ -27,19 +23,9 @@ type binary_op =
   | GEqual
 [@@deriving show]
 
-(* Reuse C_ast.const *)
-type const =
-  | ConstInt of int32
-  | ConstUInt of
-      (uint32[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint32.to_string v)])
-  | ConstLong of int64
-  | ConstULong of
-      (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
-[@@deriving show]
-
 type value =
-  | Constant of const
-  | Var of identifier
+  | Constant of Common.const
+  | Var of Common.identifier
 [@@deriving show]
 
 type instruction =
@@ -59,12 +45,12 @@ type instruction =
       { src : value
       ; dst : value
       }
-  | Jump of identifier
-  | JumpIfZero of value * identifier (* cond * target *)
-  | JumpIfNotZero of value * identifier (* cond * target *)
-  | Label of identifier
+  | Jump of Common.identifier
+  | JumpIfZero of value * Common.identifier (* cond * target *)
+  | JumpIfNotZero of value * Common.identifier (* cond * target *)
+  | Label of Common.identifier
   | FunCall of
-      { name : identifier
+      { name : Common.identifier
       ; args : value list
       ; dst : value
       }
@@ -84,15 +70,15 @@ type instruction =
 
 type top_level =
   | Function of
-      { name : identifier
+      { name : Common.identifier
       ; global : bool
-      ; params : identifier list
+      ; params : Common.identifier list
       ; body : instruction list
       }
   | StaticVar of
-      { name : identifier
+      { name : Common.identifier
       ; global : bool
-      ; init : Core.static_init
+      ; init : Common.const
       }
 [@@deriving show]
 

@@ -1,62 +1,6 @@
 open Stdint
-
-let get_inner_iden = function
-  | Tacky.Identifier iden -> iden
-;;
-
-let get_oprnd_size_for_c_type = function
-  | C_ast.Int | C_ast.UInt -> Ast.DWord
-  | C_ast.Long | C_ast.ULong -> Ast.QWord
-  | C_ast.FunType _ -> assert false
-;;
-
-let get_oprnd_size_for_iden iden =
-  match Hashtbl.find_opt Core.symbol_map iden with
-  | Some Core.{ tp; _ } -> get_oprnd_size_for_c_type tp
-  | None -> assert false
-;;
-
-let get_oprnd_size_for_fun_ret = function
-  | Tacky.Identifier iden ->
-    (match Hashtbl.find_opt Core.symbol_map iden with
-     | Some Core.{ tp = C_ast.FunType { ret; _ }; _ } -> get_oprnd_size_for_c_type ret
-     | _ -> assert false)
-;;
-
-let get_oprnd_size_for_val = function
-  | Tacky.Constant (Tacky.ConstInt _ | Tacky.ConstUInt _) -> Ast.DWord
-  | Tacky.Constant (Tacky.ConstLong _ | Tacky.ConstULong _) -> Ast.QWord
-  | Tacky.Var (Tacky.Identifier iden) -> get_oprnd_size_for_iden iden
-;;
-
-let var_map : (string, int) Hashtbl.t = Hashtbl.create 100
-let fun_map : (string, int) Hashtbl.t = Hashtbl.create 100
-
-let get_fun_stack_alloc fun_name =
-  match Hashtbl.find_opt fun_map fun_name with
-  | Some v -> v
-  | None -> 0
-;;
-
-let get_stack_address fun_name iden =
-  match Hashtbl.find_opt var_map iden with
-  | Some v -> v
-  | None ->
-    let b_sz =
-      match get_oprnd_size_for_iden iden with
-      | Ast.DWord -> 4
-      | Ast.QWord -> 8
-      | _ -> assert false
-    in
-    let stk_ptr = get_fun_stack_alloc fun_name + b_sz in
-    Hashtbl.add fun_map fun_name stk_ptr;
-    Hashtbl.add var_map iden stk_ptr;
-    stk_ptr
-;;
-
-let gen_identifier = function
-  | Tacky.Identifier ident -> Ast.Identifier ident
-;;
+open Common
+open AsmUtils
 
 let gen_uop = function
   | Tacky.Complement -> Ast.Not
@@ -102,7 +46,7 @@ let alloc_stack_ins offset =
     { bop = Ast.Sub
     ; src = Ast.Imm (Uint64.of_int offset)
     ; dst = Ast.Reg Ast.Sp
-    ; sz = Ast.QWord
+    ; sz = QWord
     }
 ;;
 
@@ -112,37 +56,33 @@ let dealloc_stack_ins offset =
     { bop = Ast.Add
     ; src = Ast.Imm (Uint64.of_int offset)
     ; dst = Ast.Reg Ast.Sp
-    ; sz = Ast.QWord
+    ; sz = QWord
     }
 ;;
 
-let gen_stack_for_var fun_name = function
-  | Tacky.Identifier iden ->
-    let addr = get_stack_address fun_name iden in
-    Ast.Stack addr
+let gen_stack_for_var fun_iden var_iden =
+  let addr = get_stack_address (fun_iden, var_iden) in
+  Ast.Stack addr
 ;;
 
 let gen_const = function
-  | Tacky.ConstInt i -> Ast.Imm (Uint64.of_int32 i)
-  | Tacky.ConstUInt ui -> Ast.Imm (Uint64.of_uint32 ui)
-  | Tacky.ConstLong l -> Ast.Imm (Uint64.of_int64 l)
-  | Tacky.ConstULong ul -> Ast.Imm ul
+  | ConstInt i -> Ast.Imm (Uint64.of_int32 i)
+  | ConstUInt ui -> Ast.Imm (Uint64.of_uint32 ui)
+  | ConstLong l -> Ast.Imm (Uint64.of_int64 l)
+  | ConstULong ul -> Ast.Imm ul
 ;;
 
 let gen_value fun_name = function
   | Tacky.Constant c -> gen_const c
-  | Tacky.Var (Tacky.Identifier iden) ->
-    (match Hashtbl.find_opt Core.symbol_map iden with
-     | Some Core.{ attrs = Core.StaticAttr _; _ } -> Ast.Data (Ast.Identifier iden)
-     | _ -> gen_stack_for_var fun_name (Tacky.Identifier iden))
+  | Tacky.Var name ->
+    if Symbol_map.is_static_var name
+    then Ast.Data name
+    else gen_stack_for_var fun_name name
 ;;
 
 let signed = function
   | Tacky.Constant _ -> assert false
-  | Tacky.Var (Tacky.Identifier iden) ->
-    (match Hashtbl.find_opt Core.symbol_map iden with
-     | Some Core.{ tp; _ } -> C_ast.signed tp
-     | None -> assert false)
+  | Tacky.Var name -> Symbol_map.is_signed_var name
 ;;
 
 let gen_instruction fun_name = function
@@ -224,20 +164,16 @@ let gen_instruction fun_name = function
   | Tacky.Copy { src; dst } ->
     let sz = get_oprnd_size_for_val dst in
     [ Ast.Mov { src = gen_value fun_name src; dst = gen_value fun_name dst; sz } ]
-  | Tacky.Jump iden -> [ Ast.Jmp (gen_identifier iden) ]
+  | Tacky.Jump iden -> [ Ast.Jmp iden ]
   | Tacky.JumpIfZero (cnd, tgt) ->
     let sz = get_oprnd_size_for_val cnd in
     let zr = Ast.Imm 0I in
-    [ Ast.Cmp { lhs = gen_value fun_name cnd; rhs = zr; sz }
-    ; Ast.JmpC (Ast.E, gen_identifier tgt)
-    ]
+    [ Ast.Cmp { lhs = gen_value fun_name cnd; rhs = zr; sz }; Ast.JmpC (Ast.E, tgt) ]
   | Tacky.JumpIfNotZero (cnd, tgt) ->
     let sz = get_oprnd_size_for_val cnd in
     let zr = Ast.Imm 0I in
-    [ Ast.Cmp { lhs = gen_value fun_name cnd; rhs = zr; sz }
-    ; Ast.JmpC (Ast.NE, gen_identifier tgt)
-    ]
-  | Tacky.Label iden -> [ Ast.Label (gen_identifier iden) ]
+    [ Ast.Cmp { lhs = gen_value fun_name cnd; rhs = zr; sz }; Ast.JmpC (Ast.NE, tgt) ]
+  | Tacky.Label iden -> [ Ast.Label iden ]
   | Tacky.FunCall { name; args; dst } ->
     let arg_regs = Ast.arg_regs in
     let arg_regs_len = Ast.arg_regs_len in
@@ -255,7 +191,7 @@ let gen_instruction fun_name = function
       let src = gen_value fun_name arg in
       let sz = get_oprnd_size_for_val arg in
       match sz with
-      | Ast.QWord -> [ Ast.Push src ]
+      | QWord -> [ Ast.Push src ]
       | _ ->
         (match src with
          | Ast.Imm _ | Ast.Reg _ -> [ Ast.Push src ]
@@ -264,7 +200,7 @@ let gen_instruction fun_name = function
            [ Ast.Mov { src; dst; sz }; Ast.Push dst ])
     in
     let stk_arg_ins = List.concat_map f (List.rev stk_args) in
-    let fun_call = [ Ast.Call (gen_identifier name) ] in
+    let fun_call = [ Ast.Call name ] in
     let bytes_to_remove = (8 * List.length stk_args) + stack_padding in
     let stack_dealloc =
       if bytes_to_remove <> 0 then [ dealloc_stack_ins bytes_to_remove ] else []
@@ -281,7 +217,7 @@ let gen_instruction fun_name = function
   | Tacky.Truncate { src; dst } ->
     let src = gen_value fun_name src in
     let dst = gen_value fun_name dst in
-    [ Ast.Mov { src; dst; sz = Ast.DWord } ]
+    [ Ast.Mov { src; dst; sz = DWord } ]
   | Tacky.ZeroExtend { src; dst } ->
     let src = gen_value fun_name src in
     let dst = gen_value fun_name dst in
@@ -289,7 +225,7 @@ let gen_instruction fun_name = function
 ;;
 
 let gen_top_level = function
-  | Tacky.Function { name = Tacky.Identifier name; global; params; body } ->
+  | Tacky.Function { name; global; params; body } ->
     let arg_regs = Ast.arg_regs in
     let arg_regs_len = Ast.arg_regs_len in
     let reg_params, stk_params =
@@ -298,14 +234,14 @@ let gen_top_level = function
     let f ind arg =
       let dst = gen_stack_for_var name arg in
       let src = Ast.Reg (List.nth arg_regs ind) in
-      let sz = get_oprnd_size_for_iden (get_inner_iden arg) in
+      let sz = get_oprnd_size_for_iden arg in
       Ast.Mov { src; dst; sz }
     in
     let reg_param_ins = List.mapi f reg_params in
     let f ind arg =
       let dst = gen_stack_for_var name arg in
       let src = Ast.Stack (-(16 + (8 * ind))) in
-      let sz = get_oprnd_size_for_iden (get_inner_iden arg) in
+      let sz = get_oprnd_size_for_iden arg in
       Ast.Mov { src; dst; sz }
     in
     let stk_param_ins = List.mapi f stk_params in
@@ -316,10 +252,8 @@ let gen_top_level = function
     let align16 = if alloc_stack > 0 then 16 * ((alloc_stack / 16) + 1) else 0 in
     let body = if align16 > 0 then alloc_stack_ins align16 :: body else body in
     let body = List.concat_map Ins_fixer.fix_instruction body in
-    Ast.Function { name = Ast.Identifier name; global; body }
-  | Tacky.StaticVar { name; global; init } ->
-    let name = gen_identifier name in
-    Ast.StaticVar { name; global; init }
+    Ast.Function { name; global; body }
+  | Tacky.StaticVar { name; global; init } -> Ast.StaticVar { name; global; init }
 ;;
 
 let gen_program = function

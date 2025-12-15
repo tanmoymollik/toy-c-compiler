@@ -1,3 +1,0 @@
-type platform =
-  | Mac
-  | Linux

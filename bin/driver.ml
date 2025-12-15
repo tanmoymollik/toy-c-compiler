@@ -7,7 +7,8 @@ type driver_stage =
 exception CommandError of string
 
 let stage : driver_stage ref = ref `Link
-let platform = ref Lib.Platform.Linux
+let target = ref Lib.Arch.X86_64
+let astdump = ref false
 let usage_msg = "Usage: dune exec c_compiler -- [options] <input_file>.c"
 
 let spec =
@@ -26,9 +27,10 @@ let spec =
     , Arg.Unit (fun () -> stage := `LibStage `CodeEmit)
     , "Stop after assembly code emission" )
   ; "-c", Arg.Unit (fun () -> stage := `Assemble), "Generate object file only"
-  ; ( "--mac"
-    , Arg.Unit (fun () -> platform := Lib.Platform.Mac)
-    , "Generate object file only" )
+  ; ( "--riscv64"
+    , Arg.Unit (fun () -> target := Lib.Arch.RISCV64)
+    , "Generate code for riscv64 target" )
+  ; "--dump", Arg.Unit (fun () -> astdump := true), "Dump ast"
   ]
 ;;
 
@@ -52,9 +54,9 @@ let assemble stage base_name =
   | `LibStage _ -> ()
   | `Assemble | `Link ->
     let nasm_cmd =
-      match !platform with
-      | Lib.Platform.Linux -> "nasm -f elf64"
-      | Lib.Platform.Mac -> "nasm -f macho64"
+      match !target with
+      | Lib.Arch.X86_64 -> "nasm -f elf64"
+      | Lib.Arch.RISCV64 -> "riscv64-linux-gnu-as"
     in
     let assembly_file = assembly_file base_name in
     let object_file = object_file base_name in
@@ -69,8 +71,13 @@ let link stage base_name =
   | `LibStage _ | `Assemble -> ()
   | `Link ->
     let object_file = object_file base_name in
+    let gcc_cmd =
+      match !target with
+      | Lib.Arch.X86_64 -> "gcc"
+      | Lib.Arch.RISCV64 -> "riscv64-linux-gnu-gcc"
+    in
     runCommand
-      (Printf.sprintf "gcc -w %s -o %s" object_file base_name)
+      (Printf.sprintf "%s -w %s -o %s" gcc_cmd object_file base_name)
       "Error during linking";
     runCommand ("rm " ^ object_file) "Error removing object file"
 ;;
@@ -84,7 +91,7 @@ let cleanup base_name =
     "Error removing auxiliary files"
 ;;
 
-let drive_single stage platform infile =
+let drive_single stage target infile =
   try
     let base_name = Filename.remove_extension infile in
     let preprocessed_file = preprocessed_file base_name in
@@ -95,7 +102,12 @@ let drive_single stage platform infile =
       | _ -> `CodeEmit
     in
     let args : Lib.compile_args =
-      { stage = lib_stage; platform; infile = preprocessed_file; outfile = assembly_file }
+      { stage = lib_stage
+      ; target
+      ; infile = preprocessed_file
+      ; outfile = assembly_file
+      ; dump = !astdump
+      }
     in
     runCommand
       (Printf.sprintf "gcc -E -P %s -o %s" infile preprocessed_file)
@@ -120,5 +132,5 @@ let () =
   then (
     Arg.usage spec usage_msg;
     exit 1)
-  else drive_single !stage !platform !input_file
+  else drive_single !stage !target !input_file
 ;;

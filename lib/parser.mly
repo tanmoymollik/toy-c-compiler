@@ -144,21 +144,21 @@ statement:
   | block = block
     { C_ast.Compound block }
   | BREAK; SEMICOLON
-    { C_ast.Break (C_ast.Identifier "dummy") }
+    { C_ast.Break (Common.Identifier "dummy") }
   | CONTINUE; SEMICOLON
-    { C_ast.Continue (C_ast.Identifier "dummy") }
+    { C_ast.Continue (Common.Identifier "dummy") }
   | WHILE; LPAREN; exp = expression; RPAREN; stmt = statement
-    { C_ast.While (exp, stmt, C_ast.Identifier "dummy") }
+    { C_ast.While (exp, stmt, Common.Identifier "dummy") }
   | DO; stmt = statement; WHILE; LPAREN; exp = expression; RPAREN; SEMICOLON
-    { C_ast.DoWhile (stmt, exp, C_ast.Identifier "dummy") }
+    { C_ast.DoWhile (stmt, exp, Common.Identifier "dummy") }
   | FOR; LPAREN; init = for_init; cnd = option(expression); SEMICOLON; post = option(expression); RPAREN; body = statement
-    { C_ast.For { init; cnd; post; body; label = C_ast.Identifier "dummy" } }
+    { C_ast.For { init; cnd; post; body; label = Common.Identifier "dummy" } }
   | SWITCH; LPAREN; cnd = expression; RPAREN; body = statement
-    { C_ast.Switch { cnd; body; cases = []; default = false; label = C_ast.Identifier "dummy" } }
+    { C_ast.Switch { cnd; body; cases = []; default = false; label = Common.Identifier "dummy" } }
   | CASE; exp = expression; COLON; stmt = statement
-    { C_ast.Case (exp, stmt, C_ast.Identifier "dummy") }
+    { C_ast.Case (exp, stmt, Common.Identifier "dummy") }
   | DEFAULT; COLON; stmt = statement
-    { C_ast.Default (stmt, C_ast.Identifier "dummy") }
+    { C_ast.Default (stmt, Common.Identifier "dummy") }
   | SEMICOLON
     { C_ast.Null }
 
@@ -188,10 +188,10 @@ factor:
     { C_ast.FunctionCall (id, args, C_ast.Int) }
 
 %inline const:
-  | i = CONST_INT    { C_ast.ConstInt i }
-  | ui = CONST_UINT  { C_ast.ConstUInt ui }
-  | l = CONST_LONG   { C_ast.ConstLong l }
-  | ul = CONST_ULONG { C_ast.ConstULong ul }
+  | i = CONST_INT    { Common.ConstInt i }
+  | ui = CONST_UINT  { Common.ConstUInt ui }
+  | l = CONST_LONG   { Common.ConstLong l }
+  | ul = CONST_ULONG { Common.ConstULong ul }
 
 %inline uop:
   | MINUS        { C_ast.Negate }
@@ -236,4 +236,4 @@ factor:
   | CARET_EQ     { XEq }
 
 identifier:
-  id = IDENT { C_ast.Identifier id }
+  id = IDENT { Common.Identifier id }
