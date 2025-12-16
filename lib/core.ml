@@ -22,5 +22,5 @@ let goto_label lbl fun_name = lbl ^ "@" ^ fun_name
 let make_unique_label prefix =
   let c = !label_count in
   label_count := c + 1;
-  Printf.sprintf "%s#%d" prefix c
+  Printf.sprintf ".L%s#%d" prefix c
 ;;

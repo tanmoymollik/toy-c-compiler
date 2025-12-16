@@ -70,19 +70,20 @@ let gen_const = function
   | ConstUInt ui -> Ast.Imm (Uint64.of_uint32 ui)
   | ConstLong l -> Ast.Imm (Uint64.of_int64 l)
   | ConstULong ul -> Ast.Imm ul
+  | ConstDouble _ -> assert false
 ;;
 
 let gen_value fun_name = function
   | Tacky.Constant c -> gen_const c
   | Tacky.Var name ->
-    if Symbol_map.is_static_var name
+    if AsmSymbolMap.is_static_var name
     then Ast.Data name
     else gen_stack_for_var fun_name name
 ;;
 
 let signed = function
   | Tacky.Constant _ -> assert false
-  | Tacky.Var name -> Symbol_map.is_signed_var name
+  | Tacky.Var name -> AsmSymbolMap.is_signed_var name
 ;;
 
 let gen_instruction fun_name = function
@@ -207,7 +208,7 @@ let gen_instruction fun_name = function
     in
     let dst = gen_value fun_name dst in
     let src = Ast.Reg Ast.Ax in
-    let sz = get_oprnd_size_for_fun_ret name in
+    let sz = AsmSymbolMap.get_fun_ret_type name in
     let ret_ins = [ Ast.Mov { src; dst; sz } ] in
     stack_alloc @ reg_arg_ins @ stk_arg_ins @ fun_call @ stack_dealloc @ ret_ins
   | Tacky.SignExtend { src; dst } ->
@@ -222,6 +223,10 @@ let gen_instruction fun_name = function
     let src = gen_value fun_name src in
     let dst = gen_value fun_name dst in
     [ Ast.MovZeroExtend { src; dst } ]
+  | Tacky.DoubleToInt _ -> assert false
+  | Tacky.DoubleToUInt _ -> assert false
+  | Tacky.IntToDouble _ -> assert false
+  | Tacky.UIntToDouble _ -> assert false
 ;;
 
 let gen_top_level = function
@@ -234,14 +239,14 @@ let gen_top_level = function
     let f ind arg =
       let dst = gen_stack_for_var name arg in
       let src = Ast.Reg (List.nth arg_regs ind) in
-      let sz = get_oprnd_size_for_iden arg in
+      let sz = AsmSymbolMap.get_var_type arg in
       Ast.Mov { src; dst; sz }
     in
     let reg_param_ins = List.mapi f reg_params in
     let f ind arg =
       let dst = gen_stack_for_var name arg in
       let src = Ast.Stack (-(16 + (8 * ind))) in
-      let sz = get_oprnd_size_for_iden arg in
+      let sz = AsmSymbolMap.get_var_type arg in
       Ast.Mov { src; dst; sz }
     in
     let stk_param_ins = List.mapi f stk_params in
@@ -253,7 +258,15 @@ let gen_top_level = function
     let body = if align16 > 0 then alloc_stack_ins align16 :: body else body in
     let body = List.concat_map Ins_fixer.fix_instruction body in
     Ast.Function { name; global; body }
-  | Tacky.StaticVar { name; global; init } -> Ast.StaticVar { name; global; init }
+  | Tacky.StaticVar { name; global; tp; init } ->
+    let alignment =
+      match AsmSymbolMap.get_asm_type_for_c_type tp with
+      | Byte -> 1
+      | Word -> 2
+      | DWord -> 4
+      | QWord -> 8
+    in
+    Ast.StaticVar { name; global; alignment; init }
 ;;
 
 let gen_program = function

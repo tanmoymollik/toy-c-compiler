@@ -1,3 +1,5 @@
+open Common
+
 type unary_op =
   | Complement
   | Negate
@@ -24,8 +26,8 @@ type binary_op =
 [@@deriving show]
 
 type value =
-  | Constant of Common.const
-  | Var of Common.identifier
+  | Constant of const
+  | Var of identifier
 [@@deriving show]
 
 type instruction =
@@ -45,12 +47,12 @@ type instruction =
       { src : value
       ; dst : value
       }
-  | Jump of Common.identifier
-  | JumpIfZero of value * Common.identifier (* cond * target *)
-  | JumpIfNotZero of value * Common.identifier (* cond * target *)
-  | Label of Common.identifier
+  | Jump of identifier
+  | JumpIfZero of value * identifier (* cond * target *)
+  | JumpIfNotZero of value * identifier (* cond * target *)
+  | Label of identifier
   | FunCall of
-      { name : Common.identifier
+      { name : identifier
       ; args : value list
       ; dst : value
       }
@@ -66,19 +68,36 @@ type instruction =
       { src : value
       ; dst : value
       }
+  | DoubleToInt of
+      { src : value
+      ; dst : value
+      }
+  | DoubleToUInt of
+      { src : value
+      ; dst : value
+      }
+  | IntToDouble of
+      { src : value
+      ; dst : value
+      }
+  | UIntToDouble of
+      { src : value
+      ; dst : value
+      }
 [@@deriving show]
 
 type top_level =
   | Function of
-      { name : Common.identifier
+      { name : identifier
       ; global : bool
-      ; params : Common.identifier list
+      ; params : identifier list
       ; body : instruction list
       }
   | StaticVar of
-      { name : Common.identifier
+      { name : identifier
       ; global : bool
-      ; init : Common.const
+      ; tp : c_type
+      ; init : const
       }
 [@@deriving show]
 

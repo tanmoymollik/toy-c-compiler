@@ -151,7 +151,7 @@ let emit_instruction = function
   | Call name ->
     let platform_name = emit_platform_name name in
     let name =
-      if not (Symbol_map.is_fun_defined name)
+      if not (AsmSymbolMap.is_fun_defined name)
       then platform_name ^ " wrt ..plt"
       else platform_name
     in
@@ -172,32 +172,32 @@ let emit_top_level = function
       ^ (List.map emit_instruction body |> String.concat "\n")
     in
     Stack.push entry text_section
-  | StaticVar { name; global; init } ->
-    let name = emit_platform_name name in
-    let size, specifier, value =
+  | StaticVar { name; global; alignment; init } ->
+    let pname = emit_platform_name name in
+    let value, is_zero =
       match init with
-      | ConstInt i -> 4, "d", Int32.to_string i
-      | ConstUInt ui -> 4, "d", Uint32.to_string ui
-      | ConstLong l -> 8, "q", Int64.to_string l
-      | ConstULong ul -> 8, "q", Uint64.to_string ul
+      | ConstInt i -> Int32.to_string i, i = 0l
+      | ConstUInt ui -> Uint32.to_string ui, ui = Uint32.zero
+      | ConstLong l -> Int64.to_string l, l = 0L
+      | ConstULong ul -> Uint64.to_string ul, ul = Uint64.zero
+      | ConstDouble _ -> assert false
     in
-    let is_zero =
-      match init with
-      | ConstInt 0l -> true
-      | ConstUInt ui -> ui = Uint32.zero
-      | ConstLong 0L -> true
-      | ConstULong ul -> ul = Uint64.zero
-      | _ -> false
+    let specifier =
+      match AsmSymbolMap.get_var_type name with
+      | Byte -> "b"
+      | Word -> "w"
+      | DWord -> "d"
+      | QWord -> "q"
     in
     let decl =
       if is_zero
-      then Printf.sprintf "%s%s res%s 1" indent name specifier
-      else Printf.sprintf "%s%s d%s %s" indent name specifier value
+      then Printf.sprintf "%s%s res%s 1" indent pname specifier
+      else Printf.sprintf "%s%s d%s %s" indent pname specifier value
     in
     let align = if is_zero then "alignb" else "align" in
     let entry =
-      Printf.sprintf "%s%s %d\n" indent align size
-      ^ (if global then indent ^ "global " ^ name ^ "\n" else "")
+      Printf.sprintf "%s%s %d\n" indent align alignment
+      ^ (if global then indent ^ "global " ^ pname ^ "\n" else "")
       ^ decl
     in
     if is_zero then Stack.push entry bss_section else Stack.push entry data_section
@@ -206,7 +206,7 @@ let emit_top_level = function
 let emit_program = function
   | Program tns ->
     List.iter emit_top_level tns;
-    let extern_decls = Symbol_map.extern_decls () in
+    let extern_decls = AsmSymbolMap.extern_decls () in
     let extern_decls = List.map (fun s -> "extern " ^ s) extern_decls in
     let f acc e = e :: acc in
     let data_body = Stack.fold f [] data_section in

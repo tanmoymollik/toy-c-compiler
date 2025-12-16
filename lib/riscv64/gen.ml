@@ -19,6 +19,7 @@ let gen_const = function
   | ConstUInt ui -> Ast.Imm (Uint64.of_uint32 ui)
   | ConstLong l -> Ast.Imm (Uint64.of_int64 l)
   | ConstULong ul -> Ast.Imm ul
+  | ConstDouble _ -> assert false
 ;;
 
 let gen_value fun_name = function

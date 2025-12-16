@@ -1,7 +1,9 @@
+open Common
+
 exception SemanticError = Errors.SemanticError
 
 (* Maps switch labels to their condition type. *)
-let switch_label_map : (string, C_ast.c_type) Hashtbl.t = Hashtbl.create 100
+let switch_label_map : (string, c_type) Hashtbl.t = Hashtbl.create 100
 let add_for_label k v = Hashtbl.replace switch_label_map k v
 
 let get_for_label lbl =
@@ -12,19 +14,21 @@ let get_for_label lbl =
 
 let rec typecheck_expression symbol_map = function
   | C_ast.Constant (c, _) -> C_ast.Constant (c, Type_converter.const_type c)
-  | C_ast.Var (Common.Identifier iden, _) ->
+  | C_ast.Var (Identifier iden, _) ->
     (match Hashtbl.find_opt symbol_map iden with
-     | Some Symbol_map.{ tp = C_ast.FunType _; _ } ->
+     | Some Symbol_map.{ tp = FunType _; _ } ->
        raise (SemanticError ("Function name used as variable - " ^ iden))
-     | Some Symbol_map.{ tp; _ } -> C_ast.Var (Common.Identifier iden, tp)
+     | Some Symbol_map.{ tp; _ } -> C_ast.Var (Identifier iden, tp)
      | None -> assert false)
   | C_ast.Cast { tgt; exp; _ } ->
     C_ast.Cast { tgt; exp = typecheck_expression symbol_map exp; etp = tgt }
   | C_ast.Unary (uop, exp, _) ->
     let exp = typecheck_expression symbol_map exp in
+    if uop = C_ast.Complement && C_ast.get_type exp = Double
+    then raise (SemanticError "Can't take the bitwise complement of a double");
     let etp =
       match uop with
-      | C_ast.Not -> C_ast.Int
+      | C_ast.Not -> Int
       | _ -> C_ast.get_type exp
     in
     C_ast.Unary (uop, exp, etp)
@@ -37,11 +41,11 @@ let rec typecheck_expression symbol_map = function
     let convert lexp rexp =
       let t1 = C_ast.get_type lexp in
       let t2 = C_ast.get_type rexp in
-      let common_t = C_ast.get_common_type t1 t2 in
+      let common_t = get_common_type t1 t2 in
       C_ast.convert_to common_t lexp, C_ast.convert_to common_t rexp
     in
     (match bop with
-     | C_ast.And | C_ast.Or -> C_ast.Binary { bop; lexp; rexp; etp = C_ast.Int }
+     | C_ast.And | C_ast.Or -> C_ast.Binary { bop; lexp; rexp; etp = Int }
      | C_ast.Add
      | C_ast.Sub
      | C_ast.Mul
@@ -57,8 +61,16 @@ let rec typecheck_expression symbol_map = function
      | C_ast.Less
      | C_ast.Greater ->
        let lexp, rexp = convert lexp rexp in
+       if bop = C_ast.Rem && C_ast.get_type rexp = Double
+       then raise (SemanticError "Can't use double with remainder operator");
+       if
+         (bop = C_ast.BAnd || bop = C_ast.BOr || bop = C_ast.Xor)
+         && C_ast.get_type rexp = Double
+       then raise (SemanticError "Can't use double with bitwise operator");
        C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
      | C_ast.Lsft | C_ast.Rsft ->
+       if C_ast.get_type lexp = Double || C_ast.get_type rexp = Double
+       then raise (SemanticError "Can't use double with shift operator");
        C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp })
   | C_ast.Assignment { lval; rval; _ } ->
     let lval = typecheck_expression symbol_map lval in
@@ -71,12 +83,12 @@ let rec typecheck_expression symbol_map = function
     let rhs = typecheck_expression symbol_map rhs in
     let t1 = C_ast.get_type lhs in
     let t2 = C_ast.get_type rhs in
-    let common_t = C_ast.get_common_type t1 t2 in
+    let common_t = get_common_type t1 t2 in
     let lhs = C_ast.convert_to common_t lhs in
     let rhs = C_ast.convert_to common_t rhs in
     C_ast.Conditional
       { cnd = typecheck_expression symbol_map cnd; lhs; rhs; etp = common_t }
-  | C_ast.FunctionCall (Common.Identifier iden, exps, _) ->
+  | C_ast.FunctionCall (Identifier iden, exps, _) ->
     (match Hashtbl.find_opt symbol_map iden with
      | Some Symbol_map.{ tp = FunType { params; ret }; _ } ->
        if List.length params <> List.length exps
@@ -85,21 +97,25 @@ let rec typecheck_expression symbol_map = function
            (SemanticError ("Function called with wrong number of arguments - " ^ iden));
        let exps = List.map (typecheck_expression symbol_map) exps in
        let converted_args = List.map2 C_ast.convert_to params exps in
-       C_ast.FunctionCall (Common.Identifier iden, converted_args, ret)
+       C_ast.FunctionCall (Identifier iden, converted_args, ret)
      | _ -> raise (SemanticError ("Variable used as function - " ^ iden)))
 ;;
 
-let get_initial c = function
-  | C_ast.Int -> Symbol_map.Initial (Common.ConstInt (Type_converter.convert_to_int c))
-  | C_ast.UInt -> Symbol_map.Initial (Common.ConstUInt (Type_converter.convert_to_uint c))
-  | C_ast.Long -> Symbol_map.Initial (Common.ConstLong (Type_converter.convert_to_long c))
-  | C_ast.ULong ->
-    Symbol_map.Initial (Common.ConstULong (Type_converter.convert_to_ulong c))
-  | C_ast.FunType _ -> assert false
+let get_initial c vtp =
+  let c =
+    match vtp with
+    | Int -> ConstInt (Type_converter.convert_to_int c)
+    | UInt -> ConstUInt (Type_converter.convert_to_uint c)
+    | Long -> ConstLong (Type_converter.convert_to_long c)
+    | ULong -> ConstULong (Type_converter.convert_to_ulong c)
+    | Double -> ConstDouble (Type_converter.convert_to_double c)
+    | FunType _ -> assert false
+  in
+  Symbol_map.Initial c
 ;;
 
 let typecheck_file_scope_variable_decl symbol_map = function
-  | C_ast.{ name = Common.Identifier iden; init; vtp; storage } ->
+  | C_ast.{ name = Identifier iden; init; vtp; storage } ->
     let initial_value =
       ref
         (match init with
@@ -143,7 +159,7 @@ let typecheck_file_scope_variable_decl symbol_map = function
 ;;
 
 let typecheck_block_scope_variable_decl symbol_map = function
-  | C_ast.{ name = Common.Identifier iden; init; vtp; storage } as ret ->
+  | C_ast.{ name = Identifier iden; init; vtp; storage } as ret ->
     (match storage with
      | Some C_ast.Extern ->
        if init <> None
@@ -167,7 +183,7 @@ let typecheck_block_scope_variable_decl symbol_map = function
        let initial_value =
          match init with
          | Some (C_ast.Constant (c, _)) -> c
-         | None -> Common.ConstInt Int32.zero
+         | None -> ConstInt Int32.zero
          | _ ->
            raise
              (SemanticError
@@ -185,7 +201,7 @@ let typecheck_block_scope_variable_decl symbol_map = function
        Hashtbl.replace symbol_map iden info;
        let init = Option.map (typecheck_expression symbol_map) init in
        let init = Option.map (C_ast.convert_to vtp) init in
-       C_ast.{ name = Common.Identifier iden; init; vtp; storage })
+       C_ast.{ name = Identifier iden; init; vtp; storage })
 ;;
 
 let typecheck_for_init symbol_map = function
@@ -222,17 +238,21 @@ let rec typecheck_statement symbol_map ftp = function
     let post = Option.map (typecheck_expression symbol_map) post in
     let body = typecheck_statement symbol_map ftp body in
     C_ast.For { init; cnd; post; body; label }
-  | C_ast.Switch { cnd; body; cases; default; label = Common.Identifier label } ->
+  | C_ast.Switch { cnd; body; cases; default; label = Identifier label } ->
     let cnd = typecheck_expression symbol_map cnd in
+    if C_ast.get_type cnd = Double
+    then raise (SemanticError "Double value in switch condition");
     add_for_label label (C_ast.get_type cnd);
     let body = typecheck_statement symbol_map ftp body in
-    C_ast.Switch { cnd; body; cases; default; label = Common.Identifier label }
-  | C_ast.Case (exp, stmt, Common.Identifier lbl) ->
+    C_ast.Switch { cnd; body; cases; default; label = Identifier label }
+  | C_ast.Case (exp, stmt, Identifier lbl) ->
     let exp = typecheck_expression symbol_map exp in
+    if C_ast.get_type exp = Double
+    then raise (SemanticError "Double value in switch-case");
     let etp = get_for_label lbl in
     let exp = C_ast.convert_to etp exp in
     let stmt = typecheck_statement symbol_map ftp stmt in
-    C_ast.Case (exp, stmt, Common.Identifier lbl)
+    C_ast.Case (exp, stmt, Identifier lbl)
   | C_ast.Default (stmt, lbl) ->
     let stmt = typecheck_statement symbol_map ftp stmt in
     C_ast.Default (stmt, lbl)
@@ -248,7 +268,7 @@ and typecheck_block symbol_map ftp = function
     C_ast.Block items
 
 and typecheck_function_decl symbol_map = function
-  | C_ast.{ name = Common.Identifier iden; params; body; ftp; storage } ->
+  | C_ast.{ name = Identifier iden; params; body; ftp; storage } ->
     let has_body = Option.is_some body in
     let already_defined = ref false in
     let global = ref (storage <> Some C_ast.Static) in
@@ -274,17 +294,17 @@ and typecheck_function_decl symbol_map = function
     let info = Symbol_map.{ tp = ftp; attrs } in
     Hashtbl.replace symbol_map iden info;
     let typecheck_param symbol_map ptp = function
-      | Common.Identifier name ->
+      | Identifier name ->
         Hashtbl.replace symbol_map name Symbol_map.{ tp = ptp; attrs = LocalAttr }
     in
     let ptps, rtp =
       match ftp with
-      | C_ast.FunType { params; ret } -> params, ret
+      | FunType { params; ret } -> params, ret
       | _ -> assert false
     in
     let _ = List.map2 (typecheck_param symbol_map) ptps params in
     let body = Option.map (typecheck_block symbol_map rtp) body in
-    C_ast.{ name = Common.Identifier iden; params; body; ftp; storage }
+    C_ast.{ name = Identifier iden; params; body; ftp; storage }
 
 and typecheck_declaration symbol_map nested = function
   | C_ast.FunDecl f -> C_ast.FunDecl (typecheck_function_decl symbol_map f)

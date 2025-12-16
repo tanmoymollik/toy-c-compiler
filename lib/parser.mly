@@ -10,8 +10,9 @@ open Parser_utils
 %token <Stdint.uint32> CONST_UINT
 %token <int64> CONST_LONG
 %token <Stdint.uint64> CONST_ULONG
+%token <float> CONST_DOUBLE
+%token INT LONG DOUBLE VOID
 %token SIGNED UNSIGNED STATIC EXTERN
-%token INT LONG VOID
 %token RETURN
 %token IF ELSE
 %token <string> GOTO
@@ -83,6 +84,7 @@ variable_decl:
 %inline type_specifier:
   | INT       { IntSpec }
   | LONG      { LongSpec }
+  | DOUBLE    { DoubleSpec }
   | SIGNED    { SignedSpec }
   | UNSIGNED  { UnsignedSpec }
 
@@ -96,7 +98,7 @@ function_decl:
         { name
         ; params
         ; body = Some body
-        ; ftp = C_ast.FunType { params = ptps; ret = rtp }
+        ; ftp = Common.FunType { params = ptps; ret = rtp }
         ; storage = storage specs
         }
     }
@@ -109,7 +111,7 @@ function_decl:
         { name
         ; params
         ; body = None
-        ; ftp = C_ast.FunType { params = ptps; ret = rtp }
+        ; ftp = Common.FunType { params = ptps; ret = rtp }
         ; storage = storage specs
         }
     }
@@ -169,29 +171,30 @@ for_init:
 expression:
   | f = factor { f }
   | lexp = expression; bop = bop; rexp = expression
-    { C_ast.Binary { bop; lexp; rexp; etp = C_ast.Int } }
+    { C_ast.Binary { bop; lexp; rexp; etp = Common.Int } }
   | lval = expression; aop = aop; rval = expression
     { assignment_ast aop lval rval }
   | cnd = expression; QUESTION; lhs = expression; COLON; rhs = expression
-    { C_ast.Conditional { cnd; lhs; rhs; etp = C_ast.Int } }
+    { C_ast.Conditional { cnd; lhs; rhs; etp = Common.Int } }
 
 factor:
-  | c = const                         { C_ast.Constant (c, C_ast.Int) }
-  | id = identifier                   { C_ast.Var (id, C_ast.Int) }
+  | c = const                         { C_ast.Constant (c, Common.Int) }
+  | id = identifier                   { C_ast.Var (id, Common.Int) }
   | LPAREN; specs = nonempty_list(type_specifier); RPAREN; exp = factor
-    { C_ast.Cast { tgt = type_of specs; exp; etp = C_ast.Int } }
-  | uop = uop; exp = factor           { C_ast.Unary (uop, exp, C_ast.Int) }
-  | tuop = tuop; exp = factor         { C_ast.TUnary (tuop, true, exp, C_ast.Int) }
-  | exp = factor; tuop = tuop         { C_ast.TUnary (tuop, false, exp, C_ast.Int) }
+    { C_ast.Cast { tgt = type_of specs; exp; etp = Common.Int } }
+  | uop = uop; exp = factor           { C_ast.Unary (uop, exp, Common.Int) }
+  | tuop = tuop; exp = factor         { C_ast.TUnary (tuop, true, exp, Common.Int) }
+  | exp = factor; tuop = tuop         { C_ast.TUnary (tuop, false, exp, Common.Int) }
   | LPAREN; exp = expression; RPAREN  { exp }
   | id = identifier; LPAREN; args = separated_list(COMMA, expression); RPAREN
-    { C_ast.FunctionCall (id, args, C_ast.Int) }
+    { C_ast.FunctionCall (id, args, Common.Int) }
 
 %inline const:
   | i = CONST_INT    { Common.ConstInt i }
   | ui = CONST_UINT  { Common.ConstUInt ui }
   | l = CONST_LONG   { Common.ConstLong l }
   | ul = CONST_ULONG { Common.ConstULong ul }
+  | d = CONST_DOUBLE { Common.ConstDouble d }
 
 %inline uop:
   | MINUS        { C_ast.Negate }

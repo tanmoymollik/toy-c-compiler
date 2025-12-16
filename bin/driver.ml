@@ -9,6 +9,7 @@ exception CommandError of string
 let stage : driver_stage ref = ref `Link
 let target = ref Lib.Arch.X86_64
 let astdump = ref false
+let link_math = ref false
 let usage_msg = "Usage: dune exec c_compiler -- [options] <input_file>.c"
 
 let spec =
@@ -30,6 +31,7 @@ let spec =
   ; ( "--riscv64"
     , Arg.Unit (fun () -> target := Lib.Arch.RISCV64)
     , "Generate code for riscv64 target" )
+  ; "-lm", Arg.Unit (fun () -> link_math := true), "Generate code for riscv64 target"
   ; "--dump", Arg.Unit (fun () -> astdump := true), "Dump ast"
   ]
 ;;
@@ -76,8 +78,9 @@ let link stage base_name =
       | Lib.Arch.X86_64 -> "gcc"
       | Lib.Arch.RISCV64 -> "riscv64-linux-gnu-gcc"
     in
+    let link_math = if !link_math then "-lm" else "" in
     runCommand
-      (Printf.sprintf "%s -w %s -o %s" gcc_cmd object_file base_name)
+      (Printf.sprintf "%s -w %s -o %s %s" gcc_cmd object_file base_name link_math)
       "Error during linking";
     runCommand ("rm " ^ object_file) "Error removing object file"
 ;;

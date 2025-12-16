@@ -15,6 +15,9 @@ let const_int = digits+
 let const_uint = digits+ unsigned_spec
 let const_long = digits+ long_spec
 let const_ulong = digits+ (long_spec unsigned_spec | unsigned_spec long_spec)
+let fraction = digits* '.' digits+ | digits+ '.'
+let scientific = (digits* '.' digits+ | digits+ '.'?) ['E' 'e'] ['+' '-']? digits+
+let const_double = fraction | scientific
 
 rule read =
   parse
@@ -22,6 +25,7 @@ rule read =
   | "long"       { Parser.LONG }
   | "signed"     { Parser.SIGNED }
   | "unsigned"   { Parser.UNSIGNED }
+  | "double"     { Parser.DOUBLE }
   | "static"     { Parser.STATIC }
   | "extern"     { Parser.EXTERN }
   | "void"       { Parser.VOID }
@@ -83,6 +87,7 @@ rule read =
   | const_uint   { parse_uint (Lexing.lexeme lexbuf) }
   | const_long   { parse_long (Lexing.lexeme lexbuf) }
   | const_ulong  { parse_ulong (Lexing.lexeme lexbuf) }
+  | const_double { Parser.CONST_DOUBLE (Float.of_string (Lexing.lexeme lexbuf)) }
   | white        { read lexbuf }
   | newline      { Lexing.new_line lexbuf; read lexbuf }
   | eof          { Parser.EOF }

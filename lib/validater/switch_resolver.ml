@@ -1,7 +1,9 @@
+open Common
+
 exception SemanticError = Errors.SemanticError
 
 (* Maps switch labels to case expression lists. *)
-let label_map : (string, Common.const list) Hashtbl.t = Hashtbl.create 100
+let label_map : (string, const list) Hashtbl.t = Hashtbl.create 100
 
 (* Maps switch labels to default existence. *)
 let default_map : (string, bool) Hashtbl.t = Hashtbl.create 10
@@ -38,11 +40,12 @@ let rec evaluate_case_expression = function
   | C_ast.Cast { tgt; exp; _ } ->
     let exp = evaluate_case_expression exp in
     (match tgt with
-     | C_ast.Int -> Common.ConstInt (Type_converter.convert_to_int exp)
-     | C_ast.UInt -> Common.ConstUInt (Type_converter.convert_to_uint exp)
-     | C_ast.Long -> Common.ConstLong (Type_converter.convert_to_long exp)
-     | C_ast.ULong -> Common.ConstULong (Type_converter.convert_to_ulong exp)
-     | C_ast.FunType _ -> assert false)
+     | Int -> ConstInt (Type_converter.convert_to_int exp)
+     | UInt -> ConstUInt (Type_converter.convert_to_uint exp)
+     | Long -> ConstLong (Type_converter.convert_to_long exp)
+     | ULong -> ConstULong (Type_converter.convert_to_ulong exp)
+     | Double -> assert false
+     | FunType _ -> assert false)
   | C_ast.Unary (uop, exp, _) ->
     Type_converter.evaluate_unary_expression uop (evaluate_case_expression exp)
   | C_ast.TUnary _ -> raise (SemanticError "Non-const value for switch-case")
@@ -69,23 +72,23 @@ let rec resolve_statement = function
   | C_ast.DoWhile (stmt, exp, iden) -> C_ast.DoWhile (resolve_statement stmt, exp, iden)
   | C_ast.For { init; cnd; post; body; label } ->
     C_ast.For { init; cnd; post; body = resolve_statement body; label }
-  | C_ast.Switch { cnd; body; label = Common.Identifier label; _ } ->
+  | C_ast.Switch { cnd; body; label = Identifier label; _ } ->
     let body = resolve_statement body in
     (* All cases are now added to the label_map. *)
     let cases = List.rev (get_for_label label) in
     let default = exists_default label in
-    C_ast.Switch { cnd; body; cases; default; label = Common.Identifier label }
-  | C_ast.Case (exp, stmt, Common.Identifier lbl) ->
+    C_ast.Switch { cnd; body; cases; default; label = Identifier label }
+  | C_ast.Case (exp, stmt, Identifier lbl) ->
     let v = evaluate_case_expression exp in
     if exists_label lbl v then raise (SemanticError "Case already exists.");
     let id = add_for_label lbl v in
-    let lbl = Common.Identifier (Core.case_label id lbl) in
+    let lbl = Identifier (Core.case_label id lbl) in
     C_ast.Label (lbl, resolve_statement stmt)
-  | C_ast.Default (stmt, Common.Identifier lbl) ->
+  | C_ast.Default (stmt, Identifier lbl) ->
     if exists_default lbl
     then raise (SemanticError "Two default case for a single switch statement");
     add_default lbl;
-    let lbl = Common.Identifier (Core.default_label lbl) in
+    let lbl = Identifier (Core.default_label lbl) in
     C_ast.Label (lbl, resolve_statement stmt)
   | ( C_ast.Return _
     | C_ast.Expression _

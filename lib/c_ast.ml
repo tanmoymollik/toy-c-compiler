@@ -1,13 +1,4 @@
-type c_type =
-  | Int
-  | UInt
-  | Long
-  | ULong
-  | FunType of
-      { params : c_type list
-      ; ret : c_type
-      }
-[@@deriving show]
+open Common
 
 type unary_op =
   | Complement
@@ -42,8 +33,8 @@ type binary_op =
 [@@deriving show]
 
 type expression =
-  | Constant of Common.const * c_type
-  | Var of Common.identifier * c_type
+  | Constant of const * c_type
+  | Var of identifier * c_type
   | Cast of
       { tgt : c_type
       ; exp : expression
@@ -68,7 +59,7 @@ type expression =
       ; rhs : expression
       ; etp : c_type
       }
-  | FunctionCall of Common.identifier * expression list * c_type
+  | FunctionCall of identifier * expression list * c_type
 [@@deriving show]
 
 type storage_class =
@@ -77,7 +68,7 @@ type storage_class =
 [@@deriving show]
 
 type variable_decl =
-  { name : Common.identifier
+  { name : identifier
   ; init : expression option
   ; vtp : c_type
   ; storage : storage_class option
@@ -97,29 +88,29 @@ type statement =
       ; thn : statement
       ; els : statement option
       }
-  | Goto of Common.identifier
-  | Label of Common.identifier * statement
+  | Goto of identifier
+  | Label of identifier * statement
   | Compound of block
-  | Break of Common.identifier
-  | Continue of Common.identifier
-  | While of expression * statement * Common.identifier
-  | DoWhile of statement * expression * Common.identifier
+  | Break of identifier
+  | Continue of identifier
+  | While of expression * statement * identifier
+  | DoWhile of statement * expression * identifier
   | For of
       { init : for_init
       ; cnd : expression option
       ; post : expression option
       ; body : statement
-      ; label : Common.identifier
+      ; label : identifier
       }
   | Switch of
       { cnd : expression
       ; body : statement
-      ; cases : Common.const list
+      ; cases : const list
       ; default : bool
-      ; label : Common.identifier
+      ; label : identifier
       }
-  | Case of expression * statement * Common.identifier
-  | Default of statement * Common.identifier
+  | Case of expression * statement * identifier
+  | Default of statement * identifier
   | Null
 [@@deriving show]
 
@@ -131,8 +122,8 @@ and block_item =
 and block = Block of block_item list [@@deriving show]
 
 and function_decl =
-  { name : Common.identifier
-  ; params : Common.identifier list
+  { name : identifier
+  ; params : identifier list
   ; body : block option
   ; ftp : c_type
   ; storage : storage_class option
@@ -157,35 +148,6 @@ let get_type = function
   | Assignment { etp; _ } -> etp
   | Conditional { etp; _ } -> etp
   | FunctionCall (_, _, etp) -> etp
-;;
-
-(* Returns the size of type in bytes. *)
-let size = function
-  | Int -> 4
-  | UInt -> 4
-  | Long -> 8
-  | ULong -> 8
-  | FunType _ -> assert false
-;;
-
-(* Returns whether the type is signed. *)
-let signed = function
-  | Int -> true
-  | UInt -> false
-  | Long -> true
-  | ULong -> false
-  | FunType _ -> assert false
-;;
-
-(* Returns the type both t1 and t2 should be converted to. *)
-let get_common_type t1 t2 =
-  if t1 = t2
-  then t1
-  else if size t1 = size t2
-  then if signed t1 then t2 else t1
-  else if size t1 > size t2
-  then t1
-  else t2
 ;;
 
 (* Converts the given expression to the given type. *)
