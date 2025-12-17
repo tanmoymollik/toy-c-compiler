@@ -29,6 +29,7 @@ type asm_type =
   | Word
   | DWord
   | QWord
+  | AsmDouble
 [@@deriving show]
 
 (* Returns the size of type in bytes. *)
@@ -42,13 +43,15 @@ let size = function
 ;;
 
 (* Returns whether the type is signed. *)
-let signed = function
-  | Int -> true
-  | UInt -> false
-  | Long -> true
-  | ULong -> false
-  | Double -> true
+let signed_c_type = function
+  | Int | Long | Double -> true
+  | UInt | ULong -> false
   | FunType _ -> assert false
+;;
+
+let signed_const = function
+  | ConstInt _ | ConstLong _ -> true
+  | ConstUInt _ | ConstULong _ | ConstDouble _ -> false
 ;;
 
 (* Returns the type both t1 and t2 should be converted to. *)
@@ -58,7 +61,7 @@ let get_common_type t1 t2 =
   else if t1 = Double || t2 = Double
   then Double
   else if size t1 = size t2
-  then if signed t1 then t2 else t1
+  then if signed_c_type t1 then t2 else t1
   else if size t1 > size t2
   then t1
   else t2
@@ -69,7 +72,7 @@ let c_type_zero = function
   | UInt -> ConstUInt 0i
   | Long -> ConstLong 0L
   | ULong -> ConstULong 0I
-  | Double -> ConstDouble 0.
+  | Double -> ConstDouble 0.0
   | FunType _ -> assert false
 ;;
 
@@ -78,6 +81,6 @@ let c_type_one = function
   | UInt -> ConstUInt 1i
   | Long -> ConstLong 1L
   | ULong -> ConstULong 1I
-  | Double -> ConstDouble 1.
+  | Double -> ConstDouble 1.0
   | FunType _ -> assert false
 ;;

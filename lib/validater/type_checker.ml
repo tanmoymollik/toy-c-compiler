@@ -53,13 +53,7 @@ let rec typecheck_expression symbol_map = function
      | C_ast.Rem
      | C_ast.BAnd
      | C_ast.BOr
-     | C_ast.Xor
-     | C_ast.Equal
-     | C_ast.NEqual
-     | C_ast.LEqual
-     | C_ast.GEqual
-     | C_ast.Less
-     | C_ast.Greater ->
+     | C_ast.Xor ->
        let lexp, rexp = convert lexp rexp in
        if bop = C_ast.Rem && C_ast.get_type rexp = Double
        then raise (SemanticError "Can't use double with remainder operator");
@@ -68,6 +62,14 @@ let rec typecheck_expression symbol_map = function
          && C_ast.get_type rexp = Double
        then raise (SemanticError "Can't use double with bitwise operator");
        C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
+     | C_ast.Equal
+     | C_ast.NEqual
+     | C_ast.LEqual
+     | C_ast.GEqual
+     | C_ast.Less
+     | C_ast.Greater ->
+       let lexp, rexp = convert lexp rexp in
+       C_ast.Binary { bop; lexp; rexp; etp = Int }
      | C_ast.Lsft | C_ast.Rsft ->
        if C_ast.get_type lexp = Double || C_ast.get_type rexp = Double
        then raise (SemanticError "Can't use double with shift operator");

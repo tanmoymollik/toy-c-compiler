@@ -19,13 +19,14 @@ let asm_symbol_map : (string, asm_symbol_info) Hashtbl.t = Hashtbl.create 100
 (* Can only be called on vars. *)
 let get_asm_type_for_c_type = function
   | Int | UInt -> DWord
-  | Long | ULong | Double -> QWord
+  | Long | ULong -> QWord
+  | Double -> AsmDouble
   | FunType _ -> assert false
 ;;
 
 let gen_obj_info iden tp is_static is_extern =
   let asm_tp = get_asm_type_for_c_type tp in
-  let is_signed = signed tp in
+  let is_signed = signed_c_type tp in
   Hashtbl.replace
     asm_symbol_map
     iden

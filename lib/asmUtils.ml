@@ -1,11 +1,5 @@
 open Common
 
-let get_oprnd_size_for_val = function
-  | Tacky.Constant (ConstInt _ | ConstUInt _) -> DWord
-  | Tacky.Constant (ConstLong _ | ConstULong _ | ConstDouble _) -> QWord
-  | Tacky.Var iden -> AsmSymbolMap.get_var_type iden
-;;
-
 let var_map : (string, int) Hashtbl.t = Hashtbl.create 100
 let fun_map : (string, int) Hashtbl.t = Hashtbl.create 100
 
@@ -25,10 +19,20 @@ let get_stack_address = function
          match AsmSymbolMap.get_var_type var_iden with
          | DWord -> 4
          | QWord -> 8
+         | AsmDouble -> 8
          | _ -> assert false
        in
        let stk_ptr = get_fun_stack_alloc fun_iden + b_sz in
        Hashtbl.add fun_map fun_name stk_ptr;
        Hashtbl.add var_map var_name stk_ptr;
        stk_ptr)
+;;
+
+let get_asm_type_for_val = function
+  | Tacky.Constant c ->
+    (match c with
+     | ConstInt _ | ConstUInt _ -> DWord
+     | ConstLong _ | ConstULong _ -> QWord
+     | ConstDouble _ -> AsmDouble)
+  | Tacky.Var iden -> AsmSymbolMap.get_var_type iden
 ;;

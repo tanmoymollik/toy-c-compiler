@@ -17,10 +17,11 @@ let switch_label = "switch"
 let case_label id scope = "case" ^ string_of_int id ^ "@" ^ scope
 let default_label scope = "default@" ^ scope
 let goto_label lbl fun_name = lbl ^ "@" ^ fun_name
+let static_const_label = "static_const"
 
 (* Adds a numerical suffix to create a unique label. *)
 let make_unique_label prefix =
   let c = !label_count in
   label_count := c + 1;
-  Printf.sprintf ".L%s#%d" prefix c
+  Printf.sprintf "%s#%d" prefix c
 ;;

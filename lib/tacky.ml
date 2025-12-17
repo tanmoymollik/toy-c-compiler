@@ -68,19 +68,19 @@ type instruction =
       { src : value
       ; dst : value
       }
-  | DoubleToInt of
-      { src : value
-      ; dst : value
-      }
-  | DoubleToUInt of
-      { src : value
-      ; dst : value
-      }
   | IntToDouble of
       { src : value
       ; dst : value
       }
+  | DoubleToInt of
+      { src : value
+      ; dst : value
+      }
   | UIntToDouble of
+      { src : value
+      ; dst : value
+      }
+  | DoubleToUInt of
       { src : value
       ; dst : value
       }

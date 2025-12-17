@@ -50,19 +50,19 @@ let rec gen_expression stk = function
       let dst = make_tmp_dst tgt in
       if inner_tp = Double
       then
-        if signed tgt
+        if signed_c_type tgt
         then Stack.push (Tacky.DoubleToInt { src; dst }) stk
         else Stack.push (Tacky.DoubleToUInt { src; dst }) stk
       else if tgt = Double
       then
-        if signed inner_tp
+        if signed_c_type inner_tp
         then Stack.push (Tacky.IntToDouble { src; dst }) stk
         else Stack.push (Tacky.UIntToDouble { src; dst }) stk
       else if size tgt = size inner_tp
       then Stack.push (Tacky.Copy { src; dst }) stk
       else if size tgt < size inner_tp
       then Stack.push (Tacky.Truncate { src; dst }) stk
-      else if signed inner_tp
+      else if signed_c_type inner_tp
       then Stack.push (Tacky.SignExtend { src; dst }) stk
       else Stack.push (Tacky.ZeroExtend { src; dst }) stk;
       dst)

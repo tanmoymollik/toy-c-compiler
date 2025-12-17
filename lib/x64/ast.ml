@@ -10,6 +10,7 @@ type binary_op =
   | Add
   | Sub
   | Imul
+  | DivDouble
   | And
   | Or
   | Xor
@@ -42,10 +43,26 @@ type reg =
   | R10
   | R11
   | Sp
+  | Xmm0
+  | Xmm1
+  | Xmm2
+  | Xmm3
+  | Xmm4
+  | Xmm5
+  | Xmm6
+  | Xmm7
+  | Xmm8
+  | Xmm9
+  | Xmm10
+  | Xmm11
+  | Xmm12
+  | Xmm13
+  | Xmm14
+  | Xmm15
 [@@deriving show]
 
-let arg_regs = [ Di; Si; Dx; Cx; R8; R9 ]
-let arg_regs_len = 6
+let int_regs = [ Di; Si; Dx; Cx; R8; R9 ]
+let double_regs = [ Xmm0; Xmm1; Xmm2; Xmm3; Xmm4; Xmm5; Xmm6; Xmm7 ]
 
 let is_arg_reg = function
   | Di | Si | Dx | Cx | R8 | R9 -> true
@@ -63,7 +80,7 @@ type instruction =
   | Mov of
       { src : operand
       ; dst : operand (* dst is always guaranteed to be Stack _. *)
-      ; sz : asm_type
+      ; tp : asm_type
       }
   | Movsx of
       { src : operand
@@ -73,17 +90,27 @@ type instruction =
       { src : operand
       ; dst : operand
       }
+  | Cvttsd2si of
+      { src : operand
+      ; dst : operand
+      ; dst_tp : asm_type
+      }
+  | Cvtsi2sd of
+      { src : operand
+      ; dst : operand
+      ; src_tp : asm_type
+      }
   | Unary of unary_op * operand * asm_type
   | Binary of
       { bop : binary_op
       ; src : operand
       ; dst : operand (* dst is always guaranteed to be Stack _. *)
-      ; sz : asm_type
+      ; tp : asm_type
       }
   | Cmp of
       { lhs : operand
       ; rhs : operand
-      ; sz : asm_type
+      ; tp : asm_type
       }
   | Idiv of operand * asm_type
   | Div of operand * asm_type
@@ -106,6 +133,11 @@ type top_level =
   | StaticVar of
       { name : identifier
       ; global : bool
+      ; alignment : int
+      ; init : const
+      }
+  | StaticConstant of
+      { name : identifier
       ; alignment : int
       ; init : const
       }
