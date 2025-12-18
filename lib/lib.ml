@@ -50,7 +50,7 @@ end = struct
     | `Validate ->
       if !astdump then print_endline C_ast.(show_program prog);
       None
-    | _ -> Some (Tacky_gen.gen_program prog)
+    | _ -> Some (Tacky.Gen.gen_program prog)
   ;;
 
   type asm_prog =
@@ -60,7 +60,7 @@ end = struct
   let code_gen stage target prog =
     match stage with
     | `Tacky ->
-      if !astdump then print_endline Tacky.(show_program prog);
+      if !astdump then print_endline Tacky.Ast.(show_program prog);
       None
     | _ ->
       (match target with

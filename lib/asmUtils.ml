@@ -29,10 +29,10 @@ let get_stack_address = function
 ;;
 
 let get_asm_type_for_val = function
-  | Tacky.Constant c ->
+  | Tacky.Ast.Constant c ->
     (match c with
      | ConstInt _ | ConstUInt _ -> DWord
      | ConstLong _ | ConstULong _ -> QWord
      | ConstDouble _ -> AsmDouble)
-  | Tacky.Var iden -> AsmSymbolMap.get_var_type iden
+  | Tacky.Ast.Var iden -> AsmSymbolMap.get_var_type iden
 ;;
