@@ -10,6 +10,7 @@ let stage : driver_stage ref = ref `Link
 let target = ref Lib.Arch.X86_64
 let astdump = ref false
 let link_math = ref false
+let use_gas = ref false
 let usage_msg = "Usage: dune exec c_compiler -- [options] <input_file>.c"
 
 let spec =
@@ -29,9 +30,14 @@ let spec =
     , "Stop after assembly code emission" )
   ; "-c", Arg.Unit (fun () -> stage := `Assemble), "Generate object file only"
   ; ( "--riscv64"
-    , Arg.Unit (fun () -> target := Lib.Arch.RISCV64)
+    , Arg.Unit
+        (fun () ->
+          target := Lib.Arch.RISCV64;
+          (* Gas format is always used for riscv64 *)
+          use_gas := true)
     , "Generate code for riscv64 target" )
   ; "-lm", Arg.Unit (fun () -> link_math := true), "Generate code for riscv64 target"
+  ; "--gas", Arg.Unit (fun () -> use_gas := true), "Emit code in GAS syntax"
   ; "--dump", Arg.Unit (fun () -> astdump := true), "Dump ast"
   ]
 ;;
@@ -55,15 +61,15 @@ let assemble stage base_name =
   match stage with
   | `LibStage _ -> ()
   | `Assemble | `Link ->
-    let nasm_cmd =
+    let as_cmd =
       match !target with
-      | Lib.Arch.X86_64 -> "nasm -f elf64"
+      | Lib.Arch.X86_64 -> if !use_gas then "as" else "nasm -f elf64"
       | Lib.Arch.RISCV64 -> "riscv64-linux-gnu-as"
     in
     let assembly_file = assembly_file base_name in
     let object_file = object_file base_name in
     runCommand
-      (Printf.sprintf "%s %s -o %s" nasm_cmd assembly_file object_file)
+      (Printf.sprintf "%s %s -o %s" as_cmd assembly_file object_file)
       "Error during linking";
     runCommand ("rm " ^ assembly_file) "Error removing assembly file"
 ;;
@@ -110,6 +116,7 @@ let drive_single stage target infile =
       ; infile = preprocessed_file
       ; outfile = assembly_file
       ; dump = !astdump
+      ; gas_emit = !use_gas
       }
     in
     runCommand

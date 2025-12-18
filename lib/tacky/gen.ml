@@ -250,7 +250,7 @@ let rec gen_statement stk = function
     Stack.push (Label brk_label) stk
   | C_ast.Switch { cnd; body; cases; default; label = Identifier label } ->
     let src1 = gen_expression stk cnd in
-    let dst = make_tmp_dst (C_ast.get_type cnd) in
+    let dst = make_tmp_dst Int in
     let calc_jmp ind cn =
       let jmp_lbl = Identifier (Core.case_label ind label) in
       let jmp_ins = Binary { bop = Equal; src1; src2 = Constant cn; dst } in

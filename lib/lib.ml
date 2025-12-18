@@ -9,6 +9,7 @@ type compile_args =
   ; infile : string
   ; outfile : string
   ; dump : bool
+  ; gas_emit : bool
   }
 
 module Impl : sig
@@ -68,7 +69,7 @@ end = struct
        | Arch.RISCV64 -> Some (Riscv64 (Riscv64.Gen.gen_program prog)))
   ;;
 
-  let code_emit stage prog =
+  let code_emit stage gas_emit prog =
     match stage with
     | `CodeGen ->
       if !astdump
@@ -79,12 +80,20 @@ end = struct
       None
     | _ ->
       (match prog with
-       | X64 prog -> Some (X64.Emitter.emit_program prog)
-       | Riscv64 prog -> Some (Riscv64.Emitter.emit_program prog))
+       | X64 prog ->
+         let prog =
+           if gas_emit
+           then X64.GasEmitter.emit_program prog
+           else X64.NasmEmitter.emit_program prog
+         in
+         Some prog
+       | Riscv64 prog ->
+         assert gas_emit;
+         Some (Riscv64.GasEmitter.emit_program prog))
   ;;
 
   let compile = function
-    | { stage; target; infile; outfile; dump } ->
+    | { stage; target; infile; outfile; dump; gas_emit } ->
       astdump := dump;
       let inx = In_channel.open_text infile in
       let lexbuf = Lexing.from_channel inx in
@@ -95,7 +104,7 @@ end = struct
         >>= validate stage
         >>= tacky_gen stage
         >>= code_gen stage target
-        >>= code_emit stage
+        >>= code_emit stage gas_emit
       in
       (match code with
        | Some v ->
