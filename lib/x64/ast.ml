@@ -116,6 +116,7 @@ type instruction =
   | Div of operand * asm_type
   | Cdq of asm_type
   | Jmp of identifier
+  | JmpP of identifier
   | JmpC of cond_code * identifier
   | SetC of cond_code * operand
   | Label of identifier

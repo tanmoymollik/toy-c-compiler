@@ -154,16 +154,90 @@ let gen_ins_uop fun_name = function
        (match src_tp with
         | AsmDouble ->
           let zr_reg = Reg Xmm0 in
+          let nan_cmp_end = Identifier (Core.make_unique_label Core.nan_cmp_end_label) in
           [ Binary { bop = Xor; src = zr_reg; dst = zr_reg; tp = src_tp }
           ; Cmp { lhs = gen_value fun_name src; rhs = zr_reg; tp = src_tp }
           ; Mov { src = zr; dst; tp = dst_tp }
+          ; JmpP nan_cmp_end
           ; SetC (E, dst)
+          ; Label nan_cmp_end
           ]
         | _ ->
           [ Cmp { lhs = gen_value fun_name src; rhs = zr; tp = src_tp }
           ; Mov { src = zr; dst; tp = dst_tp }
           ; SetC (E, dst)
           ]))
+  | _ -> assert false
+;;
+
+let gen_ins_bop fun_name = function
+  | Tacky.Ast.Binary { bop; src1; src2; dst } as ret ->
+    (match bop with
+     | Tacky.Ast.Div | Tacky.Ast.Rem -> gen_ins_div fun_name ret
+     | Tacky.Ast.Equal
+     | Tacky.Ast.NEqual
+     | Tacky.Ast.Less
+     | Tacky.Ast.LEqual
+     | Tacky.Ast.Greater
+     | Tacky.Ast.GEqual ->
+       let op_tp = get_asm_type_for_val src1 in
+       let dst_tp = get_asm_type_for_val dst in
+       assert (dst_tp = DWord);
+       let dst = gen_value fun_name dst in
+       let zr = Imm 0I in
+       (match op_tp, bop with
+        | AsmDouble, NEqual ->
+          let nan_cmp = Identifier (Core.make_unique_label Core.nan_cmp_label) in
+          let nan_cmp_end = Identifier (Core.make_unique_label Core.nan_cmp_end_label) in
+          [ Cmp
+              { lhs = gen_value fun_name src1; rhs = gen_value fun_name src2; tp = op_tp }
+          ; Mov { src = zr; dst; tp = dst_tp }
+          ; JmpP nan_cmp
+          ; SetC (gen_cond_code false bop, dst)
+          ; Jmp nan_cmp_end
+          ; Label nan_cmp
+          ; Mov { src = Imm 1I; dst; tp = dst_tp }
+          ; Label nan_cmp_end
+          ]
+        | AsmDouble, _ ->
+          let nan_cmp_end = Identifier (Core.make_unique_label Core.nan_cmp_end_label) in
+          [ Cmp
+              { lhs = gen_value fun_name src1; rhs = gen_value fun_name src2; tp = op_tp }
+          ; Mov { src = zr; dst; tp = dst_tp }
+          ; JmpP nan_cmp_end
+          ; SetC (gen_cond_code false bop, dst)
+          ; Label nan_cmp_end
+          ]
+        | _ ->
+          let signed = signed src1 in
+          [ Cmp
+              { lhs = gen_value fun_name src1; rhs = gen_value fun_name src2; tp = op_tp }
+          ; Mov { src = zr; dst; tp = dst_tp }
+          ; SetC (gen_cond_code signed bop, dst)
+          ])
+     | Tacky.Ast.Add
+     | Tacky.Ast.Sub
+     | Tacky.Ast.Mul
+     | Tacky.Ast.And
+     | Tacky.Ast.Or
+     | Tacky.Ast.Xor ->
+       let op_tp = get_asm_type_for_val dst in
+       let dst = gen_value fun_name dst in
+       [ Mov { src = gen_value fun_name src1; dst; tp = op_tp }
+       ; Binary { bop = gen_bop bop; src = gen_value fun_name src2; dst; tp = op_tp }
+       ]
+     | Tacky.Ast.Lsft | Tacky.Ast.Rsft ->
+       let op_tp = get_asm_type_for_val dst in
+       let signed = signed dst in
+       let src2 = gen_value fun_name src2 in
+       let tmp_src2 = Reg Cx in
+       let dst = gen_value fun_name dst in
+       let bop = gen_bop bop in
+       let bop = if (not signed) && bop = Sar then Shr else bop in
+       [ Mov { src = gen_value fun_name src1; dst; tp = op_tp }
+       ; Mov { src = src2; dst = tmp_src2; tp = op_tp }
+       ; Binary { bop; src = tmp_src2; dst; tp = op_tp }
+       ])
   | _ -> assert false
 ;;
 
@@ -196,54 +270,7 @@ let gen_instruction fun_name = function
     [ Mov { src = gen_value fun_name v; dst; tp }; Ret ]
   | Tacky.Ast.Unary _ as ret -> gen_ins_uop fun_name ret
   (* dst is always Tacky.Ast.Var *)
-  | Tacky.Ast.Binary { bop; src1; src2; dst } as ret ->
-    (match bop with
-     | Tacky.Ast.Div | Tacky.Ast.Rem -> gen_ins_div fun_name ret
-     | Tacky.Ast.Equal
-     | Tacky.Ast.NEqual
-     | Tacky.Ast.Less
-     | Tacky.Ast.LEqual
-     | Tacky.Ast.Greater
-     | Tacky.Ast.GEqual ->
-       let op_tp = get_asm_type_for_val src1 in
-       let dst_tp = get_asm_type_for_val dst in
-       assert (dst_tp = DWord);
-       let signed =
-         match op_tp with
-         (* We treat floating point comparisons with unsigned logic because
-            comisd sets CF and ZF flags. *)
-         | AsmDouble -> false
-         | _ -> signed src1
-       in
-       let dst = gen_value fun_name dst in
-       let zr = Imm 0I in
-       [ Cmp { lhs = gen_value fun_name src1; rhs = gen_value fun_name src2; tp = op_tp }
-       ; Mov { src = zr; dst; tp = dst_tp }
-       ; SetC (gen_cond_code signed bop, dst)
-       ]
-     | Tacky.Ast.Add
-     | Tacky.Ast.Sub
-     | Tacky.Ast.Mul
-     | Tacky.Ast.And
-     | Tacky.Ast.Or
-     | Tacky.Ast.Xor ->
-       let op_tp = get_asm_type_for_val dst in
-       let dst = gen_value fun_name dst in
-       [ Mov { src = gen_value fun_name src1; dst; tp = op_tp }
-       ; Binary { bop = gen_bop bop; src = gen_value fun_name src2; dst; tp = op_tp }
-       ]
-     | Tacky.Ast.Lsft | Tacky.Ast.Rsft ->
-       let op_tp = get_asm_type_for_val dst in
-       let signed = signed dst in
-       let src2 = gen_value fun_name src2 in
-       let tmp_src2 = Reg Cx in
-       let dst = gen_value fun_name dst in
-       let bop = gen_bop bop in
-       let bop = if (not signed) && bop = Sar then Shr else bop in
-       [ Mov { src = gen_value fun_name src1; dst; tp = op_tp }
-       ; Mov { src = src2; dst = tmp_src2; tp = op_tp }
-       ; Binary { bop; src = tmp_src2; dst; tp = op_tp }
-       ])
+  | Tacky.Ast.Binary _ as ret -> gen_ins_bop fun_name ret
   | Tacky.Ast.Copy { src; dst } ->
     let tp = get_asm_type_for_val dst in
     [ Mov { src = gen_value fun_name src; dst = gen_value fun_name dst; tp } ]
@@ -253,9 +280,12 @@ let gen_instruction fun_name = function
     (match tp with
      | AsmDouble ->
        let zr_reg = Reg Xmm0 in
+       let nan_cmp_end = Identifier (Core.make_unique_label Core.nan_cmp_end_label) in
        [ Binary { bop = Xor; src = zr_reg; dst = zr_reg; tp }
        ; Cmp { lhs = gen_value fun_name cnd; rhs = zr_reg; tp }
+       ; JmpP nan_cmp_end
        ; JmpC (E, tgt)
+       ; Label nan_cmp_end
        ]
      | _ ->
        let zr = Imm 0I in
@@ -267,6 +297,7 @@ let gen_instruction fun_name = function
        let zr_reg = Reg Xmm0 in
        [ Binary { bop = Xor; src = zr_reg; dst = zr_reg; tp }
        ; Cmp { lhs = gen_value fun_name cnd; rhs = zr_reg; tp }
+       ; JmpP tgt
        ; JmpC (NE, tgt)
        ]
      | _ ->

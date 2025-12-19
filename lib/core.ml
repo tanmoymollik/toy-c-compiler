@@ -18,6 +18,8 @@ let case_label id scope = "case" ^ string_of_int id ^ "@" ^ scope
 let default_label scope = "default@" ^ scope
 let goto_label lbl fun_name = lbl ^ "@" ^ fun_name
 let static_const_label = "static_const"
+let nan_cmp_label = "nan_cmp"
+let nan_cmp_end_label = "nan_cmp_end"
 
 (* Adds a numerical suffix to create a unique label. *)
 let make_unique_label prefix =

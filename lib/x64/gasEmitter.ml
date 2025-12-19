@@ -233,6 +233,7 @@ let emit_instruction = function
     in
     Printf.sprintf "%s%s" indent cmd
   | Jmp iden -> Printf.sprintf "%sjmp .L%s" indent (emit_identifier iden)
+  | JmpP iden -> Printf.sprintf "%sjp .L%s" indent (emit_identifier iden)
   | JmpC (cc, iden) ->
     Printf.sprintf "%sj%s .L%s" indent (emit_cond_code cc) (emit_identifier iden)
   | SetC (cc, operand) ->
