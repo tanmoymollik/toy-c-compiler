@@ -10,6 +10,7 @@ let stage : driver_stage ref = ref `Link
 let target = ref Lib.Arch.X86_64
 let astdump = ref false
 let link_math = ref false
+let optimizations = ref []
 let use_gas = ref false
 let usage_msg = "Usage: dune exec c_compiler -- [options] <input_file>.c"
 
@@ -36,7 +37,25 @@ let spec =
           (* Gas format is always used for riscv64 *)
           use_gas := true)
     , "Generate code for riscv64 target" )
-  ; "-lm", Arg.Unit (fun () -> link_math := true), "Generate code for riscv64 target"
+  ; "-lm", Arg.Unit (fun () -> link_math := true), "Link the math library"
+  ; ( "--fold-constants"
+    , Arg.Unit
+        (fun () -> optimizations := Lib.Optimizations.FoldConstants :: !optimizations)
+    , "Optimization - fold constants" )
+  ; ( "--propagate-copies"
+    , Arg.Unit
+        (fun () -> optimizations := Lib.Optimizations.PropagateCopies :: !optimizations)
+    , "Optimization - propagate copies" )
+  ; ( "--eliminate-unreachable-code"
+    , Arg.Unit
+        (fun () ->
+          optimizations := Lib.Optimizations.EliminateUnreachableCode :: !optimizations)
+    , "Optimization - eliminate unreachable code" )
+  ; ( "--eliminate-dead-stores"
+    , Arg.Unit
+        (fun () ->
+          optimizations := Lib.Optimizations.EliminateDeadStores :: !optimizations)
+    , "Optimization - eliminate dead stores" )
   ; "--gas", Arg.Unit (fun () -> use_gas := true), "Emit code in GAS syntax"
   ; "--dump", Arg.Unit (fun () -> astdump := true), "Dump ast"
   ]
@@ -113,6 +132,7 @@ let drive_single stage target infile =
     let args : Lib.compile_args =
       { stage = lib_stage
       ; target
+      ; optimizations = !optimizations
       ; infile = preprocessed_file
       ; outfile = assembly_file
       ; dump = !astdump

@@ -1,11 +1,13 @@
 module Stage = Stage
 module Arch = Arch
+module Optimizations = Optimizer.Optimizations
 
 exception CompileError of string
 
 type compile_args =
   { stage : Stage.stage
   ; target : Arch.target
+  ; optimizations : Optimizations.level list
   ; infile : string
   ; outfile : string
   ; dump : bool
@@ -93,7 +95,7 @@ end = struct
   ;;
 
   let compile = function
-    | { stage; target; infile; outfile; dump; gas_emit } ->
+    | { stage; target; infile; outfile; dump; gas_emit; _ } ->
       astdump := dump;
       let inx = In_channel.open_text infile in
       let lexbuf = Lexing.from_channel inx in
