@@ -22,6 +22,7 @@ let get_asm_type_for_c_type = function
   | Long | ULong -> QWord
   | Double -> AsmDouble
   | FunType _ -> assert false
+  | Pointer _ -> assert false
 ;;
 
 let gen_obj_info iden tp is_static is_extern =

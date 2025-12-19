@@ -12,6 +12,7 @@ type c_type =
       { params : c_type list
       ; ret : c_type
       }
+  | Pointer of c_type
 [@@deriving show]
 
 type const =
@@ -40,18 +41,30 @@ let size = function
   | ULong -> 8
   | Double -> 8
   | FunType _ -> assert false
+  | Pointer _ -> 8
 ;;
 
 (* Returns whether the type is signed. *)
 let signed_c_type = function
   | Int | Long | Double -> true
   | UInt | ULong -> false
+  | Pointer _ -> assert false
   | FunType _ -> assert false
 ;;
 
 let signed_const = function
   | ConstInt _ | ConstLong _ -> true
   | ConstUInt _ | ConstULong _ | ConstDouble _ -> false
+;;
+
+let is_arithmetic_type = function
+  | Int | UInt | Long | ULong | Double -> true
+  | FunType _ | Pointer _ -> false
+;;
+
+let is_pointer_type = function
+  | Pointer _ -> true
+  | _ -> false
 ;;
 
 (* Returns the type both t1 and t2 should be converted to. *)
@@ -74,6 +87,7 @@ let c_type_zero = function
   | ULong -> ConstULong 0I
   | Double -> ConstDouble 0.0
   | FunType _ -> assert false
+  | Pointer _ -> assert false
 ;;
 
 let c_type_one = function
@@ -83,4 +97,5 @@ let c_type_one = function
   | ULong -> ConstULong 1I
   | Double -> ConstDouble 1.0
   | FunType _ -> assert false
+  | Pointer _ -> assert false
 ;;

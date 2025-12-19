@@ -159,6 +159,7 @@ let evaluate_binary_expression bop l r =
       (evaluate_uint64_binary_expression bop (convert_to_ulong l) (convert_to_ulong r))
   | Double -> assert false
   | FunType _ -> assert false
+  | Pointer _ -> assert false
 ;;
 
 let evaluate_int32_unary_expression uop x =
@@ -198,6 +199,7 @@ let evaluate_unary_expression uop x =
   | ULong -> ConstULong (evaluate_uint64_unary_expression uop (convert_to_ulong x))
   | Double -> assert false
   | FunType _ -> assert false
+  | Pointer _ -> assert false
 ;;
 
 let evaluate_conditional_expression cnd lhs rhs =

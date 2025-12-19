@@ -45,7 +45,8 @@ let rec evaluate_case_expression = function
      | Long -> ConstLong (Type_converter.convert_to_long exp)
      | ULong -> ConstULong (Type_converter.convert_to_ulong exp)
      | Double -> assert false
-     | FunType _ -> assert false)
+     | FunType _ -> assert false
+     | Pointer _ -> assert false)
   | C_ast.Unary (uop, exp, _) ->
     Type_converter.evaluate_unary_expression uop (evaluate_case_expression exp)
   | C_ast.TUnary _ -> raise (SemanticError "Non-const value for switch-case")
@@ -61,6 +62,8 @@ let rec evaluate_case_expression = function
     let rhs = evaluate_case_expression rhs in
     Type_converter.evaluate_conditional_expression cnd lhs rhs
   | C_ast.FunctionCall _ -> raise (SemanticError "Non-const value for switch-case")
+  | C_ast.Dereference _ -> raise (SemanticError "Non-const value for switch-case")
+  | C_ast.AddrOf _ -> raise (SemanticError "Non-const value for switch-case")
 ;;
 
 let rec resolve_statement = function

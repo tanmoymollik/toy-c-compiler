@@ -59,14 +59,11 @@ let rec resolve_expression iden_map = function
       ; etp
       }
   | C_ast.Assignment { lval; rval; etp } ->
-    (match lval with
-     | C_ast.Var _ ->
-       C_ast.Assignment
-         { lval = resolve_expression iden_map lval
-         ; rval = resolve_expression iden_map rval
-         ; etp
-         }
-     | _ -> raise (SemanticError "Invalid lvalue of assignment operator"))
+    C_ast.Assignment
+      { lval = resolve_expression iden_map lval
+      ; rval = resolve_expression iden_map rval
+      ; etp
+      }
   | C_ast.Conditional { cnd; lhs; rhs; etp } ->
     C_ast.Conditional
       { cnd = resolve_expression iden_map cnd
@@ -77,6 +74,9 @@ let rec resolve_expression iden_map = function
   | C_ast.FunctionCall (Common.Identifier name, exps, etp) ->
     let name = Common.Identifier (get_iden iden_map name) in
     C_ast.FunctionCall (name, List.map (resolve_expression iden_map) exps, etp)
+  | C_ast.Dereference (exp, etp) ->
+    C_ast.Dereference (resolve_expression iden_map exp, etp)
+  | C_ast.AddrOf (exp, etp) -> C_ast.AddrOf (resolve_expression iden_map exp, etp)
 ;;
 
 let resolve_block_scope_variable_decl iden_map = function

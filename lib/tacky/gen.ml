@@ -155,6 +155,8 @@ let rec gen_expression stk = function
     let dst = make_tmp_dst etp in
     Stack.push (FunCall { name; args; dst }) stk;
     dst
+  | C_ast.Dereference _ -> assert false
+  | C_ast.AddrOf _ -> assert false
 ;;
 
 let gen_variable_decl stk = function

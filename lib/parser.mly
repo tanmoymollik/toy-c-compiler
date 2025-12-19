@@ -66,61 +66,28 @@ prog:
   f = list(declaration); EOF { C_ast.Program f }
 
 declaration:
-  | v = variable_decl { C_ast.VarDecl v }
-  | f = function_decl { C_ast.FunDecl f }
+  | v = variable_decl              { C_ast.VarDecl v }
+  | f = function_decl              { C_ast.FunDecl f }
+  | vf = variable_or_function_decl { vf }
 
 variable_decl:
-  specs = nonempty_list(specifier); name = identifier; init = option(pair(EQUAL, expression)); SEMICOLON
+  specs = nonempty_list(specifier); d = declarator; init = pair(EQUAL, expression); SEMICOLON
     {
-      let init = Option.map (fun (_, exp) -> exp) init in
-      C_ast.{ name; init; vtp = type_of specs; storage = storage specs; }
+      let init = (fun (_, exp) -> exp) init in
+      let name, vtp, _ = process_declarator (type_of specs) d in
+      (match vtp with
+       | Common.FunType _ -> raise (SyntaxError "Variable declarator does not yield variable type")
+       | _ -> ());
+      C_ast.{ name; init = Some init; vtp; storage = storage specs; }
     }
-  
-%inline specifier:
-  | ts = type_specifier { ts }
-  | EXTERN              { ExternSpec }
-  | STATIC              { StaticSpec }
-
-%inline type_specifier:
-  | INT       { IntSpec }
-  | LONG      { LongSpec }
-  | DOUBLE    { DoubleSpec }
-  | SIGNED    { SignedSpec }
-  | UNSIGNED  { UnsignedSpec }
 
 function_decl:
-  | specs = nonempty_list(specifier); name = identifier; LPAREN; params = param_list; RPAREN; body = block
-    {
-      let ptps = List.map (fun (tp, _) -> tp) params in
-      let rtp = type_of specs in
-      let params = List.map (fun (_, id) -> id) params in
-      C_ast.
-        { name
-        ; params
-        ; body = Some body
-        ; ftp = Common.FunType { params = ptps; ret = rtp }
-        ; storage = storage specs
-        }
-    }
-  | specs = nonempty_list(specifier); name = identifier; LPAREN; params = param_list; RPAREN; SEMICOLON
-    {
-      let ptps = List.map (fun (tp, _) -> tp) params in
-      let rtp = type_of specs in
-      let params = List.map (fun (_, id) -> id) params in
-      C_ast.
-        { name
-        ; params
-        ; body = None
-        ; ftp = Common.FunType { params = ptps; ret = rtp }
-        ; storage = storage specs
-        }
-    }
+  | specs = nonempty_list(specifier); d = declarator; body = block
+    { function_decl_ast specs d (Some body) }
 
-param_list:
-  | VOID
-    { [] }
-  | params = separated_nonempty_list(COMMA, pair(nonempty_list(type_specifier), identifier))
-    { List.map (fun (specs, id) -> (type_of specs, id)) params }
+variable_or_function_decl:
+  | specs = nonempty_list(specifier); d = declarator; SEMICOLON
+    { parse_declaration specs d }
 
 block:
   LBRACE; items = list(block_item); RBRACE { C_ast.Block items }
@@ -165,7 +132,13 @@ statement:
     { C_ast.Null }
 
 for_init:
-  | d = variable_decl                 { C_ast.InitDecl d }
+  // | d = variable_decl                 { C_ast.InitDecl d }
+  | d = declaration
+    {
+      match d with
+       | C_ast.FunDecl _ -> raise (SyntaxError "For loop init cannot be a function declaration")
+       | C_ast.VarDecl d -> C_ast.InitDecl d
+    }
   | e = option(expression); SEMICOLON { C_ast.InitExp e }
 
 expression:
@@ -180,14 +153,77 @@ expression:
 factor:
   | c = const                         { C_ast.Constant (c, Common.Int) }
   | id = identifier                   { C_ast.Var (id, Common.Int) }
-  | LPAREN; specs = nonempty_list(type_specifier); RPAREN; exp = factor
-    { C_ast.Cast { tgt = type_of specs; exp; etp = Common.Int } }
+  | LPAREN;
+    specs = nonempty_list(type_specifier);
+    d = option(abstract_declarator); RPAREN; exp = factor
+    {
+      let tp = type_of specs in
+      let tgt =
+        match d with
+        | Some d -> process_abstract_declarator tp d
+        | None -> tp
+      in
+      C_ast.Cast { tgt; exp; etp = Common.Int }
+    }
   | uop = uop; exp = factor           { C_ast.Unary (uop, exp, Common.Int) }
+  | ASTERISK; exp = factor            { C_ast.Dereference (exp, Common.Int) }
+  | AMPERSAND; exp = factor           { C_ast.AddrOf (exp, Common.Int) }
   | tuop = tuop; exp = factor         { C_ast.TUnary (tuop, true, exp, Common.Int) }
   | exp = factor; tuop = tuop         { C_ast.TUnary (tuop, false, exp, Common.Int) }
   | LPAREN; exp = expression; RPAREN  { exp }
   | id = identifier; LPAREN; args = separated_list(COMMA, expression); RPAREN
     { C_ast.FunctionCall (id, args, Common.Int) }
+
+simple_declarator:
+  | name = identifier              { Ident name }
+  | LPAREN; d = declarator; RPAREN { d }
+
+direct_declarator:
+  | sd = simple_declarator; pl = option(param_list)
+  {
+    match pl with
+    | None -> sd
+    | Some pl -> FunDeclarator (pl, sd)
+  }
+  
+%inline specifier:
+  | ts = type_specifier { ts }
+  | EXTERN              { ExternSpec }
+  | STATIC              { StaticSpec }
+
+%inline type_specifier:
+  | INT       { IntSpec }
+  | LONG      { LongSpec }
+  | DOUBLE    { DoubleSpec }
+  | SIGNED    { SignedSpec }
+  | UNSIGNED  { UnsignedSpec }
+
+param_list:
+  | LPAREN; VOID; RPAREN
+    { [] }
+  | LPAREN;
+    params =
+      separated_nonempty_list(
+        COMMA,
+        pair(nonempty_list(type_specifier), declarator));
+    RPAREN
+    { List.map (fun (specs, d) -> Param (type_of specs, d)) params }
+
+declarator:
+  | ASTERISK; d = declarator { PointerDeclarator d }
+  | dd = direct_declarator { dd }
+
+abstract_declarator:
+  | ASTERISK; ad = option(abstract_declarator)
+    {
+      match ad with
+      | Some ad -> AbstractPointer ad
+      | None -> AbstractPointer AbstractBase
+    }
+  | dad = direct_abstract_declarator { dad }
+
+direct_abstract_declarator:
+  | LPAREN; ad = abstract_declarator; RPAREN { ad }
 
 %inline const:
   | i = CONST_INT    { Common.ConstInt i }
