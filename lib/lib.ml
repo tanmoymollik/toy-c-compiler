@@ -66,6 +66,7 @@ end = struct
       if !astdump then print_endline Tacky.Ast.(show_program prog);
       None
     | _ ->
+      AsmSymbolMap.gen_asm_symbol_map ();
       (match target with
        | Arch.X86_64 -> Some (X64 (X64.Gen.gen_program prog))
        | Arch.RISCV64 -> Some (Riscv64 (Riscv64.Gen.gen_program prog)))

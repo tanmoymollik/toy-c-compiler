@@ -30,6 +30,11 @@ type value =
   | Var of identifier
 [@@deriving show]
 
+type exp_result =
+  | PlainOperand of value
+  | DereferencedPointer of value
+[@@deriving show]
+
 type instruction =
   | Ret of value
   | Unary of
@@ -83,6 +88,18 @@ type instruction =
   | DoubleToUInt of
       { src : value
       ; dst : value
+      }
+  | GetAddr of
+      { src : value
+      ; dst : value
+      }
+  | Load of
+      { src_ptr : value
+      ; dst : value
+      }
+  | Store of
+      { src : value
+      ; dst_ptr : value
       }
 [@@deriving show]
 

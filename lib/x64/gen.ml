@@ -424,6 +424,9 @@ let gen_instruction fun_name = function
        ; Label (Identifier label2)
        ]
      | _ -> assert false)
+  | Tacky.Ast.GetAddr _ -> assert false
+  | Tacky.Ast.Load _ -> assert false
+  | Tacky.Ast.Store _ -> assert false
 ;;
 
 let set_up_params fun_name params =

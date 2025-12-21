@@ -40,44 +40,47 @@ let make_tmp_dst vtp =
 let make_label prefix = Identifier (Core.make_unique_label prefix)
 
 let rec gen_expression stk = function
-  | C_ast.Constant (c, _) -> Constant c
-  | C_ast.Var (iden, _) -> Var iden
+  | C_ast.Constant (c, _) -> PlainOperand (Constant c)
+  | C_ast.Var (iden, _) -> PlainOperand (Var iden)
   | C_ast.Cast { tgt; exp; _ } ->
-    let src = gen_expression stk exp in
+    let src = gen_expression_and_convert stk exp in
     let inner_tp = C_ast.get_type exp in
-    if tgt = inner_tp
-    then src
-    else (
-      let dst = make_tmp_dst tgt in
-      if inner_tp = Double
-      then
-        if signed_c_type tgt
-        then Stack.push (DoubleToInt { src; dst }) stk
-        else Stack.push (DoubleToUInt { src; dst }) stk
-      else if tgt = Double
-      then
-        if signed_c_type inner_tp
-        then Stack.push (IntToDouble { src; dst }) stk
-        else Stack.push (UIntToDouble { src; dst }) stk
-      else if size tgt = size inner_tp
-      then Stack.push (Copy { src; dst }) stk
-      else if size tgt < size inner_tp
-      then Stack.push (Truncate { src; dst }) stk
-      else if signed_c_type inner_tp
-      then Stack.push (SignExtend { src; dst }) stk
-      else Stack.push (ZeroExtend { src; dst }) stk;
-      dst)
+    let ret =
+      if tgt = inner_tp
+      then src
+      else (
+        let dst = make_tmp_dst tgt in
+        if inner_tp = Double
+        then
+          if signed_c_type tgt
+          then Stack.push (DoubleToInt { src; dst }) stk
+          else Stack.push (DoubleToUInt { src; dst }) stk
+        else if tgt = Double
+        then
+          if signed_c_type inner_tp
+          then Stack.push (IntToDouble { src; dst }) stk
+          else Stack.push (UIntToDouble { src; dst }) stk
+        else if size tgt = size inner_tp
+        then Stack.push (Copy { src; dst }) stk
+        else if size tgt < size inner_tp
+        then Stack.push (Truncate { src; dst }) stk
+        else if signed_c_type inner_tp
+        then Stack.push (SignExtend { src; dst }) stk
+        else Stack.push (ZeroExtend { src; dst }) stk;
+        dst)
+    in
+    PlainOperand ret
   | C_ast.Unary (uop, exp, etp) ->
     let uop = gen_uop uop in
-    let src = gen_expression stk exp in
+    let src = gen_expression_and_convert stk exp in
     let dst = make_tmp_dst etp in
     let u_ins = Unary { uop; src; dst } in
     Stack.push u_ins stk;
-    dst
+    PlainOperand dst
   | C_ast.TUnary (tuop, prefix, lval, etp) ->
     (match lval with
      | C_ast.Var _ ->
-       let src = gen_expression stk lval in
+       let src = gen_expression_and_convert stk lval in
        let bop =
          match tuop with
          | C_ast.Inc -> Add
@@ -88,12 +91,12 @@ let rec gen_expression stk = function
        let dst = make_tmp_dst etp in
        if not prefix then Stack.push (Copy { src; dst }) stk;
        Stack.push i stk;
-       if prefix then src else dst
+       PlainOperand (if prefix then src else dst)
      | _ -> assert false)
   | C_ast.Binary { bop; lexp; rexp; etp } ->
     (match bop with
      | C_ast.And | C_ast.Or ->
-       let cnd1 = gen_expression stk lexp in
+       let cnd1 = gen_expression_and_convert stk lexp in
        let br_label = make_label ("other" ^ Core.binary_label) in
        let en_label = make_label ("end" ^ Core.binary_label) in
        (* Default short-circuit value. *)
@@ -104,7 +107,7 @@ let rec gen_expression stk = function
          else JumpIfNotZero (cnd1, br_label)
        in
        Stack.push j1 stk;
-       let cnd2 = gen_expression stk rexp in
+       let cnd2 = gen_expression_and_convert stk rexp in
        let j2 =
          if bop = C_ast.And
          then JumpIfZero (cnd2, br_label)
@@ -119,49 +122,70 @@ let rec gen_expression stk = function
        Stack.push (Label br_label) stk;
        Stack.push (Copy { src = Constant (ConstInt (Int32.of_int dflt)); dst }) stk;
        Stack.push (Label en_label) stk;
-       dst
+       PlainOperand dst
      | _ ->
        let bop = gen_bop bop in
-       let src1 = gen_expression stk lexp in
-       let src2 = gen_expression stk rexp in
+       let src1 = gen_expression_and_convert stk lexp in
+       let src2 = gen_expression_and_convert stk rexp in
        let dst = make_tmp_dst etp in
        let b_ins = Binary { bop; src1; src2; dst } in
        Stack.push b_ins stk;
-       dst)
+       PlainOperand dst)
+  (* lval is always a Var. *)
   | C_ast.Assignment { lval; rval; _ } ->
+    let lval = gen_expression stk lval in
+    let rval = gen_expression_and_convert stk rval in
     (match lval with
-     | C_ast.Var _ ->
-       let src = gen_expression stk rval in
-       let dst = gen_expression stk lval in
-       Stack.push (Copy { src; dst }) stk;
-       dst
-     | _ -> assert false)
+     | PlainOperand obj ->
+       Stack.push (Copy { src = rval; dst = obj }) stk;
+       lval
+     | DereferencedPointer ptr ->
+       Stack.push (Store { src = rval; dst_ptr = ptr }) stk;
+       PlainOperand rval)
   | C_ast.Conditional { cnd; lhs; rhs; etp } ->
-    let cnd = gen_expression stk cnd in
+    let cnd = gen_expression_and_convert stk cnd in
     let rhs_lbl = make_label ("other" ^ Core.conditional_label) in
     let en_lbl = make_label ("end" ^ Core.conditional_label) in
     let dst = make_tmp_dst etp in
     Stack.push (JumpIfZero (cnd, rhs_lbl)) stk;
-    let src = gen_expression stk lhs in
+    let src = gen_expression_and_convert stk lhs in
     Stack.push (Copy { src; dst }) stk;
     Stack.push (Jump en_lbl) stk;
     Stack.push (Label rhs_lbl) stk;
-    let src = gen_expression stk rhs in
+    let src = gen_expression_and_convert stk rhs in
     Stack.push (Copy { src; dst }) stk;
     Stack.push (Label en_lbl) stk;
-    dst
+    PlainOperand dst
   | C_ast.FunctionCall (name, args, etp) ->
-    let args = List.map (gen_expression stk) args in
+    let args = List.map (gen_expression_and_convert stk) args in
     let dst = make_tmp_dst etp in
     Stack.push (FunCall { name; args; dst }) stk;
+    PlainOperand dst
+  | C_ast.Dereference (exp, _) ->
+    let res = gen_expression_and_convert stk exp in
+    DereferencedPointer res
+  | C_ast.AddrOf (exp, etp) ->
+    let v = gen_expression stk exp in
+    (match v with
+     | PlainOperand obj ->
+       let dst = make_tmp_dst etp in
+       Stack.push (GetAddr { src = obj; dst }) stk;
+       PlainOperand dst
+     | DereferencedPointer ptr -> PlainOperand ptr)
+
+and gen_expression_and_convert stk exp =
+  let res = gen_expression stk exp in
+  match res with
+  | PlainOperand v -> v
+  | DereferencedPointer ptr ->
+    let dst = make_tmp_dst (C_ast.get_type exp) in
+    Stack.push (Load { src_ptr = ptr; dst }) stk;
     dst
-  | C_ast.Dereference _ -> assert false
-  | C_ast.AddrOf _ -> assert false
 ;;
 
 let gen_variable_decl stk = function
   | C_ast.{ name; init = Some exp; storage = None; _ } ->
-    let exp_val = gen_expression stk exp in
+    let exp_val = gen_expression_and_convert stk exp in
     Stack.push (Copy { src = exp_val; dst = Var name }) stk
   | _ -> ()
 ;;
@@ -171,20 +195,20 @@ let gen_for_init stk = function
   | C_ast.InitExp e ->
     (match e with
      | Some e ->
-       let _ = gen_expression stk e in
+       let _ = gen_expression_and_convert stk e in
        ()
      | None -> ())
 ;;
 
 let rec gen_statement stk = function
   | C_ast.Return exp ->
-    let exp_val = gen_expression stk exp in
+    let exp_val = gen_expression_and_convert stk exp in
     Stack.push (Ret exp_val) stk
   | C_ast.Expression exp ->
-    let _ = gen_expression stk exp in
+    let _ = gen_expression_and_convert stk exp in
     ()
   | C_ast.If { cnd; thn; els } ->
-    let cnd = gen_expression stk cnd in
+    let cnd = gen_expression_and_convert stk cnd in
     let els_lbl =
       if els != None then make_label ("else@" ^ Core.if_label) else Identifier "not_used"
     in
@@ -217,7 +241,7 @@ let rec gen_statement stk = function
     let cont_label = Identifier (Core.continue_label label) in
     let brk_label = Identifier (Core.break_label label) in
     Stack.push (Label cont_label) stk;
-    let cnd = gen_expression stk exp in
+    let cnd = gen_expression_and_convert stk exp in
     Stack.push (JumpIfZero (cnd, brk_label)) stk;
     gen_statement stk stmt;
     Stack.push (Jump cont_label) stk;
@@ -229,7 +253,7 @@ let rec gen_statement stk = function
     Stack.push (Label start_label) stk;
     gen_statement stk stmt;
     Stack.push (Label cont_label) stk;
-    let cnd = gen_expression stk exp in
+    let cnd = gen_expression_and_convert stk exp in
     Stack.push (JumpIfNotZero (cnd, start_label)) stk;
     Stack.push (Label brk_label) stk
   | C_ast.For { init; cnd; post; body; label = Identifier label } ->
@@ -239,19 +263,19 @@ let rec gen_statement stk = function
     let brk_label = Identifier (Core.break_label label) in
     Stack.push (Label start_label) stk;
     let f cnd =
-      let cnd = gen_expression stk cnd in
+      let cnd = gen_expression_and_convert stk cnd in
       Stack.push (JumpIfZero (cnd, brk_label)) stk
     in
     let _ = Option.map f cnd in
     ();
     gen_statement stk body;
     Stack.push (Label cont_label) stk;
-    let _ = Option.map (gen_expression stk) post in
+    let _ = Option.map (gen_expression_and_convert stk) post in
     ();
     Stack.push (Jump start_label) stk;
     Stack.push (Label brk_label) stk
   | C_ast.Switch { cnd; body; cases; default; label = Identifier label } ->
-    let src1 = gen_expression stk cnd in
+    let src1 = gen_expression_and_convert stk cnd in
     let dst = make_tmp_dst Int in
     let calc_jmp ind cn =
       let jmp_lbl = Identifier (Core.case_label ind label) in
@@ -315,6 +339,5 @@ let convert_symbols_to_tacky acc =
 let gen_program = function
   | C_ast.Program dns ->
     let top_lvls = List.filter_map gen_declaration dns in
-    AsmSymbolMap.gen_asm_symbol_map ();
     Program (convert_symbols_to_tacky top_lvls)
 ;;

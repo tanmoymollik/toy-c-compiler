@@ -87,7 +87,7 @@ let c_type_zero = function
   | ULong -> ConstULong 0I
   | Double -> ConstDouble 0.0
   | FunType _ -> assert false
-  | Pointer _ -> assert false
+  | Pointer _ -> ConstULong 0I
 ;;
 
 let c_type_one = function
