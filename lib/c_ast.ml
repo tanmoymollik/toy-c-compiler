@@ -48,6 +48,13 @@ type expression =
       ; rexp : expression
       ; etp : c_type
       }
+  | CompoundAssign of
+      { bop : binary_op
+      ; lexp : expression
+      ; rexp : expression
+      ; btp : c_type
+      ; etp : c_type
+      }
   | Assignment of
       { lval : expression
       ; rval : expression
@@ -147,6 +154,7 @@ let get_type = function
   | Unary (_, _, etp) -> etp
   | TUnary (_, _, _, etp) -> etp
   | Binary { etp; _ } -> etp
+  | CompoundAssign { etp; _ } -> etp
   | Assignment { etp; _ } -> etp
   | Conditional { etp; _ } -> etp
   | FunctionCall (_, _, etp) -> etp

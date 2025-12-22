@@ -55,6 +55,7 @@ let rec evaluate_case_expression = function
       bop
       (evaluate_case_expression lexp)
       (evaluate_case_expression rexp)
+  | C_ast.CompoundAssign _ -> raise (SemanticError "Non-const value for switch-case")
   | C_ast.Assignment _ -> raise (SemanticError "Non-const value for switch-case")
   | C_ast.Conditional { cnd; lhs; rhs; _ } ->
     let cnd = evaluate_case_expression cnd in

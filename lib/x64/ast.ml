@@ -43,6 +43,7 @@ type reg =
   | R10
   | R11
   | Sp
+  | Bp
   | Xmm0
   | Xmm1
   | Xmm2
@@ -72,7 +73,7 @@ let is_arg_reg = function
 type operand =
   | Imm of (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
   | Reg of reg
-  | Stack of int
+  | Memory of reg * int
   | Data of identifier
 [@@deriving show]
 
@@ -87,6 +88,10 @@ type instruction =
       ; dst : operand
       }
   | MovZeroExtend of
+      { src : operand
+      ; dst : operand
+      }
+  | Lea of
       { src : operand
       ; dst : operand
       }

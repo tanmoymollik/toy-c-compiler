@@ -12,6 +12,61 @@ let get_for_label lbl =
   | None -> assert false
 ;;
 
+let typecheck_expression_binary bop lexp rexp =
+  let convert lexp rexp =
+    let t1 = C_ast.get_type lexp in
+    let t2 = C_ast.get_type rexp in
+    let common_t = get_common_type t1 t2 in
+    C_ast.convert_to common_t lexp, C_ast.convert_to common_t rexp
+  in
+  match bop with
+  | C_ast.And | C_ast.Or -> C_ast.Binary { bop; lexp; rexp; etp = Int }
+  | C_ast.Add
+  | C_ast.Sub
+  | C_ast.Mul
+  | C_ast.Div
+  | C_ast.Rem
+  | C_ast.BAnd
+  | C_ast.BOr
+  | C_ast.Xor ->
+    let lexp, rexp = convert lexp rexp in
+    if bop = C_ast.Rem && C_ast.get_type rexp = Double
+    then raise (SemanticError "Can't use double with remainder operator");
+    if
+      (bop = C_ast.Mul || bop = C_ast.Div || bop = C_ast.Rem)
+      && is_pointer_type (C_ast.get_type lexp)
+    then raise (SemanticError "Invalid binary operation on pointer type");
+    if
+      (bop = C_ast.BAnd || bop = C_ast.BOr || bop = C_ast.Xor)
+      && C_ast.get_type rexp = Double
+    then raise (SemanticError "Can't use double with bitwise operator");
+    if
+      (bop = C_ast.BAnd || bop = C_ast.BOr || bop = C_ast.Xor)
+      && (is_pointer_type (C_ast.get_type lexp) || is_pointer_type (C_ast.get_type rexp))
+    then raise (SemanticError "Can't use pointer with bitwise operator");
+    C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
+  | C_ast.Equal | C_ast.NEqual ->
+    let t1 = C_ast.get_type lexp in
+    let t2 = C_ast.get_type rexp in
+    let common_t =
+      if is_pointer_type t1 || is_pointer_type t2
+      then C_ast.get_common_pointer_type lexp rexp
+      else get_common_type t1 t2
+    in
+    let lexp = C_ast.convert_to common_t lexp in
+    let rexp = C_ast.convert_to common_t rexp in
+    C_ast.Binary { bop; lexp; rexp; etp = Int }
+  | C_ast.LEqual | C_ast.GEqual | C_ast.Less | C_ast.Greater ->
+    let lexp, rexp = convert lexp rexp in
+    C_ast.Binary { bop; lexp; rexp; etp = Int }
+  | C_ast.Lsft | C_ast.Rsft ->
+    if C_ast.get_type lexp = Double || C_ast.get_type rexp = Double
+    then raise (SemanticError "Can't use double with shift operator");
+    if is_pointer_type (C_ast.get_type lexp) || is_pointer_type (C_ast.get_type rexp)
+    then raise (SemanticError "Can't use pointer with shift operator");
+    C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
+;;
+
 let rec typecheck_expression symbol_map = function
   | C_ast.Constant (c, _) -> C_ast.Constant (c, Type_converter.const_type c)
   | C_ast.Var (Identifier iden, _) ->
@@ -43,56 +98,27 @@ let rec typecheck_expression symbol_map = function
     C_ast.Unary (uop, exp, etp)
   | C_ast.TUnary (uop, p, lval, _) ->
     let lval = typecheck_expression symbol_map lval in
+    if not (C_ast.is_lvalue lval)
+    then raise (SemanticError "Invalid lvalue of suffix/postfix operator");
     C_ast.TUnary (uop, p, lval, C_ast.get_type lval)
   | C_ast.Binary { bop; lexp; rexp; _ } ->
     let lexp = typecheck_expression symbol_map lexp in
     let rexp = typecheck_expression symbol_map rexp in
-    let convert lexp rexp =
-      let t1 = C_ast.get_type lexp in
-      let t2 = C_ast.get_type rexp in
-      let common_t = get_common_type t1 t2 in
-      C_ast.convert_to common_t lexp, C_ast.convert_to common_t rexp
+    typecheck_expression_binary bop lexp rexp
+  | C_ast.CompoundAssign { bop; lexp; rexp; _ } ->
+    let lval = typecheck_expression symbol_map lexp in
+    let rexp = typecheck_expression symbol_map rexp in
+    let etp = C_ast.get_type lval in
+    if not (C_ast.is_lvalue lval)
+    then raise (SemanticError "Invalid lvalue of binary assignment operator");
+    (* let rexp = C_ast.convert_by_assignment etp rval in *)
+    let tmp_binary_ins = typecheck_expression_binary bop lval rexp in
+    let btp =
+      match tmp_binary_ins with
+      | Binary { etp; _ } -> etp
+      | _ -> assert false
     in
-    (match bop with
-     | C_ast.And | C_ast.Or -> C_ast.Binary { bop; lexp; rexp; etp = Int }
-     | C_ast.Add
-     | C_ast.Sub
-     | C_ast.Mul
-     | C_ast.Div
-     | C_ast.Rem
-     | C_ast.BAnd
-     | C_ast.BOr
-     | C_ast.Xor ->
-       let lexp, rexp = convert lexp rexp in
-       if bop = C_ast.Rem && C_ast.get_type rexp = Double
-       then raise (SemanticError "Can't use double with remainder operator");
-       if
-         (bop = C_ast.BAnd || bop = C_ast.BOr || bop = C_ast.Xor)
-         && C_ast.get_type rexp = Double
-       then raise (SemanticError "Can't use double with bitwise operator");
-       if
-         (bop = C_ast.Mul || bop = C_ast.Div || bop = C_ast.Rem)
-         && is_pointer_type (C_ast.get_type lexp)
-       then raise (SemanticError "Invalid binary operation on pointer type");
-       C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
-     | C_ast.Equal | C_ast.NEqual ->
-       let t1 = C_ast.get_type lexp in
-       let t2 = C_ast.get_type rexp in
-       let common_t =
-         if is_pointer_type t1 || is_pointer_type t2
-         then C_ast.get_common_pointer_type lexp rexp
-         else get_common_type t1 t2
-       in
-       let lexp = C_ast.convert_to common_t lexp in
-       let rexp = C_ast.convert_to common_t rexp in
-       C_ast.Binary { bop; lexp; rexp; etp = Int }
-     | C_ast.LEqual | C_ast.GEqual | C_ast.Less | C_ast.Greater ->
-       let lexp, rexp = convert lexp rexp in
-       C_ast.Binary { bop; lexp; rexp; etp = Int }
-     | C_ast.Lsft | C_ast.Rsft ->
-       if C_ast.get_type lexp = Double || C_ast.get_type rexp = Double
-       then raise (SemanticError "Can't use double with shift operator");
-       C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp })
+    C_ast.CompoundAssign { bop; lexp = lval; rexp; btp; etp }
   | C_ast.Assignment { lval; rval; _ } ->
     let lval = typecheck_expression symbol_map lval in
     let rval = typecheck_expression symbol_map rval in

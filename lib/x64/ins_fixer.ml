@@ -3,11 +3,31 @@ open Ast
 
 let imm_out_of_range32 i = i > Uint64.of_int32 Int32.max_int
 
+let reg_xmm = function
+  | Xmm0
+  | Xmm1
+  | Xmm2
+  | Xmm3
+  | Xmm4
+  | Xmm5
+  | Xmm6
+  | Xmm7
+  | Xmm8
+  | Xmm9
+  | Xmm10
+  | Xmm11
+  | Xmm12
+  | Xmm13
+  | Xmm14
+  | Xmm15 -> true
+  | _ -> false
+;;
+
 let fix_ins_cmp = function
   (* It is helpful to consider lhs as dst and rhs as src to better understand the semantics. *)
   | Cmp { lhs; rhs; tp = AsmDouble } as ret ->
     (match lhs with
-     | Imm _ | Stack _ | Data _ ->
+     | Imm _ | Memory _ | Data _ ->
        let tmp_lhs = Reg Xmm15 in
        [ Mov { src = lhs; dst = tmp_lhs; tp = AsmDouble }
        ; Cmp { lhs = tmp_lhs; rhs; tp = AsmDouble }
@@ -18,7 +38,7 @@ let fix_ins_cmp = function
       (* src, dst *)
       match rhs, lhs with
       | Imm i, _ when imm_out_of_range32 i -> true
-      | (Stack _ | Data _), (Stack _ | Data _) -> true
+      | (Memory _ | Data _), (Memory _ | Data _) -> true
       | _ -> false
     in
     let invalid_lhs =
@@ -51,7 +71,7 @@ let fix_ins_binary = function
     (match bop with
      | Add | Sub | Imul | DivDouble | Xor ->
        (match dst with
-        | Imm _ | Stack _ | Data _ ->
+        | Imm _ | Memory _ | Data _ ->
           let tmp_dst = Reg Xmm15 in
           [ Mov { src = dst; dst = tmp_dst; tp = AsmDouble }
           ; Binary { bop; src; dst = tmp_dst; tp = AsmDouble }
@@ -65,7 +85,7 @@ let fix_ins_binary = function
        let invalid_src =
          match src, dst with
          | Imm i, _ when imm_out_of_range32 i -> true
-         | (Stack _ | Data _), (Stack _ | Data _) -> true
+         | (Memory _ | Data _), (Memory _ | Data _) -> true
          | _ -> false
        in
        if invalid_src
@@ -81,7 +101,7 @@ let fix_ins_binary = function
        in
        let invalid_dst =
          match dst with
-         | Stack _ | Data _ -> true
+         | Memory _ | Data _ -> true
          | _ -> false
        in
        if invalid_src && invalid_dst
@@ -113,7 +133,7 @@ let fix_ins_binary = function
 let fix_instruction = function
   | Mov { src; dst; tp } as ret ->
     (match src, dst with
-     | (Stack _ | Data _), (Stack _ | Data _) ->
+     | (Memory _ | Data _), (Memory _ | Data _) ->
        let tmp_src =
          match tp with
          | AsmDouble -> Reg Xmm14
@@ -123,7 +143,7 @@ let fix_instruction = function
      | Imm i, _ when imm_out_of_range32 i && tp = DWord ->
        (* Truncate out of range imm value. *)
        [ Mov { src = Imm (Uint64.of_int32 (Uint64.to_int32 i)); dst; tp } ]
-     | Imm i, (Stack _ | Data _) when imm_out_of_range32 i && tp != AsmDouble ->
+     | Imm i, (Memory _ | Data _) when imm_out_of_range32 i && tp != AsmDouble ->
        let tmp_src = Reg R10 in
        [ Mov { src; dst = tmp_src; tp }; Mov { src = tmp_src; dst; tp } ]
      | _ -> [ ret ])
@@ -131,7 +151,7 @@ let fix_instruction = function
     (match src with
      | Imm _ ->
        (match dst with
-        | Stack _ | Data _ ->
+        | Memory _ | Data _ ->
           let tmp_src = Reg R10 in
           let tmp_dst = Reg R11 in
           [ Mov { src; dst = tmp_src; tp = DWord }
@@ -143,17 +163,23 @@ let fix_instruction = function
           [ Mov { src; dst = tmp_src; tp = DWord }; Movsx { src = tmp_src; dst } ])
      | _ ->
        (match dst with
-        | Stack _ | Data _ ->
+        | Memory _ | Data _ ->
           let tmp_dst = Reg R11 in
           [ Movsx { src; dst = tmp_dst }; Mov { src = tmp_dst; dst; tp = QWord } ]
         | _ -> [ ret ]))
   | MovZeroExtend { src; dst } ->
     (match dst with
      | Reg _ -> [ Mov { src; dst; tp = DWord } ]
-     | Stack _ | Data _ ->
+     | Memory _ | Data _ ->
        let tmp_dst = Reg R11 in
        [ Mov { src; dst = tmp_dst; tp = DWord }; Mov { src = tmp_dst; dst; tp = QWord } ]
      | Imm _ -> assert false)
+  | Lea { src; dst } as ret ->
+    (match dst with
+     | Memory _ | Data _ ->
+       let tmp_dst = Reg R11 in
+       [ Lea { src; dst = tmp_dst }; Mov { src = tmp_dst; dst; tp = QWord } ]
+     | _ -> [ ret ])
   | Cmp _ as ret -> fix_ins_cmp ret
   | Binary _ as ret -> fix_ins_binary ret
   | Idiv (src, tp) as ret ->
@@ -171,6 +197,10 @@ let fix_instruction = function
   | Push (Imm i) when imm_out_of_range32 i ->
     let tmp_src = Reg R10 in
     [ Mov { src = Imm i; dst = tmp_src; tp = QWord }; Push tmp_src ]
+  | Push (Reg r) when reg_xmm r ->
+    [ Binary { bop = Sub; src = Imm 8I; dst = Reg Sp; tp = QWord }
+    ; Mov { src = Reg r; dst = Memory (Sp, 0); tp = AsmDouble }
+    ]
   | Cvttsd2si { src; dst; dst_tp } ->
     let tmp_dst = Reg R11 in
     [ Cvttsd2si { src; dst = tmp_dst; dst_tp }; Mov { src = tmp_dst; dst; tp = dst_tp } ]
@@ -182,7 +212,7 @@ let fix_instruction = function
     in
     let invalid_dst =
       match dst with
-      | Imm _ | Stack _ | Data _ -> true
+      | Imm _ | Memory _ | Data _ -> true
       | _ -> false
     in
     if invalid_src && invalid_dst

@@ -56,8 +56,7 @@ let assignment_ast aop lval rval =
   | Eq -> C_ast.Assignment { lval; rval; etp = Int }
   | AEq | SEq | MEq | DEq | REq | BAEq | BOEq | XEq | LsftEq | RsftEq ->
     let bop = convert_aop_to_bop aop in
-    let bin = C_ast.Binary { bop; lexp = lval; rexp = rval; etp = Int } in
-    C_ast.Assignment { lval; rval = bin; etp = Int }
+    C_ast.CompoundAssign { bop; lexp = lval; rexp = rval; btp = Int; etp = Int }
 ;;
 
 let process_specs specs =

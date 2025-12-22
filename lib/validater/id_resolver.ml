@@ -48,14 +48,20 @@ let rec resolve_expression iden_map = function
     C_ast.Cast { tgt; exp = resolve_expression iden_map exp; etp }
   | C_ast.Unary (uop, exp, etp) -> C_ast.Unary (uop, resolve_expression iden_map exp, etp)
   | C_ast.TUnary (tuop, prefix, lval, etp) ->
-    (match lval with
-     | C_ast.Var _ -> C_ast.TUnary (tuop, prefix, resolve_expression iden_map lval, etp)
-     | _ -> raise (SemanticError "Invalid lvalue of suffix/postfix operator"))
+    C_ast.TUnary (tuop, prefix, resolve_expression iden_map lval, etp)
   | C_ast.Binary { bop; lexp; rexp; etp } ->
     C_ast.Binary
       { bop
       ; lexp = resolve_expression iden_map lexp
       ; rexp = resolve_expression iden_map rexp
+      ; etp
+      }
+  | C_ast.CompoundAssign { bop; lexp; rexp; btp; etp } ->
+    C_ast.CompoundAssign
+      { bop
+      ; lexp = resolve_expression iden_map lexp
+      ; rexp = resolve_expression iden_map rexp
+      ; btp
       ; etp
       }
   | C_ast.Assignment { lval; rval; etp } ->

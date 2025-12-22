@@ -54,7 +54,7 @@ let dealloc_stack_ins offset =
 
 let gen_stack_for_var fun_iden var_iden =
   let addr = get_stack_address (fun_iden, var_iden) in
-  Stack addr
+  Memory (Bp, addr)
 ;;
 
 let get_double_const cd alignment =
@@ -424,9 +424,24 @@ let gen_instruction fun_name = function
        ; Label (Identifier label2)
        ]
      | _ -> assert false)
-  | Tacky.Ast.GetAddr _ -> assert false
-  | Tacky.Ast.Load _ -> assert false
-  | Tacky.Ast.Store _ -> assert false
+  | Tacky.Ast.GetAddr { src; dst } ->
+    [ Lea { src = gen_value fun_name src; dst = gen_value fun_name dst } ]
+  | Tacky.Ast.Load { src_ptr; dst } ->
+    [ Mov { src = gen_value fun_name src_ptr; dst = Reg Ax; tp = QWord }
+    ; Mov
+        { src = Memory (Ax, 0)
+        ; dst = gen_value fun_name dst
+        ; tp = get_asm_type_for_val dst
+        }
+    ]
+  | Tacky.Ast.Store { src; dst_ptr } ->
+    [ Mov { src = gen_value fun_name dst_ptr; dst = Reg Ax; tp = QWord }
+    ; Mov
+        { src = gen_value fun_name src
+        ; dst = Memory (Ax, 0)
+        ; tp = get_asm_type_for_val src
+        }
+    ]
 ;;
 
 let set_up_params fun_name params =
@@ -441,7 +456,8 @@ let set_up_params fun_name params =
   let stk_ins =
     List.mapi
       (fun ind (oprnd, tp) ->
-         let src = Stack (-(16 + (8 * ind))) in
+         let addr = -(16 + (8 * ind)) in
+         let src = Memory (Bp, addr) in
          Mov { src; dst = oprnd; tp })
       stk_params
   in

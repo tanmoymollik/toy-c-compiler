@@ -47,8 +47,7 @@ let size = function
 (* Returns whether the type is signed. *)
 let signed_c_type = function
   | Int | Long | Double -> true
-  | UInt | ULong -> false
-  | Pointer _ -> assert false
+  | UInt | ULong | Pointer _ -> false
   | FunType _ -> assert false
 ;;
 

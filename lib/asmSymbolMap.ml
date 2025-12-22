@@ -19,10 +19,9 @@ let asm_symbol_map : (string, asm_symbol_info) Hashtbl.t = Hashtbl.create 100
 (* Can only be called on vars. *)
 let get_asm_type_for_c_type = function
   | Int | UInt -> DWord
-  | Long | ULong -> QWord
+  | Long | ULong | Pointer _ -> QWord
   | Double -> AsmDouble
   | FunType _ -> assert false
-  | Pointer _ -> assert false
 ;;
 
 let gen_obj_info iden tp is_static is_extern =
