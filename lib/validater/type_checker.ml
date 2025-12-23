@@ -162,6 +162,7 @@ let rec typecheck_expression symbol_map = function
     let exp = typecheck_expression symbol_map exp in
     let etp = C_ast.get_type exp in
     C_ast.AddrOf (exp, Pointer etp)
+  | C_ast.Subscript _ -> assert false
 ;;
 
 let get_initial c vtp =
@@ -179,13 +180,19 @@ let get_initial c vtp =
         raise
           (SemanticError "Non-null pointer constant used to initialize pointer variable")
       else ConstULong 0I
+    | Array _ -> assert false
   in
   Symbol_map.Initial c
 ;;
 
 let typecheck_file_scope_variable_decl symbol_map = function
-  | C_ast.{ name = Identifier iden; init; vtp; storage } ->
-    let initial_value =
+  | _ ->
+    let _ = Hashtbl.find_opt symbol_map "hola" in
+    ()
+;;
+
+(* | C_ast.{ name = Identifier iden; init; vtp; storage } -> 
+     let initial_value =
       ref
         (match init with
          | Some (C_ast.Constant (c, _)) -> get_initial c vtp
@@ -224,11 +231,15 @@ let typecheck_file_scope_variable_decl symbol_map = function
      | _ -> ());
     let attrs = Symbol_map.StaticAttr { init = !initial_value; global = !global } in
     let info = Symbol_map.{ tp = vtp; attrs } in
-    Hashtbl.replace symbol_map iden info
-;;
+    Hashtbl.replace symbol_map iden info *)
 
 let typecheck_block_scope_variable_decl symbol_map = function
-  | C_ast.{ name = Identifier iden; init; vtp; storage } as ret ->
+  | _ as ret ->
+    let _ = Hashtbl.find_opt symbol_map "var" in
+    ret
+;;
+
+(* | C_ast.{ name = Identifier iden; init; vtp; storage } as ret ->
     (match storage with
      | Some C_ast.Extern ->
        if init <> None
@@ -270,8 +281,7 @@ let typecheck_block_scope_variable_decl symbol_map = function
        Hashtbl.replace symbol_map iden info;
        let init = Option.map (typecheck_expression symbol_map) init in
        let init = Option.map (C_ast.convert_by_assignment vtp) init in
-       C_ast.{ name = Identifier iden; init; vtp; storage })
-;;
+       C_ast.{ name = Identifier iden; init; vtp; storage }) *)
 
 let typecheck_for_init symbol_map = function
   | C_ast.InitDecl d ->

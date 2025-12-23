@@ -21,6 +21,7 @@ open Parser_utils
 %token SWITCH CASE DEFAULT 
 %token LPAREN RPAREN
 %token LBRACE RBRACE
+%token LBRACKET RBRACKET
 %token SEMICOLON COMMA
 %token QUESTION COLON
 %token DPLUS DHYPHEN
@@ -71,7 +72,7 @@ declaration:
   | vf = variable_or_function_decl { vf }
 
 variable_decl:
-  specs = nonempty_list(specifier); d = declarator; init = pair(EQUAL, expression); SEMICOLON
+  specs = nonempty_list(specifier); d = declarator; init = pair(EQUAL, c_initializer); SEMICOLON
     {
       let init = (fun (_, exp) -> exp) init in
       let name, vtp, _ = process_declarator (type_of specs) d in
@@ -132,7 +133,6 @@ statement:
     { C_ast.Null }
 
 for_init:
-  // | d = variable_decl                 { C_ast.InitDecl d }
   | d = declaration
     {
       match d with
@@ -142,7 +142,8 @@ for_init:
   | e = option(expression); SEMICOLON { C_ast.InitExp e }
 
 expression:
-  | f = factor { f }
+  | f = unary_expression
+    { f }
   | lexp = expression; bop = bop; rexp = expression
     { C_ast.Binary { bop; lexp; rexp; etp = Common.Int } }
   | lval = expression; aop = aop; rval = expression
@@ -150,12 +151,29 @@ expression:
   | cnd = expression; QUESTION; lhs = expression; COLON; rhs = expression
     { C_ast.Conditional { cnd; lhs; rhs; etp = Common.Int } }
 
-factor:
+primary_expression:
   | c = const                         { C_ast.Constant (c, Common.Int) }
   | id = identifier                   { C_ast.Var (id, Common.Int) }
+  | LPAREN; exp = expression; RPAREN  { exp }
+  | id = identifier; LPAREN; args = separated_list(COMMA, expression); RPAREN
+    { C_ast.FunctionCall (id, args, Common.Int) }
+
+postfix_expression:
+  | p = primary_expression; inds = list(postfix_expression_suffix)
+    { List.fold_left (fun e acc -> C_ast.Subscript { ptr = acc; ind = e; etp = Common.Int }) p inds }
+
+postfix_expression_suffix:
+  | LBRACKET; e = expression; RBRACKET { e }
+
+unary_expression:
+  | uop = uop; exp = unary_expression           { C_ast.Unary (uop, exp, Common.Int) }
+  | ASTERISK; exp = unary_expression            { C_ast.Dereference (exp, Common.Int) }
+  | AMPERSAND; exp = unary_expression           { C_ast.AddrOf (exp, Common.Int) }
+  | tuop = tuop; exp = unary_expression         { C_ast.TUnary (tuop, true, exp, Common.Int) }
+  | exp = unary_expression; tuop = tuop         { C_ast.TUnary (tuop, false, exp, Common.Int) }
   | LPAREN;
     specs = nonempty_list(type_specifier);
-    d = option(abstract_declarator); RPAREN; exp = factor
+    d = option(abstract_declarator); RPAREN; exp = unary_expression 
     {
       let tp = type_of specs in
       let tgt =
@@ -165,14 +183,7 @@ factor:
       in
       C_ast.Cast { tgt; exp; etp = Common.Int }
     }
-  | uop = uop; exp = factor           { C_ast.Unary (uop, exp, Common.Int) }
-  | ASTERISK; exp = factor            { C_ast.Dereference (exp, Common.Int) }
-  | AMPERSAND; exp = factor           { C_ast.AddrOf (exp, Common.Int) }
-  | tuop = tuop; exp = factor         { C_ast.TUnary (tuop, true, exp, Common.Int) }
-  | exp = factor; tuop = tuop         { C_ast.TUnary (tuop, false, exp, Common.Int) }
-  | LPAREN; exp = expression; RPAREN  { exp }
-  | id = identifier; LPAREN; args = separated_list(COMMA, expression); RPAREN
-    { C_ast.FunctionCall (id, args, Common.Int) }
+  | p = postfix_expression                      { p }
 
 simple_declarator:
   | name = identifier              { Ident name }
@@ -180,24 +191,17 @@ simple_declarator:
 
 direct_declarator:
   | sd = simple_declarator; pl = option(param_list)
-  {
-    match pl with
-    | None -> sd
-    | Some pl -> FunDeclarator (pl, sd)
-  }
+    {
+      match pl with
+      | None -> sd
+      | Some pl -> FunDeclarator (pl, sd)
+    }
+  | sd = simple_declarator; cns = nonempty_list(array_suffix)
+    { List.fold_right (fun c acc -> ArrayDeclarator (acc, c)) cns sd }
+
+array_suffix:
+  | LBRACKET; c = const; RBRACKET { c }
   
-%inline specifier:
-  | ts = type_specifier { ts }
-  | EXTERN              { ExternSpec }
-  | STATIC              { StaticSpec }
-
-%inline type_specifier:
-  | INT       { IntSpec }
-  | LONG      { LongSpec }
-  | DOUBLE    { DoubleSpec }
-  | SIGNED    { SignedSpec }
-  | UNSIGNED  { UnsignedSpec }
-
 param_list:
   | LPAREN; VOID; RPAREN
     { [] }
@@ -223,7 +227,37 @@ abstract_declarator:
   | dad = direct_abstract_declarator { dad }
 
 direct_abstract_declarator:
-  | LPAREN; ad = abstract_declarator; RPAREN { ad }
+  | LPAREN; ad = abstract_declarator; RPAREN; cns = list(array_suffix)
+    {
+      match cns with
+      | [] -> ad
+      | _ ->
+        List.fold_right (fun c acc -> AbstractArray (acc, c)) cns ad
+    }
+  | cns = nonempty_list(array_suffix)
+    { List.fold_right (fun c acc -> AbstractArray (acc, c)) cns AbstractBase }
+
+c_initializer:
+  | e = expression
+    { C_ast.SingleInit (e, Common.Int) }
+  | LBRACE; inits = c_initializer_tail; RBRACE
+    { C_ast.CompoundInit (inits, Common.Int) }
+
+c_initializer_tail:
+  | c = c_initializer; COMMA; tl = c_initializer_tail { c :: tl }
+  | c = c_initializer; ioption(COMMA)                 { [c] }
+
+%inline specifier:
+  | ts = type_specifier { ts }
+  | EXTERN              { ExternSpec }
+  | STATIC              { StaticSpec }
+
+%inline type_specifier:
+  | INT       { IntSpec }
+  | LONG      { LongSpec }
+  | DOUBLE    { DoubleSpec }
+  | SIGNED    { SignedSpec }
+  | UNSIGNED  { UnsignedSpec }
 
 %inline const:
   | i = CONST_INT    { Common.ConstInt i }

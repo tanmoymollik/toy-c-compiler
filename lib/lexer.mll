@@ -45,6 +45,8 @@ rule read =
   | ')'          { Parser.RPAREN }
   | '{'          { Parser.LBRACE }
   | '}'          { Parser.RBRACE }
+  | '['          { Parser.LBRACKET }
+  | ']'          { Parser.RBRACKET }
   | ';'          { Parser.SEMICOLON }
   | ','          { Parser.COMMA }
   | '?'          { Parser.QUESTION }

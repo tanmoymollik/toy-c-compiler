@@ -83,10 +83,16 @@ let rec resolve_expression iden_map = function
   | C_ast.Dereference (exp, etp) ->
     C_ast.Dereference (resolve_expression iden_map exp, etp)
   | C_ast.AddrOf (exp, etp) -> C_ast.AddrOf (resolve_expression iden_map exp, etp)
+  | C_ast.Subscript _ -> assert false
 ;;
 
 let resolve_block_scope_variable_decl iden_map = function
-  | C_ast.{ name = Common.Identifier name; init; vtp; storage } as ret ->
+  | _ as ret ->
+    let _ = Hashtbl.find_opt iden_map "hola" in
+    ret
+;;
+
+(* | C_ast.{ name = Common.Identifier name; init; vtp; storage } as ret ->
     (match Hashtbl.find_opt iden_map name with
      | Some prev_entry ->
        if
@@ -103,8 +109,7 @@ let resolve_block_scope_variable_decl iden_map = function
       add_iden iden_map name nw_name false;
       let name = Common.Identifier nw_name in
       let init = Option.map (resolve_expression iden_map) init in
-      C_ast.{ name; init; vtp; storage })
-;;
+      C_ast.{ name; init; vtp; storage }) *)
 
 let resolve_file_scope_variable_decl iden_map = function
   | C_ast.{ name = Common.Identifier name; init; vtp; storage } ->

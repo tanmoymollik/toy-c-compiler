@@ -211,6 +211,7 @@ let rec gen_expression stk = function
        Stack.push (GetAddr { src = obj; dst }) stk;
        PlainOperand dst
      | DereferencedPointer ptr -> PlainOperand ptr)
+  | C_ast.Subscript _ -> assert false
 
 and gen_expression_and_convert stk exp =
   let res = gen_expression stk exp in
@@ -223,11 +224,15 @@ and gen_expression_and_convert stk exp =
 ;;
 
 let gen_variable_decl stk = function
-  | C_ast.{ name; init = Some exp; storage = None; _ } ->
+  | _ ->
+    Stack.push (Ret (Var (Identifier "x"))) stk;
+    assert false
+;;
+
+(* | C_ast.{ name; init = Some exp; storage = None; _ } ->
     let exp_val = gen_expression_and_convert stk exp in
     Stack.push (Copy { src = exp_val; dst = Var name }) stk
-  | _ -> ()
-;;
+  | _ -> () *)
 
 let gen_for_init stk = function
   | C_ast.InitDecl d -> gen_variable_decl stk d

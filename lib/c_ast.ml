@@ -69,6 +69,16 @@ type expression =
   | FunctionCall of identifier * expression list * c_type
   | Dereference of expression * c_type
   | AddrOf of expression * c_type
+  | Subscript of
+      { ptr : expression
+      ; ind : expression
+      ; etp : c_type
+      }
+[@@deriving show]
+
+type c_initializer =
+  | SingleInit of expression * c_type
+  | CompoundInit of c_initializer list * c_type
 [@@deriving show]
 
 type storage_class =
@@ -78,7 +88,7 @@ type storage_class =
 
 type variable_decl =
   { name : identifier
-  ; init : expression option
+  ; init : c_initializer option
   ; vtp : c_type
   ; storage : storage_class option
   }
@@ -160,6 +170,7 @@ let get_type = function
   | FunctionCall (_, _, etp) -> etp
   | Dereference (_, etp) -> etp
   | AddrOf (_, etp) -> etp
+  | Subscript { etp; _ } -> etp
 ;;
 
 let is_lvalue = function

@@ -13,6 +13,7 @@ type c_type =
       ; ret : c_type
       }
   | Pointer of c_type
+  | Array of c_type * int64
 [@@deriving show]
 
 type const =
@@ -34,7 +35,7 @@ type asm_type =
 [@@deriving show]
 
 (* Returns the size of type in bytes. *)
-let size = function
+let rec size = function
   | Int -> 4
   | UInt -> 4
   | Long -> 8
@@ -42,12 +43,13 @@ let size = function
   | Double -> 8
   | FunType _ -> assert false
   | Pointer _ -> 8
+  | Array (tp, sz) -> Int64.to_int sz * size tp
 ;;
 
 (* Returns whether the type is signed. *)
 let signed_c_type = function
   | Int | Long | Double -> true
-  | UInt | ULong | Pointer _ -> false
+  | UInt | ULong | Pointer _ | Array _ -> false
   | FunType _ -> assert false
 ;;
 
@@ -58,7 +60,7 @@ let signed_const = function
 
 let is_arithmetic_type = function
   | Int | UInt | Long | ULong | Double -> true
-  | FunType _ | Pointer _ -> false
+  | FunType _ | Pointer _ | Array _ -> false
 ;;
 
 let is_pointer_type = function
@@ -87,6 +89,7 @@ let c_type_zero = function
   | Double -> ConstDouble 0.0
   | FunType _ -> assert false
   | Pointer _ -> ConstULong 0I
+  | Array _ -> assert false
 ;;
 
 let c_type_one = function
@@ -97,4 +100,13 @@ let c_type_one = function
   | Double -> ConstDouble 1.0
   | FunType _ -> assert false
   | Pointer _ -> assert false
+  | Array _ -> assert false
+;;
+
+let get_asm_type_for_c_type = function
+  | Int | UInt -> DWord
+  | Long | ULong | Pointer _ -> QWord
+  | Double -> AsmDouble
+  | FunType _ -> assert false
+  | Array _ -> assert false
 ;;

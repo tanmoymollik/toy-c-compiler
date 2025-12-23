@@ -476,7 +476,7 @@ let gen_top_level = function
     Function { name; global; body }
   | Tacky.Ast.StaticVar { name; global; tp; init } ->
     let alignment =
-      match AsmSymbolMap.get_asm_type_for_c_type tp with
+      match get_asm_type_for_c_type tp with
       | Byte -> 1
       | Word -> 2
       | DWord -> 4

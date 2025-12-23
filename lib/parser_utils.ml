@@ -29,11 +29,13 @@ type param_info = Param of c_type * declarator [@@deriving show]
 and declarator =
   | Ident of identifier
   | PointerDeclarator of declarator
+  | ArrayDeclarator of declarator * const
   | FunDeclarator of param_info list * declarator
 [@@deriving show]
 
 type abstract_declarator =
   | AbstractPointer of abstract_declarator
+  | AbstractArray of abstract_declarator * const
   | AbstractBase
 [@@deriving show]
 
@@ -105,11 +107,19 @@ let type_of specs =
   else Int
 ;;
 
+let array_size = function
+  | ConstDouble _ -> raise (SyntaxError "Invalid array size")
+  | _ as ret -> Type_converter.convert_to_long ret
+;;
+
 let rec process_declarator base_tp = function
   | Ident name -> name, base_tp, []
   | PointerDeclarator d ->
     let derived_tp = Pointer base_tp in
     process_declarator derived_tp d
+  | ArrayDeclarator (inner, sz) ->
+    let derived_tp = Array (base_tp, array_size sz) in
+    process_declarator derived_tp inner
   | FunDeclarator (params, d) ->
     (match d with
      | Ident name ->
@@ -135,6 +145,9 @@ let rec process_abstract_declarator base_tp = function
   | AbstractBase -> base_tp
   | AbstractPointer ad ->
     let derived_tp = Pointer base_tp in
+    process_abstract_declarator derived_tp ad
+  | AbstractArray (ad, sz) ->
+    let derived_tp = Array (base_tp, array_size sz) in
     process_abstract_declarator derived_tp ad
 ;;
 
