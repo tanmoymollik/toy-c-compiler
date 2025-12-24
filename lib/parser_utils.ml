@@ -109,7 +109,7 @@ let type_of specs =
 
 let array_size = function
   | ConstDouble _ -> raise (SyntaxError "Invalid array size")
-  | _ as ret -> Type_converter.convert_to_long ret
+  | _ as ret -> Int64.to_int (Type_converter.convert_to_long ret)
 ;;
 
 let rec process_declarator base_tp = function
@@ -118,7 +118,7 @@ let rec process_declarator base_tp = function
     let derived_tp = Pointer base_tp in
     process_declarator derived_tp d
   | ArrayDeclarator (inner, sz) ->
-    let derived_tp = Array (base_tp, array_size sz) in
+    let derived_tp = CArray (base_tp, array_size sz) in
     process_declarator derived_tp inner
   | FunDeclarator (params, d) ->
     (match d with
@@ -147,7 +147,7 @@ let rec process_abstract_declarator base_tp = function
     let derived_tp = Pointer base_tp in
     process_abstract_declarator derived_tp ad
   | AbstractArray (ad, sz) ->
-    let derived_tp = Array (base_tp, array_size sz) in
+    let derived_tp = CArray (base_tp, array_size sz) in
     process_abstract_declarator derived_tp ad
 ;;
 

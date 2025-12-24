@@ -13,7 +13,7 @@ type c_type =
       ; ret : c_type
       }
   | Pointer of c_type
-  | Array of c_type * int64
+  | CArray of c_type * int
 [@@deriving show]
 
 type const =
@@ -24,6 +24,17 @@ type const =
   | ConstULong of
       (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
   | ConstDouble of float
+[@@deriving show]
+
+type static_init =
+  | IntInit of int32
+  | UIntInit of
+      (uint32[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint32.to_string v)])
+  | LongInit of int64
+  | ULongInit of
+      (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
+  | DoubleInit of float
+  | ZeroInit of { bytes : int }
 [@@deriving show]
 
 type asm_type =
@@ -43,13 +54,13 @@ let rec size = function
   | Double -> 8
   | FunType _ -> assert false
   | Pointer _ -> 8
-  | Array (tp, sz) -> Int64.to_int sz * size tp
+  | CArray (tp, sz) -> sz * size tp
 ;;
 
 (* Returns whether the type is signed. *)
 let signed_c_type = function
   | Int | Long | Double -> true
-  | UInt | ULong | Pointer _ | Array _ -> false
+  | UInt | ULong | Pointer _ | CArray _ -> false
   | FunType _ -> assert false
 ;;
 
@@ -60,11 +71,21 @@ let signed_const = function
 
 let is_arithmetic_type = function
   | Int | UInt | Long | ULong | Double -> true
-  | FunType _ | Pointer _ | Array _ -> false
+  | FunType _ | Pointer _ | CArray _ -> false
+;;
+
+let is_integer_type = function
+  | Int | UInt | Long | ULong -> true
+  | Double | FunType _ | Pointer _ | CArray _ -> false
 ;;
 
 let is_pointer_type = function
   | Pointer _ -> true
+  | _ -> false
+;;
+
+let is_array_type = function
+  | CArray _ -> true
   | _ -> false
 ;;
 
@@ -89,7 +110,7 @@ let c_type_zero = function
   | Double -> ConstDouble 0.0
   | FunType _ -> assert false
   | Pointer _ -> ConstULong 0I
-  | Array _ -> assert false
+  | CArray _ -> assert false
 ;;
 
 let c_type_one = function
@@ -100,7 +121,7 @@ let c_type_one = function
   | Double -> ConstDouble 1.0
   | FunType _ -> assert false
   | Pointer _ -> assert false
-  | Array _ -> assert false
+  | CArray _ -> assert false
 ;;
 
 let get_asm_type_for_c_type = function
@@ -108,5 +129,7 @@ let get_asm_type_for_c_type = function
   | Long | ULong | Pointer _ -> QWord
   | Double -> AsmDouble
   | FunType _ -> assert false
-  | Array _ -> assert false
+  | CArray _ -> assert false
 ;;
+
+let init_zero tp = ZeroInit { bytes = size tp }

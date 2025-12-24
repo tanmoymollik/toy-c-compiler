@@ -160,7 +160,7 @@ let evaluate_binary_expression bop l r =
   | Double -> assert false
   | FunType _ -> assert false
   | Pointer _ -> assert false
-  | Array _ -> assert false
+  | CArray _ -> assert false
 ;;
 
 let evaluate_int32_unary_expression uop x =
@@ -201,7 +201,7 @@ let evaluate_unary_expression uop x =
   | Double -> assert false
   | FunType _ -> assert false
   | Pointer _ -> assert false
-  | Array _ -> assert false
+  | CArray _ -> assert false
 ;;
 
 let evaluate_conditional_expression cnd lhs rhs =

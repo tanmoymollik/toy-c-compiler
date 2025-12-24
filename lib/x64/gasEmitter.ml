@@ -149,7 +149,11 @@ let emit_top_level = function
       ^ (List.map emit_instruction body |> String.concat "\n")
     in
     Stack.push entry text_section
-  | StaticVar { name; global; alignment; init } ->
+  | StaticVar _ -> assert false
+  | StaticConstant _ -> assert false
+;;
+
+(* | StaticVar { name; global; alignment; init } ->
     let pname = emit_platform_name name in
     let value, is_zero =
       match init with
@@ -178,7 +182,7 @@ let emit_top_level = function
       ^ decl
     in
     if is_zero then Stack.push entry bss_section else Stack.push entry data_section
-  | StaticConstant { name; alignment; init } ->
+| StaticConstant { name; alignment; init } ->
     let entry =
       Printf.sprintf
         "%salign %d\n%s%s dq %s"
@@ -190,8 +194,7 @@ let emit_top_level = function
          | ConstDouble d -> emit_double d
          | _ -> assert false)
     in
-    Stack.push entry rodata_section
-;;
+    Stack.push entry rodata_section *)
 
 let emit_program = function
   | Program tns ->

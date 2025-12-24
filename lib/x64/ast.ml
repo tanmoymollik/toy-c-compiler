@@ -140,12 +140,12 @@ type top_level =
       { name : identifier
       ; global : bool
       ; alignment : int
-      ; init : const
+      ; init : static_init list
       }
   | StaticConstant of
       { name : identifier
       ; alignment : int
-      ; init : const
+      ; init : static_init list
       }
 [@@deriving show]
 

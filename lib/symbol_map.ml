@@ -2,7 +2,7 @@ open Common
 
 type initial_value =
   | Tentative
-  | Initial of const
+  | Initial of static_init list
   | NoInitial
 [@@deriving show]
 
@@ -49,7 +49,7 @@ let fold f acc =
          (match init with
           | Initial i -> f name global tp i :: acc
           | Tentative ->
-            let init = c_type_zero tp in
+            let init = [ init_zero tp ] in
             f name global tp init :: acc
           | NoInitial -> acc)
        | _ -> acc)

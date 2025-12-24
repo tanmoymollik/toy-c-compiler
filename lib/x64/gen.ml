@@ -496,7 +496,7 @@ let gen_program = function
              StaticConstant
                { name = Identifier lbl
                ; alignment
-               ; init = ConstDouble (Int64.float_of_bits ci)
+               ; init = [ DoubleInit (Int64.float_of_bits ci) ]
                }
            in
            tp_ast :: acc)

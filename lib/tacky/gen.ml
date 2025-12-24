@@ -40,31 +40,28 @@ let make_tmp_dst vtp =
 let make_label prefix = Identifier (Core.make_unique_label prefix)
 
 let gen_cast_value stk tgt src inner_tp =
-  let ret =
-    if tgt = inner_tp
-    then src
-    else (
-      let dst = make_tmp_dst tgt in
-      if inner_tp = Double
-      then
-        if signed_c_type tgt
-        then Stack.push (DoubleToInt { src; dst }) stk
-        else Stack.push (DoubleToUInt { src; dst }) stk
-      else if tgt = Double
-      then
-        if signed_c_type inner_tp
-        then Stack.push (IntToDouble { src; dst }) stk
-        else Stack.push (UIntToDouble { src; dst }) stk
-      else if size tgt = size inner_tp
-      then Stack.push (Copy { src; dst }) stk
-      else if size tgt < size inner_tp
-      then Stack.push (Truncate { src; dst }) stk
-      else if signed_c_type inner_tp
-      then Stack.push (SignExtend { src; dst }) stk
-      else Stack.push (ZeroExtend { src; dst }) stk;
-      dst)
-  in
-  ret
+  if tgt = inner_tp
+  then src
+  else (
+    let dst = make_tmp_dst tgt in
+    if inner_tp = Double
+    then
+      if signed_c_type tgt
+      then Stack.push (DoubleToInt { src; dst }) stk
+      else Stack.push (DoubleToUInt { src; dst }) stk
+    else if tgt = Double
+    then
+      if signed_c_type inner_tp
+      then Stack.push (IntToDouble { src; dst }) stk
+      else Stack.push (UIntToDouble { src; dst }) stk
+    else if size tgt = size inner_tp
+    then Stack.push (Copy { src; dst }) stk
+    else if size tgt < size inner_tp
+    then Stack.push (Truncate { src; dst }) stk
+    else if signed_c_type inner_tp
+    then Stack.push (SignExtend { src; dst }) stk
+    else Stack.push (ZeroExtend { src; dst }) stk;
+    dst)
 ;;
 
 let rec gen_expression stk = function

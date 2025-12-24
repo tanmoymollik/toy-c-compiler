@@ -114,7 +114,7 @@ type top_level =
       { name : identifier
       ; global : bool
       ; tp : c_type
-      ; init : const
+      ; init : static_init list
       }
 [@@deriving show]
 

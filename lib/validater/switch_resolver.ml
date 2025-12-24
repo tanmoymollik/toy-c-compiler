@@ -1,4 +1,5 @@
 open Common
+open C_ast
 
 exception SemanticError = Errors.SemanticError
 
@@ -35,9 +36,9 @@ let exists_default var =
 let add_default k = Hashtbl.add default_map k true
 
 let rec evaluate_case_expression = function
-  | C_ast.Constant (c, _) -> c
-  | C_ast.Var _ -> raise (SemanticError "Non-const value for switch-case")
-  | C_ast.Cast { tgt; exp; _ } ->
+  | Constant (c, _) -> c
+  | Var _ -> raise (SemanticError "Non-const value for switch-case")
+  | Cast { tgt; exp; _ } ->
     let exp = evaluate_case_expression exp in
     (match tgt with
      | Int -> ConstInt (Type_converter.convert_to_int exp)
@@ -47,81 +48,76 @@ let rec evaluate_case_expression = function
      | Double -> assert false
      | FunType _ -> assert false
      | Pointer _ -> assert false
-     | Array _ -> assert false)
-  | C_ast.Unary (uop, exp, _) ->
+     | CArray _ -> assert false)
+  | Unary (uop, exp, _) ->
     Type_converter.evaluate_unary_expression uop (evaluate_case_expression exp)
-  | C_ast.TUnary _ -> raise (SemanticError "Non-const value for switch-case")
-  | C_ast.Binary { bop; lexp; rexp; _ } ->
+  | TUnary _ -> raise (SemanticError "Non-const value for switch-case")
+  | Binary { bop; lexp; rexp; _ } ->
     Type_converter.evaluate_binary_expression
       bop
       (evaluate_case_expression lexp)
       (evaluate_case_expression rexp)
-  | C_ast.CompoundAssign _ -> raise (SemanticError "Non-const value for switch-case")
-  | C_ast.Assignment _ -> raise (SemanticError "Non-const value for switch-case")
-  | C_ast.Conditional { cnd; lhs; rhs; _ } ->
+  | CompoundAssign _ -> raise (SemanticError "Non-const value for switch-case")
+  | Assignment _ -> raise (SemanticError "Non-const value for switch-case")
+  | Conditional { cnd; lhs; rhs; _ } ->
     let cnd = evaluate_case_expression cnd in
     let lhs = evaluate_case_expression lhs in
     let rhs = evaluate_case_expression rhs in
     Type_converter.evaluate_conditional_expression cnd lhs rhs
-  | C_ast.FunctionCall _ -> raise (SemanticError "Non-const value for switch-case")
-  | C_ast.Dereference _ -> raise (SemanticError "Non-const value for switch-case")
-  | C_ast.AddrOf _ -> raise (SemanticError "Non-const value for switch-case")
-  | C_ast.Subscript _ -> raise (SemanticError "Non-const value for switch-case")
+  | FunctionCall _ -> raise (SemanticError "Non-const value for switch-case")
+  | Dereference _ -> raise (SemanticError "Non-const value for switch-case")
+  | AddrOf _ -> raise (SemanticError "Non-const value for switch-case")
+  | Subscript _ -> raise (SemanticError "Non-const value for switch-case")
 ;;
 
 let rec resolve_statement = function
-  | C_ast.If { cnd; thn; els } ->
-    C_ast.If { cnd; thn = resolve_statement thn; els = Option.map resolve_statement els }
-  | C_ast.Label (lbl, stmt) -> C_ast.Label (lbl, resolve_statement stmt)
-  | C_ast.Compound block -> C_ast.Compound (resolve_block block)
-  | C_ast.While (exp, stmt, iden) -> C_ast.While (exp, resolve_statement stmt, iden)
-  | C_ast.DoWhile (stmt, exp, iden) -> C_ast.DoWhile (resolve_statement stmt, exp, iden)
-  | C_ast.For { init; cnd; post; body; label } ->
-    C_ast.For { init; cnd; post; body = resolve_statement body; label }
-  | C_ast.Switch { cnd; body; label = Identifier label; _ } ->
+  | If { cnd; thn; els } ->
+    If { cnd; thn = resolve_statement thn; els = Option.map resolve_statement els }
+  | Label (lbl, stmt) -> Label (lbl, resolve_statement stmt)
+  | Compound block -> Compound (resolve_block block)
+  | While (exp, stmt, iden) -> While (exp, resolve_statement stmt, iden)
+  | DoWhile (stmt, exp, iden) -> DoWhile (resolve_statement stmt, exp, iden)
+  | For { init; cnd; post; body; label } ->
+    For { init; cnd; post; body = resolve_statement body; label }
+  | Switch { cnd; body; label = Identifier label; _ } ->
     let body = resolve_statement body in
     (* All cases are now added to the label_map. *)
     let cases = List.rev (get_for_label label) in
     let default = exists_default label in
-    C_ast.Switch { cnd; body; cases; default; label = Identifier label }
-  | C_ast.Case (exp, stmt, Identifier lbl) ->
+    Switch { cnd; body; cases; default; label = Identifier label }
+  | Case (exp, stmt, Identifier lbl) ->
     let v = evaluate_case_expression exp in
     if exists_label lbl v then raise (SemanticError "Case already exists.");
     let id = add_for_label lbl v in
     let lbl = Identifier (Core.case_label id lbl) in
-    C_ast.Label (lbl, resolve_statement stmt)
-  | C_ast.Default (stmt, Identifier lbl) ->
+    Label (lbl, resolve_statement stmt)
+  | Default (stmt, Identifier lbl) ->
     if exists_default lbl
     then raise (SemanticError "Two default case for a single switch statement");
     add_default lbl;
     let lbl = Identifier (Core.default_label lbl) in
-    C_ast.Label (lbl, resolve_statement stmt)
-  | ( C_ast.Return _
-    | C_ast.Expression _
-    | C_ast.Goto _
-    | C_ast.Break _
-    | C_ast.Continue _
-    | C_ast.Null ) as ret -> ret
+    Label (lbl, resolve_statement stmt)
+  | (Return _ | Expression _ | Goto _ | Break _ | Continue _ | Null) as ret -> ret
 
 and resolve_block_item = function
-  | C_ast.S s -> C_ast.S (resolve_statement s)
-  | C_ast.D _ as ret -> ret
+  | S s -> S (resolve_statement s)
+  | D _ as ret -> ret
 
 and resolve_block = function
-  | C_ast.Block items -> C_ast.Block (List.map resolve_block_item items)
+  | Block items -> Block (List.map resolve_block_item items)
 ;;
 
 let resolve_function_decl = function
-  | C_ast.{ name; params; body; ftp; storage } ->
+  | { name; params; body; ftp; storage } ->
     let body = Option.map resolve_block body in
-    C_ast.{ name; params; body; ftp; storage }
+    { name; params; body; ftp; storage }
 ;;
 
 let resolve_declaration = function
-  | C_ast.FunDecl f -> C_ast.FunDecl (resolve_function_decl f)
-  | C_ast.VarDecl _ as ret -> ret
+  | FunDecl f -> FunDecl (resolve_function_decl f)
+  | VarDecl _ as ret -> ret
 ;;
 
 let resolve_program = function
-  | C_ast.Program dns -> C_ast.Program (List.map resolve_declaration dns)
+  | Program dns -> Program (List.map resolve_declaration dns)
 ;;

@@ -160,7 +160,7 @@ primary_expression:
 
 postfix_expression:
   | p = primary_expression; inds = list(postfix_expression_suffix)
-    { List.fold_left (fun e acc -> C_ast.Subscript { ptr = acc; ind = e; etp = Common.Int }) p inds }
+    { List.fold_left (fun e acc -> C_ast.Subscript (acc, e, Common.Int)) p inds }
 
 postfix_expression_suffix:
   | LBRACKET; e = expression; RBRACKET { e }
@@ -197,7 +197,7 @@ direct_declarator:
       | Some pl -> FunDeclarator (pl, sd)
     }
   | sd = simple_declarator; cns = nonempty_list(array_suffix)
-    { List.fold_right (fun c acc -> ArrayDeclarator (acc, c)) cns sd }
+    { List.fold_left (fun acc c -> ArrayDeclarator (acc, c)) sd cns }
 
 array_suffix:
   | LBRACKET; c = const; RBRACKET { c }
@@ -232,10 +232,10 @@ direct_abstract_declarator:
       match cns with
       | [] -> ad
       | _ ->
-        List.fold_right (fun c acc -> AbstractArray (acc, c)) cns ad
+        List.fold_left (fun acc c -> AbstractArray (acc, c)) ad cns
     }
   | cns = nonempty_list(array_suffix)
-    { List.fold_right (fun c acc -> AbstractArray (acc, c)) cns AbstractBase }
+    { List.fold_left (fun acc c -> AbstractArray (acc, c)) AbstractBase cns }
 
 c_initializer:
   | e = expression

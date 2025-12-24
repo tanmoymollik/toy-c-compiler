@@ -69,11 +69,7 @@ type expression =
   | FunctionCall of identifier * expression list * c_type
   | Dereference of expression * c_type
   | AddrOf of expression * c_type
-  | Subscript of
-      { ptr : expression
-      ; ind : expression
-      ; etp : c_type
-      }
+  | Subscript of expression * expression * c_type
 [@@deriving show]
 
 type c_initializer =
@@ -170,12 +166,13 @@ let get_type = function
   | FunctionCall (_, _, etp) -> etp
   | Dereference (_, etp) -> etp
   | AddrOf (_, etp) -> etp
-  | Subscript { etp; _ } -> etp
+  | Subscript (_, _, etp) -> etp
 ;;
 
 let is_lvalue = function
   | Var _ -> true
   | Dereference _ -> true
+  | Subscript _ -> true
   | _ -> false
 ;;
 
@@ -213,4 +210,11 @@ let convert_by_assignment tgt exp =
   else if is_null_pointer_const exp && is_pointer_type tgt
   then Cast { tgt; exp; etp = tgt }
   else raise (Errors.SemanticError "Cannot convert type for assignment")
+;;
+
+let rec zero_initializer tp =
+  match tp with
+  | CArray (e_tp, sz) -> CompoundInit (List.init sz (fun _ -> zero_initializer e_tp), tp)
+  | Pointer _ -> SingleInit (Constant (c_type_zero tp, ULong), tp)
+  | _ -> SingleInit (Constant (c_type_zero tp, tp), tp)
 ;;

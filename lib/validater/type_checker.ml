@@ -1,4 +1,5 @@
 open Common
+open C_ast
 
 exception SemanticError = Errors.SemanticError
 
@@ -13,205 +14,256 @@ let get_for_label lbl =
 ;;
 
 let typecheck_expression_binary bop lexp rexp =
+  let tl = get_type lexp in
+  let tr = get_type rexp in
   let convert lexp rexp =
-    let t1 = C_ast.get_type lexp in
-    let t2 = C_ast.get_type rexp in
-    let common_t = get_common_type t1 t2 in
-    C_ast.convert_to common_t lexp, C_ast.convert_to common_t rexp
+    let tl = get_type lexp in
+    let tr = get_type rexp in
+    let common_t = get_common_type tl tr in
+    convert_to common_t lexp, convert_to common_t rexp
   in
   match bop with
-  | C_ast.And | C_ast.Or -> C_ast.Binary { bop; lexp; rexp; etp = Int }
-  | C_ast.Add
-  | C_ast.Sub
-  | C_ast.Mul
-  | C_ast.Div
-  | C_ast.Rem
-  | C_ast.BAnd
-  | C_ast.BOr
-  | C_ast.Xor ->
-    let lexp, rexp = convert lexp rexp in
-    if bop = C_ast.Rem && C_ast.get_type rexp = Double
-    then raise (SemanticError "Can't use double with remainder operator");
-    if
-      (bop = C_ast.Mul || bop = C_ast.Div || bop = C_ast.Rem)
-      && is_pointer_type (C_ast.get_type lexp)
+  | And | Or -> Binary { bop; lexp; rexp; etp = Int }
+  | Add ->
+    if is_arithmetic_type tl && is_arithmetic_type tr
+    then (
+      let lexp, rexp = convert lexp rexp in
+      Binary { bop; lexp; rexp; etp = get_type lexp })
+    else if is_pointer_type tl && is_integer_type tr
+    then (
+      let rexp = convert_to Long rexp in
+      Binary { bop; lexp; rexp; etp = get_type lexp })
+    else if is_integer_type tl && is_pointer_type tr
+    then (
+      let lexp = convert_to Long lexp in
+      Binary { bop; lexp; rexp; etp = get_type rexp })
+    else raise (SemanticError "Invalid operands for addition")
+  | Sub ->
+    if is_arithmetic_type tl && is_arithmetic_type tr
+    then (
+      let lexp, rexp = convert lexp rexp in
+      Binary { bop; lexp; rexp; etp = get_type lexp })
+    else if is_pointer_type tl && is_integer_type tr
+    then (
+      let rexp = convert_to Long rexp in
+      Binary { bop; lexp; rexp; etp = get_type lexp })
+    else if is_pointer_type tl && tl = tr
+    then Binary { bop; lexp; rexp; etp = Long }
+    else raise (SemanticError "Invalid operands for subtraction")
+  | Mul | Div ->
+    if is_pointer_type tl || is_pointer_type tr
     then raise (SemanticError "Invalid binary operation on pointer type");
-    if
-      (bop = C_ast.BAnd || bop = C_ast.BOr || bop = C_ast.Xor)
-      && C_ast.get_type rexp = Double
-    then raise (SemanticError "Can't use double with bitwise operator");
-    if
-      (bop = C_ast.BAnd || bop = C_ast.BOr || bop = C_ast.Xor)
-      && (is_pointer_type (C_ast.get_type lexp) || is_pointer_type (C_ast.get_type rexp))
-    then raise (SemanticError "Can't use pointer with bitwise operator");
-    C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
-  | C_ast.Equal | C_ast.NEqual ->
-    let t1 = C_ast.get_type lexp in
-    let t2 = C_ast.get_type rexp in
-    let common_t =
-      if is_pointer_type t1 || is_pointer_type t2
-      then C_ast.get_common_pointer_type lexp rexp
-      else get_common_type t1 t2
-    in
-    let lexp = C_ast.convert_to common_t lexp in
-    let rexp = C_ast.convert_to common_t rexp in
-    C_ast.Binary { bop; lexp; rexp; etp = Int }
-  | C_ast.LEqual | C_ast.GEqual | C_ast.Less | C_ast.Greater ->
     let lexp, rexp = convert lexp rexp in
-    C_ast.Binary { bop; lexp; rexp; etp = Int }
-  | C_ast.Lsft | C_ast.Rsft ->
-    if C_ast.get_type lexp = Double || C_ast.get_type rexp = Double
+    Binary { bop; lexp; rexp; etp = get_type lexp }
+  | Rem ->
+    if tl = Double || tr = Double
+    then raise (SemanticError "Can't use double with remainder operator");
+    if is_pointer_type tl || is_pointer_type tr
+    then raise (SemanticError "Invalid binary operation on pointer type");
+    let lexp, rexp = convert lexp rexp in
+    Binary { bop; lexp; rexp; etp = get_type lexp }
+  | BAnd | BOr | Xor ->
+    if is_pointer_type tl || is_pointer_type tr
+    then raise (SemanticError "Can't use pointer with bitwise operator");
+    let lexp, rexp = convert lexp rexp in
+    Binary { bop; lexp; rexp; etp = get_type lexp }
+  | Equal | NEqual ->
+    let common_t =
+      if is_pointer_type tl || is_pointer_type tr
+      then get_common_pointer_type lexp rexp
+      else get_common_type tl tr
+    in
+    let lexp = convert_to common_t lexp in
+    let rexp = convert_to common_t rexp in
+    Binary { bop; lexp; rexp; etp = Int }
+  | LEqual | GEqual | Less | Greater ->
+    if is_arithmetic_type tl && is_arithmetic_type tr
+    then (
+      let lexp, rexp = convert lexp rexp in
+      Binary { bop; lexp; rexp; etp = Int })
+    else if is_pointer_type tl && tl = tr
+    then Binary { bop; lexp; rexp; etp = Int }
+    else raise (SemanticError "Invalid operand for comparison operator")
+  | Lsft | Rsft ->
+    if tl = Double || tr = Double
     then raise (SemanticError "Can't use double with shift operator");
-    if is_pointer_type (C_ast.get_type lexp) || is_pointer_type (C_ast.get_type rexp)
+    if is_pointer_type tl || is_pointer_type tr
     then raise (SemanticError "Can't use pointer with shift operator");
-    C_ast.Binary { bop; lexp; rexp; etp = C_ast.get_type lexp }
+    Binary { bop; lexp; rexp; etp = get_type lexp }
 ;;
 
 let rec typecheck_expression symbol_map = function
-  | C_ast.Constant (c, _) -> C_ast.Constant (c, Type_converter.const_type c)
-  | C_ast.Var (Identifier iden, _) ->
+  | Constant (c, _) -> Constant (c, Type_converter.const_type c)
+  | Var (Identifier iden, _) ->
     (match Hashtbl.find_opt symbol_map iden with
      | Some Symbol_map.{ tp = FunType _; _ } ->
        raise (SemanticError ("Function name used as variable - " ^ iden))
-     | Some Symbol_map.{ tp; _ } -> C_ast.Var (Identifier iden, tp)
+     | Some Symbol_map.{ tp; _ } -> Var (Identifier iden, tp)
      | None -> assert false)
-  | C_ast.Cast { tgt; exp; _ } ->
-    let exp = typecheck_expression symbol_map exp in
-    if is_pointer_type (C_ast.get_type exp) && tgt = Double
-    then raise (SemanticError "Can't cast pointer to double")
-    else if C_ast.get_type exp = Double && is_pointer_type tgt
-    then raise (SemanticError "Can't cast double to pointer");
-    C_ast.Cast { tgt; exp = typecheck_expression symbol_map exp; etp = tgt }
-  | C_ast.Unary (uop, exp, _) ->
-    let exp = typecheck_expression symbol_map exp in
-    if uop = C_ast.Complement && C_ast.get_type exp = Double
+  | Cast { tgt; exp; _ } ->
+    let exp = typecheck_expression_and_convert symbol_map exp in
+    let etp = get_type exp in
+    (match tgt with
+     | Double when is_pointer_type etp ->
+       raise (SemanticError "Can't cast pointer to double")
+     | Pointer _ when etp = Double -> raise (SemanticError "Can't cast double to pointer")
+     | CArray _ -> raise (SemanticError "Can't cast to array type")
+     | _ -> ());
+    Cast { tgt; exp; etp = tgt }
+  | Unary (uop, exp, _) ->
+    let exp = typecheck_expression_and_convert symbol_map exp in
+    if uop = Complement && get_type exp = Double
     then raise (SemanticError "Can't take the bitwise complement of a double");
-    if
-      (uop = C_ast.Complement || uop = C_ast.Negate)
-      && is_pointer_type (C_ast.get_type exp)
+    if (uop = Complement || uop = Negate) && is_pointer_type (get_type exp)
     then raise (SemanticError "Invalid unary operation on pointer type");
     let etp =
       match uop with
-      | C_ast.Not -> Int
-      | _ -> C_ast.get_type exp
+      | Not -> Int
+      | _ -> get_type exp
     in
-    C_ast.Unary (uop, exp, etp)
-  | C_ast.TUnary (uop, p, lval, _) ->
-    let lval = typecheck_expression symbol_map lval in
-    if not (C_ast.is_lvalue lval)
+    Unary (uop, exp, etp)
+  | TUnary (uop, p, lval, _) ->
+    let lval = typecheck_expression_and_convert symbol_map lval in
+    if not (is_lvalue lval)
     then raise (SemanticError "Invalid lvalue of suffix/postfix operator");
-    C_ast.TUnary (uop, p, lval, C_ast.get_type lval)
-  | C_ast.Binary { bop; lexp; rexp; _ } ->
-    let lexp = typecheck_expression symbol_map lexp in
-    let rexp = typecheck_expression symbol_map rexp in
+    TUnary (uop, p, lval, get_type lval)
+  | Binary { bop; lexp; rexp; _ } ->
+    let lexp = typecheck_expression_and_convert symbol_map lexp in
+    let rexp = typecheck_expression_and_convert symbol_map rexp in
     typecheck_expression_binary bop lexp rexp
-  | C_ast.CompoundAssign { bop; lexp; rexp; _ } ->
-    let lval = typecheck_expression symbol_map lexp in
-    let rexp = typecheck_expression symbol_map rexp in
-    let etp = C_ast.get_type lval in
-    if not (C_ast.is_lvalue lval)
+  | CompoundAssign { bop; lexp; rexp; _ } ->
+    let lval = typecheck_expression_and_convert symbol_map lexp in
+    let rexp = typecheck_expression_and_convert symbol_map rexp in
+    let etp = get_type lval in
+    if not (is_lvalue lval)
     then raise (SemanticError "Invalid lvalue of binary assignment operator");
-    (* let rexp = C_ast.convert_by_assignment etp rval in *)
+    (* let rexp = convert_by_assignment etp rval in *)
     let tmp_binary_ins = typecheck_expression_binary bop lval rexp in
     let btp =
       match tmp_binary_ins with
       | Binary { etp; _ } -> etp
       | _ -> assert false
     in
-    C_ast.CompoundAssign { bop; lexp = lval; rexp; btp; etp }
-  | C_ast.Assignment { lval; rval; _ } ->
-    let lval = typecheck_expression symbol_map lval in
-    let rval = typecheck_expression symbol_map rval in
-    let etp = C_ast.get_type lval in
-    if not (C_ast.is_lvalue lval)
+    CompoundAssign { bop; lexp = lval; rexp; btp; etp }
+  | Assignment { lval; rval; _ } ->
+    let lval = typecheck_expression_and_convert symbol_map lval in
+    if not (is_lvalue lval)
     then raise (SemanticError "Invalid lvalue of assignment operator");
-    let rval = C_ast.convert_by_assignment etp rval in
-    C_ast.Assignment { lval; rval; etp }
-  | C_ast.Conditional { cnd; lhs; rhs; _ } ->
-    let lhs = typecheck_expression symbol_map lhs in
-    let rhs = typecheck_expression symbol_map rhs in
-    let t1 = C_ast.get_type lhs in
-    let t2 = C_ast.get_type rhs in
+    let etp = get_type lval in
+    let rval = typecheck_expression_and_convert symbol_map rval in
+    let rval = convert_by_assignment etp rval in
+    Assignment { lval; rval; etp }
+  | Conditional { cnd; lhs; rhs; _ } ->
+    let lhs = typecheck_expression_and_convert symbol_map lhs in
+    let rhs = typecheck_expression_and_convert symbol_map rhs in
+    let tl = get_type lhs in
+    let tr = get_type rhs in
     let common_t =
-      if is_pointer_type t1 || is_pointer_type t2
-      then C_ast.get_common_pointer_type lhs rhs
-      else get_common_type t1 t2
+      if is_pointer_type tl || is_pointer_type tr
+      then get_common_pointer_type lhs rhs
+      else get_common_type tl tr
     in
-    let lhs = C_ast.convert_to common_t lhs in
-    let rhs = C_ast.convert_to common_t rhs in
-    C_ast.Conditional
-      { cnd = typecheck_expression symbol_map cnd; lhs; rhs; etp = common_t }
-  | C_ast.FunctionCall (Identifier iden, exps, _) ->
+    let lhs = convert_to common_t lhs in
+    let rhs = convert_to common_t rhs in
+    Conditional
+      { cnd = typecheck_expression_and_convert symbol_map cnd; lhs; rhs; etp = common_t }
+  | FunctionCall (Identifier iden, exps, _) ->
     (match Hashtbl.find_opt symbol_map iden with
      | Some Symbol_map.{ tp = FunType { params; ret }; _ } ->
        if List.length params <> List.length exps
        then
          raise
            (SemanticError ("Function called with wrong number of arguments - " ^ iden));
-       let exps = List.map (typecheck_expression symbol_map) exps in
-       let converted_args = List.map2 C_ast.convert_by_assignment params exps in
-       C_ast.FunctionCall (Identifier iden, converted_args, ret)
+       let exps = List.map (typecheck_expression_and_convert symbol_map) exps in
+       let converted_args = List.map2 convert_by_assignment params exps in
+       FunctionCall (Identifier iden, converted_args, ret)
      | _ -> raise (SemanticError ("Variable used as function - " ^ iden)))
-  | C_ast.Dereference (exp, _) ->
-    let exp = typecheck_expression symbol_map exp in
-    (match C_ast.get_type exp with
-     | Pointer ptp -> C_ast.Dereference (exp, ptp)
+  | Dereference (exp, _) ->
+    let exp = typecheck_expression_and_convert symbol_map exp in
+    (match get_type exp with
+     | Pointer ptp -> Dereference (exp, ptp)
      | _ -> raise (SemanticError "Dereferencing a non-pointer type"))
-  | C_ast.AddrOf (exp, _) ->
-    if not (C_ast.is_lvalue exp) then raise (SemanticError "Taking address of non-lvalue");
+  | AddrOf (exp, _) ->
+    if not (is_lvalue exp) then raise (SemanticError "Taking address of non-lvalue");
     let exp = typecheck_expression symbol_map exp in
-    let etp = C_ast.get_type exp in
-    C_ast.AddrOf (exp, Pointer etp)
-  | C_ast.Subscript _ -> assert false
+    let etp = get_type exp in
+    AddrOf (exp, Pointer etp)
+  | Subscript (e1, e2, _) ->
+    let e1 = typecheck_expression_and_convert symbol_map e1 in
+    let e2 = typecheck_expression_and_convert symbol_map e2 in
+    let t1 = get_type e1 in
+    let t2 = get_type e2 in
+    let ptr, e1, e2 =
+      if is_pointer_type t1 && is_integer_type t2
+      then t1, e1, convert_to Long e2
+      else if is_integer_type t1 && is_pointer_type t2
+      then t2, convert_to Long e1, e2
+      else raise (SemanticError "Subscript must have integer and pointer operand")
+    in
+    let ptr_ref =
+      match ptr with
+      | Pointer tp -> tp
+      | _ -> assert false
+    in
+    Subscript (e1, e2, ptr_ref)
+
+and typecheck_expression_and_convert symbol_map exp =
+  let exp = typecheck_expression symbol_map exp in
+  match get_type exp with
+  | CArray (tp, _) -> AddrOf (exp, Pointer tp)
+  | _ -> exp
 ;;
 
-let get_initial c vtp =
-  let c =
-    match vtp with
-    | Int -> ConstInt (Type_converter.convert_to_int c)
-    | UInt -> ConstUInt (Type_converter.convert_to_uint c)
-    | Long -> ConstLong (Type_converter.convert_to_long c)
-    | ULong -> ConstULong (Type_converter.convert_to_ulong c)
-    | Double -> ConstDouble (Type_converter.convert_to_double c)
-    | FunType _ -> assert false
-    | Pointer _ ->
-      if not (C_ast.is_null_pointer_const (C_ast.Constant (c, vtp)))
-      then
-        raise
-          (SemanticError "Non-null pointer constant used to initialize pointer variable")
-      else ConstULong 0I
-    | Array _ -> assert false
-  in
-  Symbol_map.Initial c
+let rec typecheck_static_init vtp = function
+  | SingleInit (Constant (c, _), _) ->
+    let c =
+      match vtp with
+      | Int -> IntInit (Type_converter.convert_to_int c)
+      | UInt -> UIntInit (Type_converter.convert_to_uint c)
+      | Long -> LongInit (Type_converter.convert_to_long c)
+      | ULong -> ULongInit (Type_converter.convert_to_ulong c)
+      | Double -> DoubleInit (Type_converter.convert_to_double c)
+      | FunType _ -> assert false
+      | Pointer _ ->
+        let v = Type_converter.convert_to_long c in
+        if v <> 0L
+        then
+          raise
+            (SemanticError "Non-null pointer constant used to initialize pointer variable")
+        else ULongInit 0I
+      | CArray _ -> raise (SemanticError "Invalid static initializer for arrays")
+    in
+    [ c ]
+  | CompoundInit (init_list, _) ->
+    (match vtp with
+     | CArray (tp, sz) ->
+       if List.length init_list > sz
+       then raise (SemanticError "Wrong number of values in initializer");
+       let tail_sz = (sz - List.length init_list) * size tp in
+       let tail = if tail_sz > 0 then [ ZeroInit { bytes = tail_sz } ] else [] in
+       let init_list = List.concat_map (typecheck_static_init tp) init_list in
+       init_list @ tail
+     | _ -> raise (SemanticError "Invalid static initializer for arrays"))
+  | _ -> raise (SemanticError "Non-constant initializer for file-scope variable")
 ;;
 
 let typecheck_file_scope_variable_decl symbol_map = function
-  | _ ->
-    let _ = Hashtbl.find_opt symbol_map "hola" in
-    ()
-;;
-
-(* | C_ast.{ name = Identifier iden; init; vtp; storage } -> 
-     let initial_value =
+  | { name = Identifier iden; init; vtp; storage } as ret ->
+    let initial_value =
       ref
         (match init with
-         | Some (C_ast.Constant (c, _)) -> get_initial c vtp
+         | Some ci -> Symbol_map.Initial (typecheck_static_init vtp ci)
          | None ->
-           if storage = Some C_ast.Extern
-           then Symbol_map.NoInitial
-           else Symbol_map.Tentative
-         | _ ->
-           raise
-             (SemanticError ("Non-constant initializer for file-scope variable - " ^ iden)))
+           if storage = Some Extern then Symbol_map.NoInitial else Symbol_map.Tentative)
     in
-    let global = ref (storage <> Some C_ast.Static) in
+    let global = ref (storage <> Some Static) in
     (match Hashtbl.find_opt symbol_map iden with
      | Some Symbol_map.{ tp; attrs } ->
        if tp <> vtp
        then raise (SemanticError ("Variable declaration type mismatch - " ^ iden));
        (match attrs with
         | StaticAttr attrs ->
-          if storage = Some C_ast.Extern
+          if storage = Some Extern
           then global := attrs.global
           else if attrs.global <> !global
           then raise (SemanticError ("Conflicting variable linkage - " ^ iden));
@@ -231,17 +283,30 @@ let typecheck_file_scope_variable_decl symbol_map = function
      | _ -> ());
     let attrs = Symbol_map.StaticAttr { init = !initial_value; global = !global } in
     let info = Symbol_map.{ tp = vtp; attrs } in
-    Hashtbl.replace symbol_map iden info *)
-
-let typecheck_block_scope_variable_decl symbol_map = function
-  | _ as ret ->
-    let _ = Hashtbl.find_opt symbol_map "var" in
+    Hashtbl.replace symbol_map iden info;
     ret
 ;;
 
-(* | C_ast.{ name = Identifier iden; init; vtp; storage } as ret ->
+let rec typecheck_var_init symbol_map tgt init =
+  match tgt, init with
+  | _, SingleInit (exp, _) ->
+    let exp = typecheck_expression_and_convert symbol_map exp in
+    let exp = convert_by_assignment tgt exp in
+    SingleInit (exp, tgt)
+  | CArray (tp, sz), CompoundInit (init_list, _) ->
+    if List.length init_list > sz
+    then raise (SemanticError "Wrong number of values in initializer");
+    let init_list = List.map (fun el -> typecheck_var_init symbol_map tp el) init_list in
+    let padding = List.init (sz - List.length init_list) (fun _ -> zero_initializer tp) in
+    CompoundInit (init_list @ padding, tgt)
+  | _ ->
+    raise (SemanticError "Can't initialize a scalar object with compound initializer")
+;;
+
+let typecheck_block_scope_variable_decl symbol_map = function
+  | { name = Identifier iden; init; vtp; storage } as ret ->
     (match storage with
-     | Some C_ast.Extern ->
+     | Some Extern ->
        if init <> None
        then
          raise
@@ -259,17 +324,12 @@ let typecheck_block_scope_variable_decl symbol_map = function
           in
           Hashtbl.replace symbol_map iden info);
        ret
-     | Some C_ast.Static ->
+     | Some Static ->
        let initial_value =
          match init with
-         | Some (C_ast.Constant (c, _)) -> c
-         | None -> ConstInt Int32.zero
-         | _ ->
-           raise
-             (SemanticError
-                ("Non-constant initializer for local static variable - " ^ iden))
+         | Some ci -> Symbol_map.Initial (typecheck_static_init vtp ci)
+         | None -> Symbol_map.Tentative
        in
-       let initial_value = get_initial initial_value vtp in
        let info =
          Symbol_map.
            { tp = vtp; attrs = StaticAttr { init = initial_value; global = false } }
@@ -279,78 +339,88 @@ let typecheck_block_scope_variable_decl symbol_map = function
      | None ->
        let info = Symbol_map.{ tp = vtp; attrs = LocalAttr } in
        Hashtbl.replace symbol_map iden info;
-       let init = Option.map (typecheck_expression symbol_map) init in
-       let init = Option.map (C_ast.convert_by_assignment vtp) init in
-       C_ast.{ name = Identifier iden; init; vtp; storage }) *)
+       let init = Option.map (typecheck_var_init symbol_map vtp) init in
+       { name = Identifier iden; init; vtp; storage })
+;;
 
 let typecheck_for_init symbol_map = function
-  | C_ast.InitDecl d ->
+  | InitDecl d ->
     if d.storage <> None then raise (SemanticError "Storage specifier in for-loop init");
-    C_ast.InitDecl (typecheck_block_scope_variable_decl symbol_map d)
-  | C_ast.InitExp e -> C_ast.InitExp (Option.map (typecheck_expression symbol_map) e)
+    InitDecl (typecheck_block_scope_variable_decl symbol_map d)
+  | InitExp e -> InitExp (Option.map (typecheck_expression_and_convert symbol_map) e)
 ;;
 
 let rec typecheck_statement symbol_map ftp = function
-  | C_ast.Return exp ->
-    let exp = typecheck_expression symbol_map exp in
-    let exp = C_ast.convert_by_assignment ftp exp in
-    C_ast.Return exp
-  | C_ast.Expression exp -> C_ast.Expression (typecheck_expression symbol_map exp)
-  | C_ast.If { cnd; thn; els } ->
-    let cnd = typecheck_expression symbol_map cnd in
+  | Return exp ->
+    let exp = typecheck_expression_and_convert symbol_map exp in
+    let exp = convert_by_assignment ftp exp in
+    Return exp
+  | Expression exp -> Expression (typecheck_expression_and_convert symbol_map exp)
+  | If { cnd; thn; els } ->
+    let cnd = typecheck_expression_and_convert symbol_map cnd in
     let thn = typecheck_statement symbol_map ftp thn in
     let els = Option.map (typecheck_statement symbol_map ftp) els in
-    C_ast.If { cnd; thn; els }
-  | C_ast.Label (lbl, stmt) -> C_ast.Label (lbl, typecheck_statement symbol_map ftp stmt)
-  | C_ast.Compound block -> C_ast.Compound (typecheck_block symbol_map ftp block)
-  | C_ast.While (exp, stmt, lbl) ->
-    let exp = typecheck_expression symbol_map exp in
+    If { cnd; thn; els }
+  | Label (lbl, stmt) -> Label (lbl, typecheck_statement symbol_map ftp stmt)
+  | Compound block -> Compound (typecheck_block symbol_map ftp block)
+  | While (exp, stmt, lbl) ->
+    let exp = typecheck_expression_and_convert symbol_map exp in
     let stmt = typecheck_statement symbol_map ftp stmt in
-    C_ast.While (exp, stmt, lbl)
-  | C_ast.DoWhile (stmt, exp, lbl) ->
+    While (exp, stmt, lbl)
+  | DoWhile (stmt, exp, lbl) ->
     let stmt = typecheck_statement symbol_map ftp stmt in
-    let exp = typecheck_expression symbol_map exp in
-    C_ast.DoWhile (stmt, exp, lbl)
-  | C_ast.For { init; cnd; post; body; label } ->
+    let exp = typecheck_expression_and_convert symbol_map exp in
+    DoWhile (stmt, exp, lbl)
+  | For { init; cnd; post; body; label } ->
     let init = typecheck_for_init symbol_map init in
-    let cnd = Option.map (typecheck_expression symbol_map) cnd in
-    let post = Option.map (typecheck_expression symbol_map) post in
+    let cnd = Option.map (typecheck_expression_and_convert symbol_map) cnd in
+    let post = Option.map (typecheck_expression_and_convert symbol_map) post in
     let body = typecheck_statement symbol_map ftp body in
-    C_ast.For { init; cnd; post; body; label }
-  | C_ast.Switch { cnd; body; cases; default; label = Identifier label } ->
-    let cnd = typecheck_expression symbol_map cnd in
-    if C_ast.get_type cnd = Double
-    then raise (SemanticError "Double value in switch condition");
-    add_for_label label (C_ast.get_type cnd);
+    For { init; cnd; post; body; label }
+  | Switch { cnd; body; cases; default; label = Identifier label } ->
+    let cnd = typecheck_expression_and_convert symbol_map cnd in
+    if get_type cnd = Double then raise (SemanticError "Double value in switch condition");
+    add_for_label label (get_type cnd);
     let body = typecheck_statement symbol_map ftp body in
-    C_ast.Switch { cnd; body; cases; default; label = Identifier label }
-  | C_ast.Case (exp, stmt, Identifier lbl) ->
-    let exp = typecheck_expression symbol_map exp in
-    if C_ast.get_type exp = Double
-    then raise (SemanticError "Double value in switch-case");
+    Switch { cnd; body; cases; default; label = Identifier label }
+  | Case (exp, stmt, Identifier lbl) ->
+    let exp = typecheck_expression_and_convert symbol_map exp in
+    if get_type exp = Double then raise (SemanticError "Double value in switch-case");
     let etp = get_for_label lbl in
-    let exp = C_ast.convert_to etp exp in
+    let exp = convert_to etp exp in
     let stmt = typecheck_statement symbol_map ftp stmt in
-    C_ast.Case (exp, stmt, Identifier lbl)
-  | C_ast.Default (stmt, lbl) ->
+    Case (exp, stmt, Identifier lbl)
+  | Default (stmt, lbl) ->
     let stmt = typecheck_statement symbol_map ftp stmt in
-    C_ast.Default (stmt, lbl)
-  | (C_ast.Goto _ | C_ast.Break _ | C_ast.Continue _ | C_ast.Null) as ret -> ret
+    Default (stmt, lbl)
+  | (Goto _ | Break _ | Continue _ | Null) as ret -> ret
 
 and typecheck_block_item symbol_map ftp = function
-  | C_ast.S s -> C_ast.S (typecheck_statement symbol_map ftp s)
-  | C_ast.D d -> C_ast.D (typecheck_declaration symbol_map true d)
+  | S s -> S (typecheck_statement symbol_map ftp s)
+  | D d -> D (typecheck_declaration symbol_map true d)
 
 and typecheck_block symbol_map ftp = function
-  | C_ast.Block items ->
+  | Block items ->
     let items = List.map (typecheck_block_item symbol_map ftp) items in
-    C_ast.Block items
+    Block items
 
 and typecheck_function_decl symbol_map = function
-  | C_ast.{ name = Identifier iden; params; body; ftp; storage } ->
+  | { name = Identifier iden; params; body; ftp; storage } ->
     let has_body = Option.is_some body in
     let already_defined = ref false in
-    let global = ref (storage <> Some C_ast.Static) in
+    let global = ref (storage <> Some Static) in
+    let ptps, rtp =
+      match ftp with
+      | FunType { params; ret } -> params, ret
+      | _ -> assert false
+    in
+    if is_array_type rtp then raise (SemanticError "A function can't return an array");
+    let adjust_param = function
+      | CArray (tp, _) -> Pointer tp
+      | x -> x
+    in
+    let ptps = List.map adjust_param ptps in
+    let ftp = FunType { params = ptps; ret = rtp } in
     (match Hashtbl.find_opt symbol_map iden with
      | Some Symbol_map.{ tp; attrs } ->
        if ftp <> tp
@@ -360,7 +430,7 @@ and typecheck_function_decl symbol_map = function
           already_defined := attrs.defined;
           if !already_defined && has_body
           then raise (SemanticError ("Function is defined more thand once - " ^ iden));
-          if attrs.global && storage = Some C_ast.Static
+          if attrs.global && storage = Some Static
           then
             raise
               (SemanticError ("Static function declaration follows non-static - " ^ iden));
@@ -376,26 +446,19 @@ and typecheck_function_decl symbol_map = function
       | Identifier name ->
         Hashtbl.replace symbol_map name Symbol_map.{ tp = ptp; attrs = LocalAttr }
     in
-    let ptps, rtp =
-      match ftp with
-      | FunType { params; ret } -> params, ret
-      | _ -> assert false
-    in
     let _ = List.map2 (typecheck_param symbol_map) ptps params in
     let body = Option.map (typecheck_block symbol_map rtp) body in
-    C_ast.{ name = Identifier iden; params; body; ftp; storage }
+    { name = Identifier iden; params; body; ftp; storage }
 
 and typecheck_declaration symbol_map nested = function
-  | C_ast.FunDecl f -> C_ast.FunDecl (typecheck_function_decl symbol_map f)
-  | C_ast.VarDecl v ->
+  | FunDecl f -> FunDecl (typecheck_function_decl symbol_map f)
+  | VarDecl v ->
     if nested
-    then C_ast.VarDecl (typecheck_block_scope_variable_decl symbol_map v)
-    else (
-      typecheck_file_scope_variable_decl symbol_map v;
-      C_ast.VarDecl v)
+    then VarDecl (typecheck_block_scope_variable_decl symbol_map v)
+    else VarDecl (typecheck_file_scope_variable_decl symbol_map v)
 ;;
 
 let typecheck_program = function
-  | C_ast.Program dns ->
-    C_ast.Program (List.map (typecheck_declaration Symbol_map.symbol_map false) dns)
+  | Program dns ->
+    Program (List.map (typecheck_declaration Symbol_map.symbol_map false) dns)
 ;;
