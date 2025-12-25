@@ -3,7 +3,7 @@
 This repository contains my personal implementation of a C compiler, following
 along with the book "Writing a C Compiler" by Nora Sandler. 📚
 
-Currently this implementation passes tests upto chapter 10 with extra credits.
+Currently this implementation passes tests upto chapter 15 with extra credits.
 
 My first implementation was written in Rust because I had recently learnt it and
 wanted to try it out on something. But then I pivoted to OCaml because I found
