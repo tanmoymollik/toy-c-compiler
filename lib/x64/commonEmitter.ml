@@ -126,4 +126,5 @@ let rec emit_reg r tp =
      | Xmm13
      | Xmm14
      | Xmm15 -> "xmm" ^ name)
+  | ByteArray _ -> assert false
 ;;

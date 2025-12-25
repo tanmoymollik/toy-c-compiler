@@ -43,6 +43,10 @@ type asm_type =
   | DWord
   | QWord
   | AsmDouble
+  | ByteArray of
+      { sz : int
+      ; alignment : int
+      }
 [@@deriving show]
 
 (* Returns the size of type in bytes. *)
@@ -120,8 +124,15 @@ let c_type_one = function
   | ULong -> ConstULong 1I
   | Double -> ConstDouble 1.0
   | FunType _ -> assert false
-  | Pointer _ -> assert false
+  | Pointer _ -> ConstLong 1L
   | CArray _ -> assert false
+;;
+
+let rec scalar_type_alignment = function
+  | Int | UInt -> 4
+  | Long | ULong | Double | Pointer _ -> 8
+  | FunType _ -> assert false
+  | CArray (tp, _) -> scalar_type_alignment tp
 ;;
 
 let get_asm_type_for_c_type = function
@@ -129,7 +140,10 @@ let get_asm_type_for_c_type = function
   | Long | ULong | Pointer _ -> QWord
   | Double -> AsmDouble
   | FunType _ -> assert false
-  | CArray _ -> assert false
+  | CArray (tp, sz) ->
+    let sz = sz * size tp in
+    let alignment = if sz >= 16 then 16 else scalar_type_alignment tp in
+    ByteArray { sz; alignment }
 ;;
 
 let init_zero tp = ZeroInit { bytes = size tp }

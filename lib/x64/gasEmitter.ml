@@ -6,10 +6,14 @@ open CommonEmitter
 let emit_operand = function
   | Imm i, _ -> Printf.sprintf "$%s" (Uint64.to_string i)
   | Reg r, sz -> "%" ^ emit_reg r sz
+  | Pseudo _, _ -> assert false
   | Memory (r, i), _ ->
     let rv = emit_reg r QWord in
     Printf.sprintf "%d(%%%s)" (-i) rv
   | Data iden, _ -> Printf.sprintf "%s(%%rip)" (emit_identifier iden)
+  | Indexed { base; ind; scale }, _ ->
+    Printf.sprintf "(%s, %s, %d)" (emit_reg base QWord) (emit_reg ind QWord) scale
+  | PseudoMem _, _ -> assert false
 ;;
 
 let emit_instruction_size = function
@@ -18,6 +22,7 @@ let emit_instruction_size = function
   | DWord -> "l"
   | QWord -> "q"
   | AsmDouble -> ""
+  | ByteArray _ -> assert false
 ;;
 
 let emit_instruction = function
@@ -149,8 +154,38 @@ let emit_top_level = function
       ^ (List.map emit_instruction body |> String.concat "\n")
     in
     Stack.push entry text_section
-  | StaticVar _ -> assert false
-  | StaticConstant _ -> assert false
+  | StaticVar { name; global; alignment; init_list } ->
+    let pname = emit_platform_name name in
+    let emit_static_init = function
+      | IntInit i -> ".long " ^ Int32.to_string i
+      | UIntInit ui -> ".long " ^ Uint32.to_string ui
+      | LongInit l -> ".quad " ^ Int64.to_string l
+      | ULongInit ul -> ".quad " ^ Uint64.to_string ul
+      | DoubleInit d -> ".quad " ^ emit_double d
+      | ZeroInit { bytes } -> Printf.sprintf ".zero %d" bytes
+    in
+    let static_inits = List.map emit_static_init init_list in
+    let static_inits = String.concat ("\n" ^ indent) static_inits in
+    let entry =
+      Printf.sprintf "%s.align %d\n" indent alignment
+      ^ (if global then indent ^ ".global " ^ pname ^ "\n" else "")
+      ^ (pname ^ ":\n")
+      ^ Printf.sprintf "%s%s" indent static_inits
+    in
+    Stack.push entry data_section
+  | StaticConstant { name; alignment; init } ->
+    let entry =
+      Printf.sprintf
+        "%s.align %d\n%s%s .quad %s"
+        indent
+        alignment
+        indent
+        (emit_identifier name)
+        (match init with
+         | DoubleInit d -> emit_double d
+         | _ -> assert false)
+    in
+    Stack.push entry rodata_section
 ;;
 
 (* | StaticVar { name; global; alignment; init } ->

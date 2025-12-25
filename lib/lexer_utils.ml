@@ -2,10 +2,7 @@ open Stdint
 
 exception SyntaxError = Errors.SyntaxError
 
-let raise_error msg str =
-  print_endline msg;
-  raise (SyntaxError (msg ^ " in integer constant " ^ str))
-;;
+let raise_error msg str = raise (SyntaxError (msg ^ " in integer constant " ^ str))
 
 let parse_int str =
   try

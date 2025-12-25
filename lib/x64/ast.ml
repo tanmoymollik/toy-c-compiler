@@ -73,8 +73,15 @@ let is_arg_reg = function
 type operand =
   | Imm of (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
   | Reg of reg
+  | Pseudo of identifier
   | Memory of reg * int
   | Data of identifier
+  | Indexed of
+      { base : reg
+      ; ind : reg
+      ; scale : int
+      }
+  | PseudoMem of identifier * int
 [@@deriving show]
 
 type instruction =
@@ -140,13 +147,23 @@ type top_level =
       { name : identifier
       ; global : bool
       ; alignment : int
-      ; init : static_init list
+      ; init_list : static_init list
       }
   | StaticConstant of
       { name : identifier
       ; alignment : int
-      ; init : static_init list
+      ; init : static_init
       }
 [@@deriving show]
 
 type program = Program of top_level list [@@deriving show]
+
+let alloc_stack_ins offset =
+  assert (offset > 0);
+  Binary { bop = Sub; src = Imm (Uint64.of_int offset); dst = Reg Sp; tp = QWord }
+;;
+
+let dealloc_stack_ins offset =
+  assert (offset > 0);
+  Binary { bop = Add; src = Imm (Uint64.of_int offset); dst = Reg Sp; tp = QWord }
+;;

@@ -1,8 +1,11 @@
+open Stdint
 open Common
 open AsmUtils
 open Ast
 
 let static_consts : (int64 * int, string) Hashtbl.t = Hashtbl.create 10
+let imm_zr = Imm 0I
+let imm_one = Imm 1I
 
 let gen_uop = function
   | Tacky.Ast.Complement -> Not
@@ -42,23 +45,8 @@ let gen_cond_code signed = function
   | _ -> assert false
 ;;
 
-let alloc_stack_ins offset =
-  assert (offset > 0);
-  Binary { bop = Sub; src = Imm (Stdint.Uint64.of_int offset); dst = Reg Sp; tp = QWord }
-;;
-
-let dealloc_stack_ins offset =
-  assert (offset > 0);
-  Binary { bop = Add; src = Imm (Stdint.Uint64.of_int offset); dst = Reg Sp; tp = QWord }
-;;
-
-let gen_stack_for_var fun_iden var_iden =
-  let addr = get_stack_address (fun_iden, var_iden) in
-  Memory (Bp, addr)
-;;
-
 let get_double_const cd alignment =
-  let ci = Int64.bits_of_float cd in
+  let ci = Stdlib.Int64.bits_of_float cd in
   let const_label =
     match Hashtbl.find_opt static_consts (ci, alignment) with
     | Some lbl -> lbl
@@ -68,21 +56,21 @@ let get_double_const cd alignment =
       lbl
   in
   let var = Identifier const_label in
-  Data var
+  AsmSymbolMap.add_obj_info const_label Double true false;
+  Pseudo var
 ;;
 
 let gen_const = function
-  | ConstInt i -> Imm (Stdint.Uint64.of_int32 i)
-  | ConstUInt ui -> Imm (Stdint.Uint64.of_uint32 ui)
-  | ConstLong l -> Imm (Stdint.Uint64.of_int64 l)
-  | ConstULong ul -> Imm ul
   | ConstDouble d -> get_double_const d 8
+  | x -> Imm (Type_converter.convert_to_ulong x)
 ;;
 
-let gen_value fun_name = function
+let gen_value = function
   | Tacky.Ast.Constant c -> gen_const c
   | Tacky.Ast.Var name ->
-    if AsmSymbolMap.is_static_var name then Data name else gen_stack_for_var fun_name name
+    (match AsmSymbolMap.get_var_type name with
+     | ByteArray _ -> PseudoMem (name, 0)
+     | _ -> Pseudo name)
 ;;
 
 let signed = function
@@ -90,20 +78,20 @@ let signed = function
   | Tacky.Ast.Var name -> AsmSymbolMap.is_signed_var name
 ;;
 
-let gen_ins_div fun_name = function
+let gen_ins_div = function
   | Tacky.Ast.Binary { bop; src1; src2; dst } ->
     let op_tp = get_asm_type_for_val dst in
     let signed = signed dst in
     (match op_tp, bop with
      | AsmDouble, Tacky.Ast.Div ->
-       let dst = gen_value fun_name dst in
-       [ Mov { src = gen_value fun_name src1; dst; tp = op_tp }
-       ; Binary { bop = DivDouble; src = gen_value fun_name src2; dst; tp = op_tp }
+       let dst = gen_value dst in
+       [ Mov { src = gen_value src1; dst; tp = op_tp }
+       ; Binary { bop = DivDouble; src = gen_value src2; dst; tp = op_tp }
        ]
      | AsmDouble, Tacky.Ast.Rem -> assert false
      | _ ->
        let ex_ins =
-         if signed then Cdq op_tp else Mov { src = Imm 0I; dst = Reg Dx; tp = op_tp }
+         if signed then Cdq op_tp else Mov { src = imm_zr; dst = Reg Dx; tp = op_tp }
        in
        let tmp_dst =
          match bop with
@@ -112,68 +100,65 @@ let gen_ins_div fun_name = function
          | _ -> assert false
        in
        let div_ins =
-         if signed
-         then Idiv (gen_value fun_name src2, op_tp)
-         else Div (gen_value fun_name src2, op_tp)
+         if signed then Idiv (gen_value src2, op_tp) else Div (gen_value src2, op_tp)
        in
-       [ Mov { src = gen_value fun_name src1; dst = Reg Ax; tp = op_tp }
+       [ Mov { src = gen_value src1; dst = Reg Ax; tp = op_tp }
        ; ex_ins
        ; div_ins
-       ; Mov { src = tmp_dst; dst = gen_value fun_name dst; tp = op_tp }
+       ; Mov { src = tmp_dst; dst = gen_value dst; tp = op_tp }
        ])
   | _ -> assert false
 ;;
 
-let gen_ins_uop fun_name = function
+let gen_ins_uop = function
   (* dst is always Tacky.Ast.Var *)
   | Tacky.Ast.Unary { uop; src; dst } ->
     (match uop with
      | Tacky.Ast.Complement ->
        let tp = get_asm_type_for_val dst in
-       [ Mov { src = gen_value fun_name src; dst = gen_value fun_name dst; tp }
-       ; Unary (gen_uop uop, gen_value fun_name dst, tp)
+       [ Mov { src = gen_value src; dst = gen_value dst; tp }
+       ; Unary (gen_uop uop, gen_value dst, tp)
        ]
      | Tacky.Ast.Negate ->
        let tp = get_asm_type_for_val dst in
        (match tp with
         | AsmDouble ->
           let neg_zr = get_double_const (-0.0) 16 in
-          let dst = gen_value fun_name dst in
-          [ Mov { src = gen_value fun_name src; dst; tp }
+          let dst = gen_value dst in
+          [ Mov { src = gen_value src; dst; tp }
           ; Binary { bop = Xor; src = neg_zr; dst; tp }
           ]
         | _ ->
-          [ Mov { src = gen_value fun_name src; dst = gen_value fun_name dst; tp }
-          ; Unary (gen_uop uop, gen_value fun_name dst, tp)
+          [ Mov { src = gen_value src; dst = gen_value dst; tp }
+          ; Unary (gen_uop uop, gen_value dst, tp)
           ])
      | Tacky.Ast.Not ->
        let src_tp = get_asm_type_for_val src in
        let dst_tp = get_asm_type_for_val dst in
-       let dst = gen_value fun_name dst in
-       let zr = Imm 0I in
+       let dst = gen_value dst in
        (match src_tp with
         | AsmDouble ->
           let zr_reg = Reg Xmm0 in
           let nan_cmp_end = Identifier (Core.make_unique_label Core.nan_cmp_end_label) in
           [ Binary { bop = Xor; src = zr_reg; dst = zr_reg; tp = src_tp }
-          ; Cmp { lhs = gen_value fun_name src; rhs = zr_reg; tp = src_tp }
-          ; Mov { src = zr; dst; tp = dst_tp }
+          ; Cmp { lhs = gen_value src; rhs = zr_reg; tp = src_tp }
+          ; Mov { src = imm_zr; dst; tp = dst_tp }
           ; JmpP nan_cmp_end
           ; SetC (E, dst)
           ; Label nan_cmp_end
           ]
         | _ ->
-          [ Cmp { lhs = gen_value fun_name src; rhs = zr; tp = src_tp }
-          ; Mov { src = zr; dst; tp = dst_tp }
+          [ Cmp { lhs = gen_value src; rhs = imm_zr; tp = src_tp }
+          ; Mov { src = imm_zr; dst; tp = dst_tp }
           ; SetC (E, dst)
           ]))
   | _ -> assert false
 ;;
 
-let gen_ins_bop fun_name = function
+let gen_ins_bop = function
   | Tacky.Ast.Binary { bop; src1; src2; dst } as ret ->
     (match bop with
-     | Tacky.Ast.Div | Tacky.Ast.Rem -> gen_ins_div fun_name ret
+     | Tacky.Ast.Div | Tacky.Ast.Rem -> gen_ins_div ret
      | Tacky.Ast.Equal
      | Tacky.Ast.NEqual
      | Tacky.Ast.Less
@@ -183,36 +168,32 @@ let gen_ins_bop fun_name = function
        let op_tp = get_asm_type_for_val src1 in
        let dst_tp = get_asm_type_for_val dst in
        assert (dst_tp = DWord);
-       let dst = gen_value fun_name dst in
-       let zr = Imm 0I in
+       let dst = gen_value dst in
        (match op_tp, bop with
         | AsmDouble, NEqual ->
           let nan_cmp = Identifier (Core.make_unique_label Core.nan_cmp_label) in
           let nan_cmp_end = Identifier (Core.make_unique_label Core.nan_cmp_end_label) in
-          [ Cmp
-              { lhs = gen_value fun_name src1; rhs = gen_value fun_name src2; tp = op_tp }
-          ; Mov { src = zr; dst; tp = dst_tp }
+          [ Cmp { lhs = gen_value src1; rhs = gen_value src2; tp = op_tp }
+          ; Mov { src = imm_zr; dst; tp = dst_tp }
           ; JmpP nan_cmp
           ; SetC (gen_cond_code false bop, dst)
           ; Jmp nan_cmp_end
           ; Label nan_cmp
-          ; Mov { src = Imm 1I; dst; tp = dst_tp }
+          ; Mov { src = imm_one; dst; tp = dst_tp }
           ; Label nan_cmp_end
           ]
         | AsmDouble, _ ->
           let nan_cmp_end = Identifier (Core.make_unique_label Core.nan_cmp_end_label) in
-          [ Cmp
-              { lhs = gen_value fun_name src1; rhs = gen_value fun_name src2; tp = op_tp }
-          ; Mov { src = zr; dst; tp = dst_tp }
+          [ Cmp { lhs = gen_value src1; rhs = gen_value src2; tp = op_tp }
+          ; Mov { src = imm_zr; dst; tp = dst_tp }
           ; JmpP nan_cmp_end
           ; SetC (gen_cond_code false bop, dst)
           ; Label nan_cmp_end
           ]
         | _ ->
           let signed = signed src1 in
-          [ Cmp
-              { lhs = gen_value fun_name src1; rhs = gen_value fun_name src2; tp = op_tp }
-          ; Mov { src = zr; dst; tp = dst_tp }
+          [ Cmp { lhs = gen_value src1; rhs = gen_value src2; tp = op_tp }
+          ; Mov { src = imm_zr; dst; tp = dst_tp }
           ; SetC (gen_cond_code signed bop, dst)
           ])
      | Tacky.Ast.Add
@@ -222,31 +203,31 @@ let gen_ins_bop fun_name = function
      | Tacky.Ast.Or
      | Tacky.Ast.Xor ->
        let op_tp = get_asm_type_for_val dst in
-       let dst = gen_value fun_name dst in
-       [ Mov { src = gen_value fun_name src1; dst; tp = op_tp }
-       ; Binary { bop = gen_bop bop; src = gen_value fun_name src2; dst; tp = op_tp }
+       let dst = gen_value dst in
+       [ Mov { src = gen_value src1; dst; tp = op_tp }
+       ; Binary { bop = gen_bop bop; src = gen_value src2; dst; tp = op_tp }
        ]
      | Tacky.Ast.Lsft | Tacky.Ast.Rsft ->
        let op_tp = get_asm_type_for_val dst in
        let signed = signed dst in
-       let src2 = gen_value fun_name src2 in
+       let src2 = gen_value src2 in
        let tmp_src2 = Reg Cx in
-       let dst = gen_value fun_name dst in
+       let dst = gen_value dst in
        let bop = gen_bop bop in
        let bop = if (not signed) && bop = Sar then Shr else bop in
-       [ Mov { src = gen_value fun_name src1; dst; tp = op_tp }
+       [ Mov { src = gen_value src1; dst; tp = op_tp }
        ; Mov { src = src2; dst = tmp_src2; tp = op_tp }
        ; Binary { bop; src = tmp_src2; dst; tp = op_tp }
        ])
   | _ -> assert false
 ;;
 
-let classify_params fun_name params =
+let classify_params params =
   let int_reg_args = Stack.create () in
   let double_reg_args = Stack.create () in
   let stack_args = Stack.create () in
   let loop_iter param =
-    let oprnd = gen_value fun_name param in
+    let oprnd = gen_value param in
     let tp = get_asm_type_for_val param in
     let typed_oprnd = oprnd, tp in
     if tp = AsmDouble
@@ -263,17 +244,17 @@ let classify_params fun_name params =
   reverser int_reg_args, reverser double_reg_args, reverser stack_args
 ;;
 
-let gen_instruction fun_name = function
+let gen_instruction = function
   | Tacky.Ast.Ret v ->
     let tp = get_asm_type_for_val v in
     let dst = if tp = AsmDouble then Reg Xmm0 else Reg Ax in
-    [ Mov { src = gen_value fun_name v; dst; tp }; Ret ]
-  | Tacky.Ast.Unary _ as ret -> gen_ins_uop fun_name ret
+    [ Mov { src = gen_value v; dst; tp }; Ret ]
+  | Tacky.Ast.Unary _ as ret -> gen_ins_uop ret
   (* dst is always Tacky.Ast.Var *)
-  | Tacky.Ast.Binary _ as ret -> gen_ins_bop fun_name ret
+  | Tacky.Ast.Binary _ as ret -> gen_ins_bop ret
   | Tacky.Ast.Copy { src; dst } ->
     let tp = get_asm_type_for_val dst in
-    [ Mov { src = gen_value fun_name src; dst = gen_value fun_name dst; tp } ]
+    [ Mov { src = gen_value src; dst = gen_value dst; tp } ]
   | Tacky.Ast.Jump iden -> [ Jmp iden ]
   | Tacky.Ast.JumpIfZero (cnd, tgt) ->
     let tp = get_asm_type_for_val cnd in
@@ -282,30 +263,26 @@ let gen_instruction fun_name = function
        let zr_reg = Reg Xmm0 in
        let nan_cmp_end = Identifier (Core.make_unique_label Core.nan_cmp_end_label) in
        [ Binary { bop = Xor; src = zr_reg; dst = zr_reg; tp }
-       ; Cmp { lhs = gen_value fun_name cnd; rhs = zr_reg; tp }
+       ; Cmp { lhs = gen_value cnd; rhs = zr_reg; tp }
        ; JmpP nan_cmp_end
        ; JmpC (E, tgt)
        ; Label nan_cmp_end
        ]
-     | _ ->
-       let zr = Imm 0I in
-       [ Cmp { lhs = gen_value fun_name cnd; rhs = zr; tp }; JmpC (E, tgt) ])
+     | _ -> [ Cmp { lhs = gen_value cnd; rhs = imm_zr; tp }; JmpC (E, tgt) ])
   | Tacky.Ast.JumpIfNotZero (cnd, tgt) ->
     let tp = get_asm_type_for_val cnd in
     (match tp with
      | AsmDouble ->
        let zr_reg = Reg Xmm0 in
        [ Binary { bop = Xor; src = zr_reg; dst = zr_reg; tp }
-       ; Cmp { lhs = gen_value fun_name cnd; rhs = zr_reg; tp }
+       ; Cmp { lhs = gen_value cnd; rhs = zr_reg; tp }
        ; JmpP tgt
        ; JmpC (NE, tgt)
        ]
-     | _ ->
-       let zr = Imm 0I in
-       [ Cmp { lhs = gen_value fun_name cnd; rhs = zr; tp }; JmpC (NE, tgt) ])
+     | _ -> [ Cmp { lhs = gen_value cnd; rhs = imm_zr; tp }; JmpC (NE, tgt) ])
   | Tacky.Ast.Label iden -> [ Label iden ]
   | Tacky.Ast.FunCall { name; args; dst } ->
-    let int_args, double_args, stk_args = classify_params fun_name args in
+    let int_args, double_args, stk_args = classify_params args in
     let stack_padding = if List.length stk_args mod 2 = 1 then 8 else 0 in
     let stack_alloc = if stack_padding <> 0 then [ alloc_stack_ins 8 ] else [] in
     let f reg_list ind (operand, tp) =
@@ -332,7 +309,7 @@ let gen_instruction fun_name = function
       if bytes_to_remove <> 0 then [ dealloc_stack_ins bytes_to_remove ] else []
     in
     let tp = AsmSymbolMap.get_fun_ret_type name in
-    let dst = gen_value fun_name dst in
+    let dst = gen_value dst in
     let src = if tp = AsmDouble then Reg Xmm0 else Reg Ax in
     let ret_ins = [ Mov { src; dst; tp } ] in
     stack_alloc
@@ -343,31 +320,31 @@ let gen_instruction fun_name = function
     @ stack_dealloc
     @ ret_ins
   | Tacky.Ast.SignExtend { src; dst } ->
-    let src = gen_value fun_name src in
-    let dst = gen_value fun_name dst in
+    let src = gen_value src in
+    let dst = gen_value dst in
     [ Movsx { src; dst } ]
   | Tacky.Ast.Truncate { src; dst } ->
-    let src = gen_value fun_name src in
-    let dst = gen_value fun_name dst in
+    let src = gen_value src in
+    let dst = gen_value dst in
     [ Mov { src; dst; tp = DWord } ]
   | Tacky.Ast.ZeroExtend { src; dst } ->
-    let src = gen_value fun_name src in
-    let dst = gen_value fun_name dst in
+    let src = gen_value src in
+    let dst = gen_value dst in
     [ MovZeroExtend { src; dst } ]
   | Tacky.Ast.IntToDouble { src; dst } ->
     let src_tp = get_asm_type_for_val src in
-    let src = gen_value fun_name src in
-    let dst = gen_value fun_name dst in
+    let src = gen_value src in
+    let dst = gen_value dst in
     [ Cvtsi2sd { src; dst; src_tp } ]
   | Tacky.Ast.DoubleToInt { src; dst } ->
     let dst_tp = get_asm_type_for_val dst in
-    let src = gen_value fun_name src in
-    let dst = gen_value fun_name dst in
+    let src = gen_value src in
+    let dst = gen_value dst in
     [ Cvttsd2si { src; dst; dst_tp } ]
   | Tacky.Ast.UIntToDouble { src; dst } ->
     let src_tp = get_asm_type_for_val src in
-    let src = gen_value fun_name src in
-    let dst = gen_value fun_name dst in
+    let src = gen_value src in
+    let dst = gen_value dst in
     let label1 = Core.make_unique_label "UIntToDouble" in
     let label2 = Core.make_unique_label "UIntToDoubleEnd" in
     (match src_tp with
@@ -379,15 +356,15 @@ let gen_instruction fun_name = function
      | QWord ->
        let reg1 = Reg Ax in
        let reg2 = Reg Dx in
-       [ Cmp { lhs = src; rhs = Imm 0I; tp = QWord }
+       [ Cmp { lhs = src; rhs = imm_zr; tp = QWord }
        ; JmpC (L, Identifier label1)
        ; Cvtsi2sd { src; dst; src_tp = QWord }
        ; Jmp (Identifier label2)
        ; Label (Identifier label1)
        ; Mov { src; dst = reg1; tp = QWord }
        ; Mov { src = reg1; dst = reg2; tp = QWord }
-       ; Binary { bop = Shr; src = Imm 1I; dst = reg2; tp = QWord }
-       ; Binary { bop = And; src = Imm 1I; dst = reg1; tp = QWord }
+       ; Binary { bop = Shr; src = imm_one; dst = reg2; tp = QWord }
+       ; Binary { bop = And; src = imm_one; dst = reg1; tp = QWord }
        ; Binary { bop = Or; src = reg1; dst = reg2; tp = QWord }
        ; Cvtsi2sd { src = reg2; dst; src_tp = QWord }
        ; Binary { bop = Add; src = dst; dst; tp = AsmDouble }
@@ -396,8 +373,8 @@ let gen_instruction fun_name = function
      | _ -> assert false)
   | Tacky.Ast.DoubleToUInt { src; dst } ->
     let dst_tp = get_asm_type_for_val dst in
-    let src = gen_value fun_name src in
-    let dst = gen_value fun_name dst in
+    let src = gen_value src in
+    let dst = gen_value dst in
     (match dst_tp with
      | DWord ->
        let tmp_dst = Reg Ax in
@@ -408,7 +385,7 @@ let gen_instruction fun_name = function
        let regX = Reg Xmm0 in
        let regR = Reg Ax in
        let upper_bound = get_double_const 9223372036854775808.0 8 in
-       let upper_bound_int = Stdint.Uint64.of_int64 9223372036854775808L in
+       let upper_bound_int = Uint64.of_int64 9223372036854775808L in
        let label1 = Core.make_unique_label "DoubleToUInt" in
        let label2 = Core.make_unique_label "DoubleToUIntEnd" in
        [ Cmp { lhs = src; rhs = upper_bound; tp = AsmDouble }
@@ -424,28 +401,48 @@ let gen_instruction fun_name = function
        ; Label (Identifier label2)
        ]
      | _ -> assert false)
-  | Tacky.Ast.GetAddr { src; dst } ->
-    [ Lea { src = gen_value fun_name src; dst = gen_value fun_name dst } ]
+  | Tacky.Ast.GetAddr { src; dst } -> [ Lea { src = gen_value src; dst = gen_value dst } ]
   | Tacky.Ast.Load { src_ptr; dst } ->
-    [ Mov { src = gen_value fun_name src_ptr; dst = Reg Ax; tp = QWord }
-    ; Mov
-        { src = Memory (Ax, 0)
-        ; dst = gen_value fun_name dst
-        ; tp = get_asm_type_for_val dst
-        }
+    [ Mov { src = gen_value src_ptr; dst = Reg Ax; tp = QWord }
+    ; Mov { src = Memory (Ax, 0); dst = gen_value dst; tp = get_asm_type_for_val dst }
     ]
   | Tacky.Ast.Store { src; dst_ptr } ->
-    [ Mov { src = gen_value fun_name dst_ptr; dst = Reg Ax; tp = QWord }
-    ; Mov
-        { src = gen_value fun_name src
-        ; dst = Memory (Ax, 0)
-        ; tp = get_asm_type_for_val src
-        }
+    [ Mov { src = gen_value dst_ptr; dst = Reg Ax; tp = QWord }
+    ; Mov { src = gen_value src; dst = Memory (Ax, 0); tp = get_asm_type_for_val src }
     ]
+  | Tacky.Ast.AddPtr { src_ptr; ind; scale; dst } ->
+    let dst = gen_value dst in
+    (match ind with
+     | Tacky.Ast.Constant c ->
+       let ind = Int64.to_int (Type_converter.convert_to_long c) in
+       [ Mov { src = gen_value src_ptr; dst = Reg Ax; tp = QWord }
+       ; Lea { src = Memory (Ax, -(ind * scale)); dst }
+       ]
+     | _ ->
+       (match scale with
+        | 1 | 2 | 4 | 8 ->
+          [ Mov { src = gen_value src_ptr; dst = Reg Ax; tp = QWord }
+          ; Mov { src = gen_value ind; dst = Reg Dx; tp = QWord }
+          ; Lea { src = Indexed { base = Ax; ind = Dx; scale }; dst }
+          ]
+        | _ ->
+          [ Mov { src = gen_value src_ptr; dst = Reg Ax; tp = QWord }
+          ; Mov { src = gen_value ind; dst = Reg Dx; tp = QWord }
+          ; Binary
+              { bop = Imul; src = Imm (Uint64.of_int scale); dst = Reg Dx; tp = QWord }
+          ; Lea { src = Indexed { base = Ax; ind = Dx; scale = 1 }; dst }
+          ]))
+  | Tacky.Ast.CopyToOffset { src; dst; offset } ->
+    let dst =
+      match dst with
+      | Var name -> PseudoMem (name, offset)
+      | _ -> assert false
+    in
+    [ Mov { src = gen_value src; dst; tp = get_asm_type_for_val src } ]
 ;;
 
-let set_up_params fun_name params =
-  let int_reg_params, double_reg_params, stk_params = classify_params fun_name params in
+let set_up_params params =
+  let int_reg_params, double_reg_params, stk_params = classify_params params in
   let f reg_list ind (oprnd, tp) =
     Mov { src = Reg (List.nth reg_list ind); dst = oprnd; tp }
   in
@@ -467,14 +464,15 @@ let set_up_params fun_name params =
 let gen_top_level = function
   | Tacky.Ast.Function { name; global; params; body } ->
     let params = List.map (fun param -> Tacky.Ast.Var param) params in
-    let param_ins = set_up_params name params in
-    let body = param_ins @ List.concat_map (gen_instruction name) body in
+    let param_ins = set_up_params params in
+    let body = param_ins @ List.concat_map gen_instruction body in
+    let body = List.map (PseudoResolver.resolve_instruction name) body in
     let alloc_stack = get_fun_stack_alloc name in
-    let align16 = if alloc_stack > 0 then 16 * ((alloc_stack / 16) + 1) else 0 in
+    let align16 = align_by alloc_stack 16 in
     let body = if align16 > 0 then alloc_stack_ins align16 :: body else body in
-    let body = List.concat_map Ins_fixer.fix_instruction body in
+    let body = List.concat_map InsFixer.fix_instruction body in
     Function { name; global; body }
-  | Tacky.Ast.StaticVar { name; global; tp; init } ->
+  | Tacky.Ast.StaticVar { name; global; tp; init_list } ->
     let alignment =
       match get_asm_type_for_c_type tp with
       | Byte -> 1
@@ -482,8 +480,9 @@ let gen_top_level = function
       | DWord -> 4
       | QWord -> 8
       | AsmDouble -> 8
+      | ByteArray { alignment; _ } -> alignment
     in
-    StaticVar { name; global; alignment; init }
+    StaticVar { name; global; alignment; init_list }
 ;;
 
 let gen_program = function
@@ -496,7 +495,7 @@ let gen_program = function
              StaticConstant
                { name = Identifier lbl
                ; alignment
-               ; init = [ DoubleInit (Int64.float_of_bits ci) ]
+               ; init = DoubleInit (Stdlib.Int64.float_of_bits ci)
                }
            in
            tp_ast :: acc)

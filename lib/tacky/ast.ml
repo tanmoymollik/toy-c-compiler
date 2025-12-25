@@ -101,6 +101,17 @@ type instruction =
       { src : value
       ; dst_ptr : value
       }
+  | AddPtr of
+      { src_ptr : value
+      ; ind : value
+      ; scale : int
+      ; dst : value
+      }
+  | CopyToOffset of
+      { src : value
+      ; dst : value
+      ; offset : int
+      }
 [@@deriving show]
 
 type top_level =
@@ -114,7 +125,7 @@ type top_level =
       { name : identifier
       ; global : bool
       ; tp : c_type
-      ; init : static_init list
+      ; init_list : static_init list
       }
 [@@deriving show]
 

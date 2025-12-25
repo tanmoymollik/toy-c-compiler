@@ -156,9 +156,7 @@ let function_decl_ast specs d body =
   let name, ftp, params = process_declarator rtp d in
   (match ftp with
    | FunType _ -> ()
-   | _ ->
-     print_endline (show_c_type ftp);
-     raise (SyntaxError "Function declarator does not yield function type"));
+   | _ -> raise (SyntaxError "Function declarator does not yield function type"));
   C_ast.{ name; params; body; ftp; storage = storage specs }
 ;;
 

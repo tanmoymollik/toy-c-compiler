@@ -9,11 +9,13 @@ let emit_operand_size = function
   | DWord -> "dword "
   | QWord -> "qword "
   | AsmDouble -> ""
+  | ByteArray _ -> assert false
 ;;
 
 let emit_operand = function
   | Imm i, sz -> Printf.sprintf "%s%s" (emit_operand_size sz) (Uint64.to_string i)
   | Reg r, sz -> emit_reg r sz
+  | Pseudo _, _ -> assert false
   | Memory (r, i), sz ->
     let rv = emit_reg r QWord in
     if i >= 0
@@ -26,6 +28,14 @@ let emit_operand = function
       | _ -> emit_platform_name iden
     in
     Printf.sprintf "%s[rel %s]" (emit_operand_size sz) name
+  | Indexed { base; ind; scale }, sz ->
+    Printf.sprintf
+      "%s[%s + %s * %d]"
+      (emit_operand_size sz)
+      (emit_reg base QWord)
+      (emit_reg ind QWord)
+      scale
+  | PseudoMem _, _ -> assert false
 ;;
 
 let emit_instruction = function
@@ -138,40 +148,26 @@ let emit_top_level = function
       ^ (List.map emit_instruction body |> String.concat "\n")
     in
     Stack.push entry text_section
-  | StaticVar _ -> assert false
-  | StaticConstant _ -> assert false
-;;
-
-(* | StaticVar { name; global; alignment; init } ->
+  | StaticVar { name; global; alignment; init_list } ->
     let pname = emit_platform_name name in
-    let value, is_zero =
-      match init with
-      | ConstInt i -> Int32.to_string i, i = 0l
-      | ConstUInt ui -> Uint32.to_string ui, ui = Uint32.zero
-      | ConstLong l -> Int64.to_string l, l = 0L
-      | ConstULong ul -> Uint64.to_string ul, ul = Uint64.zero
-      | ConstDouble d -> emit_double d, false
+    let emit_static_init = function
+      | IntInit i -> "dd " ^ Int32.to_string i
+      | UIntInit ui -> "dd " ^ Uint32.to_string ui
+      | LongInit l -> "dq " ^ Int64.to_string l
+      | ULongInit ul -> "dq " ^ Uint64.to_string ul
+      | DoubleInit d -> "dq " ^ emit_double d
+      | ZeroInit { bytes } -> Printf.sprintf "times %d db 0" bytes
     in
-    let specifier =
-      match AsmSymbolMap.get_var_type name with
-      | Byte -> "b"
-      | Word -> "w"
-      | DWord -> "d"
-      | QWord | AsmDouble -> "q"
-    in
-    let decl =
-      if is_zero
-      then Printf.sprintf "%s%s res%s 1" indent pname specifier
-      else Printf.sprintf "%s%s d%s %s" indent pname specifier value
-    in
-    let align = if is_zero then "alignb" else "align" in
+    let static_inits = List.map emit_static_init init_list in
+    let static_inits = String.concat (",\n" ^ indent) static_inits in
     let entry =
-      Printf.sprintf "%s%s %d\n" indent align alignment
+      Printf.sprintf "%salign %d\n" indent alignment
       ^ (if global then indent ^ "global " ^ pname ^ "\n" else "")
-      ^ decl
+      ^ (pname ^ ":\n")
+      ^ Printf.sprintf "%s%s" indent static_inits
     in
-    if is_zero then Stack.push entry bss_section else Stack.push entry data_section
-| StaticConstant { name; alignment; init } ->
+    Stack.push entry data_section
+  | StaticConstant { name; alignment; init } ->
     let entry =
       Printf.sprintf
         "%salign %d\n%s%s dq %s"
@@ -180,10 +176,11 @@ let emit_top_level = function
         indent
         (emit_identifier name)
         (match init with
-         | ConstDouble d -> emit_double d
+         | DoubleInit d -> emit_double d
          | _ -> assert false)
     in
-    Stack.push entry rodata_section *)
+    Stack.push entry rodata_section
+;;
 
 let emit_program = function
   | Program tns ->

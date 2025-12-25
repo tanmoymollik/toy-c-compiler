@@ -151,26 +151,11 @@ expression:
   | cnd = expression; QUESTION; lhs = expression; COLON; rhs = expression
     { C_ast.Conditional { cnd; lhs; rhs; etp = Common.Int } }
 
-primary_expression:
-  | c = const                         { C_ast.Constant (c, Common.Int) }
-  | id = identifier                   { C_ast.Var (id, Common.Int) }
-  | LPAREN; exp = expression; RPAREN  { exp }
-  | id = identifier; LPAREN; args = separated_list(COMMA, expression); RPAREN
-    { C_ast.FunctionCall (id, args, Common.Int) }
-
-postfix_expression:
-  | p = primary_expression; inds = list(postfix_expression_suffix)
-    { List.fold_left (fun e acc -> C_ast.Subscript (acc, e, Common.Int)) p inds }
-
-postfix_expression_suffix:
-  | LBRACKET; e = expression; RBRACKET { e }
-
 unary_expression:
   | uop = uop; exp = unary_expression           { C_ast.Unary (uop, exp, Common.Int) }
   | ASTERISK; exp = unary_expression            { C_ast.Dereference (exp, Common.Int) }
   | AMPERSAND; exp = unary_expression           { C_ast.AddrOf (exp, Common.Int) }
   | tuop = tuop; exp = unary_expression         { C_ast.TUnary (tuop, true, exp, Common.Int) }
-  | exp = unary_expression; tuop = tuop         { C_ast.TUnary (tuop, false, exp, Common.Int) }
   | LPAREN;
     specs = nonempty_list(type_specifier);
     d = option(abstract_declarator); RPAREN; exp = unary_expression 
@@ -183,7 +168,27 @@ unary_expression:
       in
       C_ast.Cast { tgt; exp; etp = Common.Int }
     }
-  | p = postfix_expression                      { p }
+  | p = postfix_expression
+    { p }
+
+postfix_expression:
+  | p = primary_expression; inds = list(postfix_expression_suffix)
+    { List.fold_left (fun e acc -> C_ast.Subscript (acc, e, Common.Int)) p inds }
+
+postfix_expression_suffix:
+  | LBRACKET; e = expression; RBRACKET { e }
+
+primary_expression:
+  | c = const
+    { C_ast.Constant (c, Common.Int) }
+  | id = identifier
+    { C_ast.Var (id, Common.Int) }
+  | LPAREN; exp = expression; RPAREN
+    { exp }
+  | id = identifier; LPAREN; args = separated_list(COMMA, expression); RPAREN
+    { C_ast.FunctionCall (id, args, Common.Int) }
+  | exp = postfix_expression; tuop = tuop
+    { C_ast.TUnary (tuop, false, exp, Common.Int) }
 
 simple_declarator:
   | name = identifier              { Ident name }

@@ -167,13 +167,13 @@ let fix_instruction = function
           let tmp_dst = Reg R11 in
           [ Movsx { src; dst = tmp_dst }; Mov { src = tmp_dst; dst; tp = QWord } ]
         | _ -> [ ret ]))
-  | MovZeroExtend { src; dst } ->
+  | MovZeroExtend { src; dst } as ret ->
     (match dst with
      | Reg _ -> [ Mov { src; dst; tp = DWord } ]
      | Memory _ | Data _ ->
        let tmp_dst = Reg R11 in
        [ Mov { src; dst = tmp_dst; tp = DWord }; Mov { src = tmp_dst; dst; tp = QWord } ]
-     | Imm _ -> assert false)
+     | _ -> [ ret ])
   | Lea { src; dst } as ret ->
     (match dst with
      | Memory _ | Data _ ->

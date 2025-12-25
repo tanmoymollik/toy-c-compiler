@@ -6,7 +6,6 @@ type asm_symbol_info =
       ; is_static : bool
       ; is_signed : bool
       ; is_extern : bool
-      ; is_constant : bool
       }
   | FunInfo of
       { defined : bool
@@ -16,13 +15,13 @@ type asm_symbol_info =
 
 let asm_symbol_map : (string, asm_symbol_info) Hashtbl.t = Hashtbl.create 100
 
-let gen_obj_info iden tp is_static is_extern =
+let add_obj_info iden tp is_static is_extern =
   let asm_tp = get_asm_type_for_c_type tp in
   let is_signed = signed_c_type tp in
   Hashtbl.replace
     asm_symbol_map
     iden
-    (ObjInfo { tp = asm_tp; is_static; is_signed; is_extern; is_constant = false })
+    (ObjInfo { tp = asm_tp; is_static; is_signed; is_extern })
 ;;
 
 let gen_asm_symbol_map () =
@@ -35,7 +34,7 @@ let gen_asm_symbol_map () =
            | NoInitial -> true
            | _ -> false
          in
-         gen_obj_info iden tp true is_extern
+         add_obj_info iden tp true is_extern
        | FunAttr { defined; _ } ->
          let ret =
            match tp with
@@ -43,7 +42,7 @@ let gen_asm_symbol_map () =
            | _ -> assert false
          in
          Hashtbl.replace asm_symbol_map iden (FunInfo { defined; ret })
-       | LocalAttr -> gen_obj_info iden tp false false)
+       | LocalAttr -> add_obj_info iden tp false false)
     Symbol_map.symbol_map
 ;;
 

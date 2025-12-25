@@ -65,6 +65,8 @@ let typecheck_expression_binary bop lexp rexp =
   | BAnd | BOr | Xor ->
     if is_pointer_type tl || is_pointer_type tr
     then raise (SemanticError "Can't use pointer with bitwise operator");
+    if tl = Double || tr = Double
+    then raise (SemanticError "Can't use double with bitwise operator");
     let lexp, rexp = convert lexp rexp in
     Binary { bop; lexp; rexp; etp = get_type lexp }
   | Equal | NEqual ->
@@ -137,7 +139,8 @@ let rec typecheck_expression symbol_map = function
     let etp = get_type lval in
     if not (is_lvalue lval)
     then raise (SemanticError "Invalid lvalue of binary assignment operator");
-    (* let rexp = convert_by_assignment etp rval in *)
+    if is_pointer_type (get_type rexp)
+    then raise (SemanticError "Invalid rhs for compound assignment");
     let tmp_binary_ins = typecheck_expression_binary bop lval rexp in
     let btp =
       match tmp_binary_ins with
@@ -378,7 +381,9 @@ let rec typecheck_statement symbol_map ftp = function
     let body = typecheck_statement symbol_map ftp body in
     For { init; cnd; post; body; label }
   | Switch { cnd; body; cases; default; label = Identifier label } ->
-    let cnd = typecheck_expression_and_convert symbol_map cnd in
+    let cnd = typecheck_expression symbol_map cnd in
+    if is_array_type (get_type cnd)
+    then raise (SemanticError "Array values can't be used in switch condition");
     if get_type cnd = Double then raise (SemanticError "Double value in switch condition");
     add_for_label label (get_type cnd);
     let body = typecheck_statement symbol_map ftp body in
