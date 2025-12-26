@@ -26,7 +26,7 @@ let add_obj_info iden tp is_static is_extern =
 
 let gen_asm_symbol_map () =
   Hashtbl.iter
-    (fun iden Symbol_map.{ tp; attrs } ->
+    (fun iden SymbolMap.{ tp; attrs } ->
        match attrs with
        | StaticAttr { init; _ } ->
          let is_extern =
@@ -43,7 +43,7 @@ let gen_asm_symbol_map () =
          in
          Hashtbl.replace asm_symbol_map iden (FunInfo { defined; ret })
        | LocalAttr -> add_obj_info iden tp false false)
-    Symbol_map.symbol_map
+    SymbolMap.symbol_map
 ;;
 
 (* Can only be called on vars. *)

@@ -1,6 +1,6 @@
 %{
 
-open Parser_utils
+open ParserUtils
 
 %}
 

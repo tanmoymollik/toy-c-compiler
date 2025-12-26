@@ -26,7 +26,7 @@ let gen_const = function
 let gen_value fun_name = function
   | Tacky.Ast.Constant c -> gen_const c
   | Tacky.Ast.Var name ->
-    (* if Symbol_map.is_static_var name
+    (* if SymbolMap.is_static_var name
     then Data name *)
     gen_stack_for_var fun_name name
 ;;

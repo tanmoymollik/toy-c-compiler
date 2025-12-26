@@ -95,12 +95,12 @@ let typecheck_expression_binary bop lexp rexp =
 ;;
 
 let rec typecheck_expression symbol_map = function
-  | Constant (c, _) -> Constant (c, Type_converter.const_type c)
+  | Constant (c, _) -> Constant (c, TypeConverter.const_type c)
   | Var (Identifier iden, _) ->
     (match Hashtbl.find_opt symbol_map iden with
-     | Some Symbol_map.{ tp = FunType _; _ } ->
+     | Some SymbolMap.{ tp = FunType _; _ } ->
        raise (SemanticError ("Function name used as variable - " ^ iden))
-     | Some Symbol_map.{ tp; _ } -> Var (Identifier iden, tp)
+     | Some SymbolMap.{ tp; _ } -> Var (Identifier iden, tp)
      | None -> assert false)
   | Cast { tgt; exp; _ } ->
     let exp = typecheck_expression_and_convert symbol_map exp in
@@ -172,7 +172,7 @@ let rec typecheck_expression symbol_map = function
       { cnd = typecheck_expression_and_convert symbol_map cnd; lhs; rhs; etp = common_t }
   | FunctionCall (Identifier iden, exps, _) ->
     (match Hashtbl.find_opt symbol_map iden with
-     | Some Symbol_map.{ tp = FunType { params; ret }; _ } ->
+     | Some SymbolMap.{ tp = FunType { params; ret }; _ } ->
        if List.length params <> List.length exps
        then
          raise
@@ -221,14 +221,14 @@ let rec typecheck_static_init vtp = function
   | SingleInit (Constant (c, _), _) ->
     let c =
       match vtp with
-      | Int -> IntInit (Type_converter.convert_to_int c)
-      | UInt -> UIntInit (Type_converter.convert_to_uint c)
-      | Long -> LongInit (Type_converter.convert_to_long c)
-      | ULong -> ULongInit (Type_converter.convert_to_ulong c)
-      | Double -> DoubleInit (Type_converter.convert_to_double c)
+      | Int -> IntInit (TypeConverter.convert_to_int c)
+      | UInt -> UIntInit (TypeConverter.convert_to_uint c)
+      | Long -> LongInit (TypeConverter.convert_to_long c)
+      | ULong -> ULongInit (TypeConverter.convert_to_ulong c)
+      | Double -> DoubleInit (TypeConverter.convert_to_double c)
       | FunType _ -> assert false
       | Pointer _ ->
-        let v = Type_converter.convert_to_long c in
+        let v = TypeConverter.convert_to_long c in
         if v <> 0L
         then
           raise
@@ -255,13 +255,13 @@ let typecheck_file_scope_variable_decl symbol_map = function
     let initial_value =
       ref
         (match init with
-         | Some ci -> Symbol_map.Initial (typecheck_static_init vtp ci)
+         | Some ci -> SymbolMap.Initial (typecheck_static_init vtp ci)
          | None ->
-           if storage = Some Extern then Symbol_map.NoInitial else Symbol_map.Tentative)
+           if storage = Some Extern then SymbolMap.NoInitial else SymbolMap.Tentative)
     in
     let global = ref (storage <> Some Static) in
     (match Hashtbl.find_opt symbol_map iden with
-     | Some Symbol_map.{ tp; attrs } ->
+     | Some SymbolMap.{ tp; attrs } ->
        if tp <> vtp
        then raise (SemanticError ("Variable declaration type mismatch - " ^ iden));
        (match attrs with
@@ -272,7 +272,7 @@ let typecheck_file_scope_variable_decl symbol_map = function
           then raise (SemanticError ("Conflicting variable linkage - " ^ iden));
           let is_constant init =
             match init with
-            | Symbol_map.Initial _ -> true
+            | SymbolMap.Initial _ -> true
             | _ -> false
           in
           if is_constant attrs.init
@@ -280,12 +280,12 @@ let typecheck_file_scope_variable_decl symbol_map = function
             if is_constant !initial_value
             then raise (SemanticError ("Redefinition of constant variable - " ^ iden))
             else initial_value := attrs.init
-          else if (not (is_constant !initial_value)) && attrs.init = Symbol_map.Tentative
-          then initial_value := Symbol_map.Tentative
+          else if (not (is_constant !initial_value)) && attrs.init = SymbolMap.Tentative
+          then initial_value := SymbolMap.Tentative
         | _ -> assert false)
      | _ -> ());
-    let attrs = Symbol_map.StaticAttr { init = !initial_value; global = !global } in
-    let info = Symbol_map.{ tp = vtp; attrs } in
+    let attrs = SymbolMap.StaticAttr { init = !initial_value; global = !global } in
+    let info = SymbolMap.{ tp = vtp; attrs } in
     Hashtbl.replace symbol_map iden info;
     ret
 ;;
@@ -315,14 +315,14 @@ let typecheck_block_scope_variable_decl symbol_map = function
          raise
            (SemanticError ("Initializer for local extern variable declaration - " ^ iden));
        (match Hashtbl.find_opt symbol_map iden with
-        | Some Symbol_map.{ tp; _ } ->
+        | Some SymbolMap.{ tp; _ } ->
           if tp <> vtp
           then raise (SemanticError ("Variable declaration type mismatch - " ^ iden))
         | None ->
           let info =
-            Symbol_map.
+            SymbolMap.
               { tp = vtp
-              ; attrs = StaticAttr { init = Symbol_map.NoInitial; global = true }
+              ; attrs = StaticAttr { init = SymbolMap.NoInitial; global = true }
               }
           in
           Hashtbl.replace symbol_map iden info);
@@ -330,17 +330,17 @@ let typecheck_block_scope_variable_decl symbol_map = function
      | Some Static ->
        let initial_value =
          match init with
-         | Some ci -> Symbol_map.Initial (typecheck_static_init vtp ci)
-         | None -> Symbol_map.Tentative
+         | Some ci -> SymbolMap.Initial (typecheck_static_init vtp ci)
+         | None -> SymbolMap.Tentative
        in
        let info =
-         Symbol_map.
+         SymbolMap.
            { tp = vtp; attrs = StaticAttr { init = initial_value; global = false } }
        in
        Hashtbl.replace symbol_map iden info;
        ret
      | None ->
-       let info = Symbol_map.{ tp = vtp; attrs = LocalAttr } in
+       let info = SymbolMap.{ tp = vtp; attrs = LocalAttr } in
        Hashtbl.replace symbol_map iden info;
        let init = Option.map (typecheck_var_init symbol_map vtp) init in
        { name = Identifier iden; init; vtp; storage })
@@ -427,11 +427,11 @@ and typecheck_function_decl symbol_map = function
     let ptps = List.map adjust_param ptps in
     let ftp = FunType { params = ptps; ret = rtp } in
     (match Hashtbl.find_opt symbol_map iden with
-     | Some Symbol_map.{ tp; attrs } ->
+     | Some SymbolMap.{ tp; attrs } ->
        if ftp <> tp
        then raise (SemanticError ("Incomplete function declaration - " ^ iden));
        (match attrs with
-        | Symbol_map.FunAttr attrs ->
+        | SymbolMap.FunAttr attrs ->
           already_defined := attrs.defined;
           if !already_defined && has_body
           then raise (SemanticError ("Function is defined more thand once - " ^ iden));
@@ -443,13 +443,13 @@ and typecheck_function_decl symbol_map = function
         | _ -> assert false)
      | _ -> ());
     let attrs =
-      Symbol_map.FunAttr { defined = !already_defined || has_body; global = !global }
+      SymbolMap.FunAttr { defined = !already_defined || has_body; global = !global }
     in
-    let info = Symbol_map.{ tp = ftp; attrs } in
+    let info = SymbolMap.{ tp = ftp; attrs } in
     Hashtbl.replace symbol_map iden info;
     let typecheck_param symbol_map ptp = function
       | Identifier name ->
-        Hashtbl.replace symbol_map name Symbol_map.{ tp = ptp; attrs = LocalAttr }
+        Hashtbl.replace symbol_map name SymbolMap.{ tp = ptp; attrs = LocalAttr }
     in
     let _ = List.map2 (typecheck_param symbol_map) ptps params in
     let body = Option.map (typecheck_block symbol_map rtp) body in
@@ -465,5 +465,5 @@ and typecheck_declaration symbol_map nested = function
 
 let typecheck_program = function
   | Program dns ->
-    Program (List.map (typecheck_declaration Symbol_map.symbol_map false) dns)
+    Program (List.map (typecheck_declaration SymbolMap.symbol_map false) dns)
 ;;

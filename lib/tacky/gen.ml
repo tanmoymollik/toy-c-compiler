@@ -33,7 +33,7 @@ let make_tmp_dst vtp =
   let c = Core.get_var_count () in
   let name = Printf.sprintf "tmp.%d" c in
   let name = Identifier name in
-  Symbol_map.add_local_var name vtp;
+  SymbolMap.add_local_var name vtp;
   Var name
 ;;
 
@@ -458,7 +458,7 @@ let gen_function_decl = function
     let f acc a = a :: acc in
     let body = Stack.fold f [] stk in
     let tacky_f =
-      Function { name; global = Symbol_map.is_global_fun name; params; body }
+      Function { name; global = SymbolMap.is_global_fun name; params; body }
     in
     Some tacky_f
   (* Do nothing for empty function bodies. *)
@@ -471,7 +471,7 @@ let gen_declaration = function
 ;;
 
 let convert_symbols_to_tacky acc =
-  Symbol_map.fold
+  SymbolMap.fold
     (fun name global tp init_list -> StaticVar { name; global; tp; init_list })
     acc
 ;;

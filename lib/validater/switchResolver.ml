@@ -41,19 +41,19 @@ let rec evaluate_case_expression = function
   | Cast { tgt; exp; _ } ->
     let exp = evaluate_case_expression exp in
     (match tgt with
-     | Int -> ConstInt (Type_converter.convert_to_int exp)
-     | UInt -> ConstUInt (Type_converter.convert_to_uint exp)
-     | Long -> ConstLong (Type_converter.convert_to_long exp)
-     | ULong -> ConstULong (Type_converter.convert_to_ulong exp)
+     | Int -> ConstInt (TypeConverter.convert_to_int exp)
+     | UInt -> ConstUInt (TypeConverter.convert_to_uint exp)
+     | Long -> ConstLong (TypeConverter.convert_to_long exp)
+     | ULong -> ConstULong (TypeConverter.convert_to_ulong exp)
      | Double -> assert false
      | FunType _ -> assert false
      | Pointer _ -> assert false
      | CArray _ -> assert false)
   | Unary (uop, exp, _) ->
-    Type_converter.evaluate_unary_expression uop (evaluate_case_expression exp)
+    TypeConverter.evaluate_unary_expression uop (evaluate_case_expression exp)
   | TUnary _ -> raise (SemanticError "Non-const value for switch-case")
   | Binary { bop; lexp; rexp; _ } ->
-    Type_converter.evaluate_binary_expression
+    TypeConverter.evaluate_binary_expression
       bop
       (evaluate_case_expression lexp)
       (evaluate_case_expression rexp)
@@ -63,7 +63,7 @@ let rec evaluate_case_expression = function
     let cnd = evaluate_case_expression cnd in
     let lhs = evaluate_case_expression lhs in
     let rhs = evaluate_case_expression rhs in
-    Type_converter.evaluate_conditional_expression cnd lhs rhs
+    TypeConverter.evaluate_conditional_expression cnd lhs rhs
   | FunctionCall _ -> raise (SemanticError "Non-const value for switch-case")
   | Dereference _ -> raise (SemanticError "Non-const value for switch-case")
   | AddrOf _ -> raise (SemanticError "Non-const value for switch-case")

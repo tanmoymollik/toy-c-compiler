@@ -109,7 +109,7 @@ let type_of specs =
 
 let array_size = function
   | ConstDouble _ -> raise (SyntaxError "Invalid array size")
-  | _ as ret -> Int64.to_int (Type_converter.convert_to_long ret)
+  | _ as ret -> Int64.to_int (TypeConverter.convert_to_long ret)
 ;;
 
 let rec process_declarator base_tp = function

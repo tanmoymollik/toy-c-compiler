@@ -62,7 +62,7 @@ let get_double_const cd alignment =
 
 let gen_const = function
   | ConstDouble d -> get_double_const d 8
-  | x -> Imm (Type_converter.convert_to_ulong x)
+  | x -> Imm (TypeConverter.convert_to_ulong x)
 ;;
 
 let gen_value = function
@@ -414,7 +414,7 @@ let gen_instruction = function
     let dst = gen_value dst in
     (match ind with
      | Tacky.Ast.Constant c ->
-       let ind = Int64.to_int (Type_converter.convert_to_long c) in
+       let ind = Int64.to_int (TypeConverter.convert_to_long c) in
        [ Mov { src = gen_value src_ptr; dst = Reg Ax; tp = QWord }
        ; Lea { src = Memory (Ax, -(ind * scale)); dst }
        ]
