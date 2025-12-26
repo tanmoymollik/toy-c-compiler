@@ -272,33 +272,33 @@ c_initializer_tail:
   | d = CONST_DOUBLE { Common.ConstDouble d }
 
 %inline uop:
-  | MINUS        { C_ast.Negate }
-  | TILDE        { C_ast.Complement }
-  | EXCLAMATION  { C_ast.Not }
+  | MINUS        { Common.Negate }
+  | TILDE        { Common.Complement }
+  | EXCLAMATION  { Common.Not }
 
 %inline tuop:
   | DPLUS        { C_ast.Inc }
   | DHYPHEN      { C_ast.Dec }
 
 %inline bop:
-  | PLUS       { C_ast.Add }
-  | MINUS      { C_ast.Sub }
-  | ASTERISK   { C_ast.Mul }
-  | FSLASH     { C_ast.Div }
-  | PERCENT    { C_ast.Rem }
-  | AMPERSAND  { C_ast.BAnd }
-  | PIPE       { C_ast.BOr }
-  | CARET      { C_ast.Xor }
-  | LSHIFT     { C_ast.Lsft }
-  | RSHIFT     { C_ast.Rsft }
-  | DAMPERSAND { C_ast.And }
-  | DPIPE      { C_ast.Or }
-  | DEQUAL     { C_ast.Equal }
-  | NEQUAL     { C_ast.NEqual }
-  | LEQUAL     { C_ast.LEqual }
-  | GEQUAL     { C_ast.GEqual }
-  | LESS       { C_ast.Less }
-  | GREATER    { C_ast.Greater }
+  | PLUS       { Common.Add }
+  | MINUS      { Common.Sub }
+  | ASTERISK   { Common.Mul }
+  | FSLASH     { Common.Div }
+  | PERCENT    { Common.Rem }
+  | AMPERSAND  { Common.BAnd }
+  | PIPE       { Common.BOr }
+  | CARET      { Common.Xor }
+  | LSHIFT     { Common.Lsft }
+  | RSHIFT     { Common.Rsft }
+  | DAMPERSAND { Common.And }
+  | DPIPE      { Common.Or }
+  | DEQUAL     { Common.Equal }
+  | NEQUAL     { Common.NEqual }
+  | LEQUAL     { Common.LEqual }
+  | GEQUAL     { Common.GEqual }
+  | LESS       { Common.Less }
+  | GREATER    { Common.Greater }
 
 %inline aop:
   | EQUAL        { Eq } 

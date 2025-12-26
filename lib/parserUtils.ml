@@ -41,16 +41,16 @@ type abstract_declarator =
 
 let convert_aop_to_bop = function
   | Eq -> assert false
-  | AEq -> C_ast.Add
-  | SEq -> C_ast.Sub
-  | MEq -> C_ast.Mul
-  | DEq -> C_ast.Div
-  | REq -> C_ast.Rem
-  | BAEq -> C_ast.BAnd
-  | BOEq -> C_ast.BOr
-  | XEq -> C_ast.Xor
-  | LsftEq -> C_ast.Lsft
-  | RsftEq -> C_ast.Rsft
+  | AEq -> Add
+  | SEq -> Sub
+  | MEq -> Mul
+  | DEq -> Div
+  | REq -> Rem
+  | BAEq -> BAnd
+  | BOEq -> BOr
+  | XEq -> Xor
+  | LsftEq -> Lsft
+  | RsftEq -> Rsft
 ;;
 
 let assignment_ast aop lval rval =

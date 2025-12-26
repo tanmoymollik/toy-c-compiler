@@ -1,35 +1,8 @@
 open Common
 
-type unary_op =
-  | Complement
-  | Negate
-  | Not
-[@@deriving show]
-
 type tunary_op =
   | Inc
   | Dec
-[@@deriving show]
-
-type binary_op =
-  | Add
-  | Sub
-  | Mul
-  | Div
-  | Rem
-  | BAnd
-  | BOr
-  | Xor
-  | Lsft
-  | Rsft
-  | And
-  | Or
-  | Equal
-  | NEqual
-  | LEqual
-  | GEqual
-  | Less
-  | Greater
 [@@deriving show]
 
 type expression =

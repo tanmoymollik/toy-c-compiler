@@ -82,7 +82,7 @@ let assemble stage base_name =
   | `Assemble | `Link ->
     let as_cmd =
       match !target with
-      | Lib.Arch.X86_64 -> if !use_gas then "as" else "nasm -f elf64"
+      | Lib.Arch.X86_64 -> if !use_gas then "gcc -c" else "nasm -f elf64"
       | Lib.Arch.RISCV64 -> "riscv64-linux-gnu-as"
     in
     let assembly_file = assembly_file base_name in
@@ -162,5 +162,10 @@ let () =
   then (
     Arg.usage spec usage_msg;
     exit 1)
-  else drive_single !stage !target !input_file
+  else (
+    (* Always use gas format when optimizations are specified.
+       The test suite used for development can only check for gas
+       style assembly. *)
+    if List.length !optimizations > 0 then use_gas := true;
+    drive_single !stage !target !input_file)
 ;;

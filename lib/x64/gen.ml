@@ -7,40 +7,34 @@ let static_consts : (int64 * int, string) Hashtbl.t = Hashtbl.create 10
 let imm_zr = Imm 0I
 let imm_one = Imm 1I
 
-let gen_uop = function
-  | Tacky.Ast.Complement -> Not
-  | Tacky.Ast.Negate -> Neg
+let gen_uop : Common.unary_op -> Ast.unary_op = function
+  | Complement -> Not
+  | Negate -> Neg
   (* Handled differently. *)
-  | _ -> assert false
+  | Not -> assert false
 ;;
 
-let gen_bop = function
-  | Tacky.Ast.Add -> Add
-  | Tacky.Ast.Sub -> Sub
-  | Tacky.Ast.Mul -> Imul
-  | Tacky.Ast.And -> And
-  | Tacky.Ast.Or -> Or
-  | Tacky.Ast.Xor -> Xor
-  | Tacky.Ast.Lsft -> Sal
-  | Tacky.Ast.Rsft -> Sar
+let gen_bop : Common.binary_op -> Ast.binary_op = function
+  | Add -> Add
+  | Sub -> Sub
+  | Mul -> Imul
+  | BAnd -> And
+  | BOr -> Or
+  | Xor -> Xor
+  | Lsft -> Sal
+  | Rsft -> Sar
   (* Handled differently. *)
-  | Tacky.Ast.Div
-  | Tacky.Ast.Rem
-  | Tacky.Ast.Equal
-  | Tacky.Ast.NEqual
-  | Tacky.Ast.Less
-  | Tacky.Ast.LEqual
-  | Tacky.Ast.Greater
-  | Tacky.Ast.GEqual -> assert false
+  | And | Or | Div | Rem | Equal | NEqual | Less | LEqual | Greater | GEqual ->
+    assert false
 ;;
 
 let gen_cond_code signed = function
-  | Tacky.Ast.Equal -> E
-  | Tacky.Ast.NEqual -> NE
-  | Tacky.Ast.Less -> if signed then L else B
-  | Tacky.Ast.LEqual -> if signed then LE else BE
-  | Tacky.Ast.Greater -> if signed then G else A
-  | Tacky.Ast.GEqual -> if signed then GE else AE
+  | Equal -> E
+  | NEqual -> NE
+  | Less -> if signed then L else B
+  | LEqual -> if signed then LE else BE
+  | Greater -> if signed then G else A
+  | GEqual -> if signed then GE else AE
   (* Not conditional ops. *)
   | _ -> assert false
 ;;
@@ -83,20 +77,20 @@ let gen_ins_div = function
     let op_tp = get_asm_type_for_val dst in
     let signed = signed dst in
     (match op_tp, bop with
-     | AsmDouble, Tacky.Ast.Div ->
+     | AsmDouble, Div ->
        let dst = gen_value dst in
        [ Mov { src = gen_value src1; dst; tp = op_tp }
        ; Binary { bop = DivDouble; src = gen_value src2; dst; tp = op_tp }
        ]
-     | AsmDouble, Tacky.Ast.Rem -> assert false
+     | AsmDouble, Rem -> assert false
      | _ ->
        let ex_ins =
          if signed then Cdq op_tp else Mov { src = imm_zr; dst = Reg Dx; tp = op_tp }
        in
        let tmp_dst =
          match bop with
-         | Tacky.Ast.Div -> Reg Ax
-         | Tacky.Ast.Rem -> Reg Dx
+         | Div -> Reg Ax
+         | Rem -> Reg Dx
          | _ -> assert false
        in
        let div_ins =
@@ -114,12 +108,12 @@ let gen_ins_uop = function
   (* dst is always Tacky.Ast.Var *)
   | Tacky.Ast.Unary { uop; src; dst } ->
     (match uop with
-     | Tacky.Ast.Complement ->
+     | Complement ->
        let tp = get_asm_type_for_val dst in
        [ Mov { src = gen_value src; dst = gen_value dst; tp }
        ; Unary (gen_uop uop, gen_value dst, tp)
        ]
-     | Tacky.Ast.Negate ->
+     | Negate ->
        let tp = get_asm_type_for_val dst in
        (match tp with
         | AsmDouble ->
@@ -132,7 +126,7 @@ let gen_ins_uop = function
           [ Mov { src = gen_value src; dst = gen_value dst; tp }
           ; Unary (gen_uop uop, gen_value dst, tp)
           ])
-     | Tacky.Ast.Not ->
+     | Not ->
        let src_tp = get_asm_type_for_val src in
        let dst_tp = get_asm_type_for_val dst in
        let dst = gen_value dst in
@@ -158,13 +152,8 @@ let gen_ins_uop = function
 let gen_ins_bop = function
   | Tacky.Ast.Binary { bop; src1; src2; dst } as ret ->
     (match bop with
-     | Tacky.Ast.Div | Tacky.Ast.Rem -> gen_ins_div ret
-     | Tacky.Ast.Equal
-     | Tacky.Ast.NEqual
-     | Tacky.Ast.Less
-     | Tacky.Ast.LEqual
-     | Tacky.Ast.Greater
-     | Tacky.Ast.GEqual ->
+     | Div | Rem -> gen_ins_div ret
+     | Equal | NEqual | Less | LEqual | Greater | GEqual ->
        let op_tp = get_asm_type_for_val src1 in
        let dst_tp = get_asm_type_for_val dst in
        assert (dst_tp = DWord);
@@ -196,18 +185,13 @@ let gen_ins_bop = function
           ; Mov { src = imm_zr; dst; tp = dst_tp }
           ; SetC (gen_cond_code signed bop, dst)
           ])
-     | Tacky.Ast.Add
-     | Tacky.Ast.Sub
-     | Tacky.Ast.Mul
-     | Tacky.Ast.And
-     | Tacky.Ast.Or
-     | Tacky.Ast.Xor ->
+     | Add | Sub | Mul | BAnd | BOr | Xor ->
        let op_tp = get_asm_type_for_val dst in
        let dst = gen_value dst in
        [ Mov { src = gen_value src1; dst; tp = op_tp }
        ; Binary { bop = gen_bop bop; src = gen_value src2; dst; tp = op_tp }
        ]
-     | Tacky.Ast.Lsft | Tacky.Ast.Rsft ->
+     | Lsft | Rsft ->
        let op_tp = get_asm_type_for_val dst in
        let signed = signed dst in
        let src2 = gen_value src2 in
@@ -218,7 +202,8 @@ let gen_ins_bop = function
        [ Mov { src = gen_value src1; dst; tp = op_tp }
        ; Mov { src = src2; dst = tmp_src2; tp = op_tp }
        ; Binary { bop; src = tmp_src2; dst; tp = op_tp }
-       ])
+       ]
+     | And | Or -> assert false)
   | _ -> assert false
 ;;
 

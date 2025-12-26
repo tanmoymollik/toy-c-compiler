@@ -2,32 +2,8 @@ open Stdint
 open Common
 open Ast
 
-let gen_uop = function
-  | C_ast.Complement -> Complement
-  | C_ast.Negate -> Negate
-  | C_ast.Not -> Not
-;;
-
-let gen_bop = function
-  | C_ast.Add -> Add
-  | C_ast.Sub -> Sub
-  | C_ast.Mul -> Mul
-  | C_ast.Div -> Div
-  | C_ast.Rem -> Rem
-  | C_ast.BAnd -> And
-  | C_ast.BOr -> Or
-  | C_ast.Xor -> Xor
-  | C_ast.Lsft -> Lsft
-  | C_ast.Rsft -> Rsft
-  | C_ast.Equal -> Equal
-  | C_ast.NEqual -> NEqual
-  | C_ast.Less -> Less
-  | C_ast.LEqual -> LEqual
-  | C_ast.GEqual -> GEqual
-  | C_ast.Greater -> Greater
-  (* And and Or handled differently *)
-  | C_ast.And | C_ast.Or -> assert false
-;;
+let gen_uop uop = uop
+let gen_bop bop = bop
 
 let make_tmp_dst vtp =
   let c = Core.get_var_count () in
@@ -129,23 +105,19 @@ let rec gen_expression_tunary stk = function
 and gen_expression_binary stk = function
   | C_ast.Binary { bop; lexp; rexp; etp } ->
     (match bop with
-     | C_ast.And | C_ast.Or ->
+     | And | Or ->
        let cnd1 = gen_expression_and_convert stk lexp in
        let br_label = make_label ("other" ^ Core.binary_label) in
        let en_label = make_label ("end" ^ Core.binary_label) in
        (* Default short-circuit value. *)
-       let dflt = if bop = C_ast.And then 0 else 1 in
+       let dflt = if bop = And then 0 else 1 in
        let j1 =
-         if bop = C_ast.And
-         then JumpIfZero (cnd1, br_label)
-         else JumpIfNotZero (cnd1, br_label)
+         if bop = And then JumpIfZero (cnd1, br_label) else JumpIfNotZero (cnd1, br_label)
        in
        Stack.push j1 stk;
        let cnd2 = gen_expression_and_convert stk rexp in
        let j2 =
-         if bop = C_ast.And
-         then JumpIfZero (cnd2, br_label)
-         else JumpIfNotZero (cnd2, br_label)
+         if bop = And then JumpIfZero (cnd2, br_label) else JumpIfNotZero (cnd2, br_label)
        in
        Stack.push j2 stk;
        let dst = make_tmp_dst Int in
@@ -348,9 +320,9 @@ let rec gen_statement stk = function
   | C_ast.If { cnd; thn; els } ->
     let cnd = gen_expression_and_convert stk cnd in
     let els_lbl =
-      if els != None then make_label ("else@" ^ Core.if_label) else Identifier "not_used"
+      if els != None then make_label (Core.else_if_label ()) else Identifier "not_used"
     in
-    let en_lbl = make_label ("end@" ^ Core.if_label) in
+    let en_lbl = make_label (Core.end_if_label ()) in
     let to_go = if els != None then els_lbl else en_lbl in
     Stack.push (JumpIfZero (cnd, to_go)) stk;
     let () = gen_statement stk thn in
@@ -385,7 +357,7 @@ let rec gen_statement stk = function
     Stack.push (Jump cont_label) stk;
     Stack.push (Label brk_label) stk
   | C_ast.DoWhile (stmt, exp, Identifier label) ->
-    let start_label = Identifier ("start@" ^ label) in
+    let start_label = Identifier (Core.start_loop_label label) in
     let cont_label = Identifier (Core.continue_label label) in
     let brk_label = Identifier (Core.break_label label) in
     Stack.push (Label start_label) stk;
@@ -396,7 +368,7 @@ let rec gen_statement stk = function
     Stack.push (Label brk_label) stk
   | C_ast.For { init; cnd; post; body; label = Identifier label } ->
     gen_for_init stk init;
-    let start_label = Identifier ("start@" ^ label) in
+    let start_label = Identifier (Core.start_loop_label label) in
     let cont_label = Identifier (Core.continue_label label) in
     let brk_label = Identifier (Core.break_label label) in
     Stack.push (Label start_label) stk;

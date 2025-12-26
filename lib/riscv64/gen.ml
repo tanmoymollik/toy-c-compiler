@@ -8,11 +8,11 @@ let gen_stack_for_var fun_iden var_iden =
   Stack addr
 ;;
 
-let gen_uop = function
-  | Tacky.Ast.Complement -> Not
-  | Tacky.Ast.Negate -> Neg
+let gen_uop : Common.unary_op -> Ast.unary_op = function
+  | Complement -> Not
+  | Negate -> Neg
   (* Handled differently. *)
-  | _ -> assert false
+  | Not -> assert false
 ;;
 
 let gen_const = function

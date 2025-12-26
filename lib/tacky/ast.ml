@@ -1,30 +1,5 @@
 open Common
 
-type unary_op =
-  | Complement
-  | Negate
-  | Not
-[@@deriving show]
-
-type binary_op =
-  | Add
-  | Sub
-  | Mul
-  | Div
-  | Rem
-  | And
-  | Or
-  | Xor
-  | Lsft
-  | Rsft
-  | Equal
-  | NEqual
-  | Less
-  | LEqual
-  | Greater
-  | GEqual
-[@@deriving show]
-
 type value =
   | Constant of const
   | Var of identifier

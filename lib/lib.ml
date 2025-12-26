@@ -48,12 +48,14 @@ end = struct
        | Errors.SemanticError e -> raise (CompileError ("SemanticError: " ^ e)))
   ;;
 
-  let tacky_gen stage prog =
+  let tacky_gen stage optimizations prog =
     match stage with
     | `Validate ->
       if !astdump then print_endline C_ast.(show_program prog);
       None
-    | _ -> Some (Tacky.Gen.gen_program prog)
+    | _ ->
+      let prog = Tacky.Gen.gen_program prog in
+      Some (Optimizer.M.optimize optimizations prog)
   ;;
 
   type asm_prog =
@@ -96,8 +98,12 @@ end = struct
   ;;
 
   let compile = function
-    | { stage; target; infile; outfile; dump; gas_emit; _ } ->
+    | { stage; target; optimizations; infile; outfile; dump; gas_emit } ->
       astdump := dump;
+      if gas_emit
+      then (
+        Core.lbl_sep := "_";
+        Core.num_sep := "_");
       let inx = In_channel.open_text infile in
       let lexbuf = Lexing.from_channel inx in
       Lexing.set_filename lexbuf infile;
@@ -105,7 +111,7 @@ end = struct
       let code =
         parse lexbuf
         >>= validate stage
-        >>= tacky_gen stage
+        >>= tacky_gen stage optimizations
         >>= code_gen stage target
         >>= code_emit stage gas_emit
       in

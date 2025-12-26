@@ -2,6 +2,33 @@ open Stdint
 
 type identifier = Identifier of string [@@deriving show]
 
+type unary_op =
+  | Complement
+  | Negate
+  | Not
+[@@deriving show]
+
+type binary_op =
+  | Add
+  | Sub
+  | Mul
+  | Div
+  | Rem
+  | BAnd
+  | BOr
+  | Xor
+  | Lsft
+  | Rsft
+  | And
+  | Or
+  | Equal
+  | NEqual
+  | Less
+  | LEqual
+  | Greater
+  | GEqual
+[@@deriving show]
+
 type c_type =
   | Int
   | UInt

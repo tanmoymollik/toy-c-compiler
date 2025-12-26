@@ -3,8 +3,15 @@ open Ast
 open Common
 open CommonEmitter
 
+let emit_imm ul = function
+  | Byte -> Uint8.to_string (Uint64.to_uint8 ul)
+  | Word -> Uint16.to_string (Uint64.to_uint16 ul)
+  | DWord -> Uint32.to_string (Uint64.to_uint32 ul)
+  | _ -> Uint64.to_string ul
+;;
+
 let emit_operand = function
-  | Imm i, _ -> Printf.sprintf "$%s" (Uint64.to_string i)
+  | Imm i, sz -> Printf.sprintf "$%s" (emit_imm i sz)
   | Reg r, sz -> "%" ^ emit_reg r sz
   | Pseudo _, _ -> assert false
   | Memory (r, i), _ ->
@@ -235,7 +242,7 @@ let emit_program = function
   | Program tns ->
     List.iter emit_top_level tns;
     let extern_decls = AsmSymbolMap.extern_decls () in
-    let extern_decls = List.map (fun s -> "extern " ^ s) extern_decls in
+    let extern_decls = List.map (fun s -> ".extern " ^ s) extern_decls in
     let f acc e = e :: acc in
     let data_body = Stack.fold f [] data_section in
     let rodata_body = Stack.fold f [] rodata_section in

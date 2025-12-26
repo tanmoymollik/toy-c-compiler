@@ -49,11 +49,10 @@ let rec evaluate_case_expression = function
      | FunType _ -> assert false
      | Pointer _ -> assert false
      | CArray _ -> assert false)
-  | Unary (uop, exp, _) ->
-    TypeConverter.evaluate_unary_expression uop (evaluate_case_expression exp)
+  | Unary (uop, exp, _) -> TypeConverter.evaluate_unary uop (evaluate_case_expression exp)
   | TUnary _ -> raise (SemanticError "Non-const value for switch-case")
   | Binary { bop; lexp; rexp; _ } ->
-    TypeConverter.evaluate_binary_expression
+    TypeConverter.evaluate_binary
       bop
       (evaluate_case_expression lexp)
       (evaluate_case_expression rexp)
@@ -63,7 +62,7 @@ let rec evaluate_case_expression = function
     let cnd = evaluate_case_expression cnd in
     let lhs = evaluate_case_expression lhs in
     let rhs = evaluate_case_expression rhs in
-    TypeConverter.evaluate_conditional_expression cnd lhs rhs
+    TypeConverter.evaluate_conditional cnd lhs rhs
   | FunctionCall _ -> raise (SemanticError "Non-const value for switch-case")
   | Dereference _ -> raise (SemanticError "Non-const value for switch-case")
   | AddrOf _ -> raise (SemanticError "Non-const value for switch-case")

@@ -54,157 +54,190 @@ let convert_to_double = function
   | ConstDouble d -> d
 ;;
 
-let evaluate_int32_binary_expression bop l r =
-  match bop with
-  | C_ast.Add -> Int32.add l r
-  | C_ast.Sub -> Int32.sub l r
-  | C_ast.Mul -> Int32.mul l r
-  | C_ast.Div -> Int32.div l r
-  | C_ast.Rem -> Int32.rem l r
-  | C_ast.BAnd -> Int32.logand l r
-  | C_ast.BOr -> Int32.logor l r
-  | C_ast.Xor -> Int32.logxor l r
-  | C_ast.Lsft -> Int32.shift_left l (Int32.to_int r)
-  | C_ast.Rsft -> Int32.shift_right l (Int32.to_int r)
-  | C_ast.And -> if l != 0l && r != 0l then 1l else 0l
-  | C_ast.Or -> if l != 0l || r != 0l then 1l else 0l
-  | C_ast.Equal -> if l = r then 1l else 0l
-  | C_ast.NEqual -> if l <> r then 1l else 0l
-  | C_ast.LEqual -> if l <= r then 1l else 0l
-  | C_ast.GEqual -> if l >= r then 1l else 0l
-  | C_ast.Less -> if l < r then 1l else 0l
-  | C_ast.Greater -> if l > r then 1l else 0l
+let is_zero = function
+  | ConstInt 0l -> true
+  | ConstUInt ui -> ui = 0i
+  | ConstLong 0L -> true
+  | ConstULong ul -> ul = 0I
+  | ConstDouble 0.0 -> true
+  | _ -> false
 ;;
 
-let evaluate_uint32_binary_expression bop l r =
+let evaluate_int32_binary bop l r =
   match bop with
-  | C_ast.Add -> Uint32.add l r
-  | C_ast.Sub -> Uint32.sub l r
-  | C_ast.Mul -> Uint32.mul l r
-  | C_ast.Div -> Uint32.div l r
-  | C_ast.Rem -> Uint32.rem l r
-  | C_ast.BAnd -> Uint32.logand l r
-  | C_ast.BOr -> Uint32.logor l r
-  | C_ast.Xor -> Uint32.logxor l r
-  | C_ast.Lsft -> Uint32.shift_left l (Uint32.to_int r)
-  | C_ast.Rsft -> Uint32.shift_right l (Uint32.to_int r)
-  | C_ast.And -> if l != 0i && r != 0i then 1i else 0i
-  | C_ast.Or -> if l != 0i || r != 0i then 1i else 0i
-  | C_ast.Equal -> if l = r then 1i else 0i
-  | C_ast.NEqual -> if l <> r then 1i else 0i
-  | C_ast.LEqual -> if l <= r then 1i else 0i
-  | C_ast.GEqual -> if l >= r then 1i else 0i
-  | C_ast.Less -> if l < r then 1i else 0i
-  | C_ast.Greater -> if l > r then 1i else 0i
+  | Add -> Int32.add l r
+  | Sub -> Int32.sub l r
+  | Mul -> Int32.mul l r
+  | Div -> if r = 0l then 0l else Int32.div l r
+  | Rem -> if r = 0l then 0l else Int32.rem l r
+  | BAnd -> Int32.logand l r
+  | BOr -> Int32.logor l r
+  | Xor -> Int32.logxor l r
+  | Lsft -> Int32.shift_left l (Int32.to_int r)
+  | Rsft -> Int32.shift_right l (Int32.to_int r)
+  | And -> if l != 0l && r != 0l then 1l else 0l
+  | Or -> if l != 0l || r != 0l then 1l else 0l
+  | Equal -> if l = r then 1l else 0l
+  | NEqual -> if l <> r then 1l else 0l
+  | LEqual -> if l <= r then 1l else 0l
+  | GEqual -> if l >= r then 1l else 0l
+  | Less -> if l < r then 1l else 0l
+  | Greater -> if l > r then 1l else 0l
 ;;
 
-let evaluate_int64_binary_expression bop l r =
+let evaluate_uint32_binary bop l r =
   match bop with
-  | C_ast.Add -> Int64.add l r
-  | C_ast.Sub -> Int64.sub l r
-  | C_ast.Mul -> Int64.mul l r
-  | C_ast.Div -> Int64.div l r
-  | C_ast.Rem -> Int64.rem l r
-  | C_ast.BAnd -> Int64.logand l r
-  | C_ast.BOr -> Int64.logor l r
-  | C_ast.Xor -> Int64.logxor l r
-  | C_ast.Lsft -> Int64.shift_left l (Int64.to_int r)
-  | C_ast.Rsft -> Int64.shift_right l (Int64.to_int r)
-  | C_ast.And -> if l != 0L && r != 0L then 1L else 0L
-  | C_ast.Or -> if l != 0L || r != 0L then 1L else 0L
-  | C_ast.Equal -> if l = r then 1L else 0L
-  | C_ast.NEqual -> if l <> r then 1L else 0L
-  | C_ast.LEqual -> if l <= r then 1L else 0L
-  | C_ast.GEqual -> if l >= r then 1L else 0L
-  | C_ast.Less -> if l < r then 1L else 0L
-  | C_ast.Greater -> if l > r then 1L else 0L
+  | Add -> Uint32.add l r
+  | Sub -> Uint32.sub l r
+  | Mul -> Uint32.mul l r
+  | Div -> if r = 0i then 0i else Uint32.div l r
+  | Rem -> if r = 0i then 0i else Uint32.rem l r
+  | BAnd -> Uint32.logand l r
+  | BOr -> Uint32.logor l r
+  | Xor -> Uint32.logxor l r
+  | Lsft -> Uint32.shift_left l (Uint32.to_int r)
+  | Rsft -> Uint32.shift_right l (Uint32.to_int r)
+  | And -> if l != 0i && r != 0i then 1i else 0i
+  | Or -> if l != 0i || r != 0i then 1i else 0i
+  | Equal -> if l = r then 1i else 0i
+  | NEqual -> if l <> r then 1i else 0i
+  | LEqual -> if l <= r then 1i else 0i
+  | GEqual -> if l >= r then 1i else 0i
+  | Less -> if l < r then 1i else 0i
+  | Greater -> if l > r then 1i else 0i
 ;;
 
-let evaluate_uint64_binary_expression bop l r =
+let evaluate_int64_binary bop l r =
   match bop with
-  | C_ast.Add -> Uint64.add l r
-  | C_ast.Sub -> Uint64.sub l r
-  | C_ast.Mul -> Uint64.mul l r
-  | C_ast.Div -> Uint64.div l r
-  | C_ast.Rem -> Uint64.rem l r
-  | C_ast.BAnd -> Uint64.logand l r
-  | C_ast.BOr -> Uint64.logor l r
-  | C_ast.Xor -> Uint64.logxor l r
-  | C_ast.Lsft -> Uint64.shift_left l (Uint64.to_int r)
-  | C_ast.Rsft -> Uint64.shift_right l (Uint64.to_int r)
-  | C_ast.And -> if l != 0I && r != 0I then 1I else 0I
-  | C_ast.Or -> if l != 0I || r != 0I then 1I else 0I
-  | C_ast.Equal -> if l = r then 1I else 0I
-  | C_ast.NEqual -> if l <> r then 1I else 0I
-  | C_ast.LEqual -> if l <= r then 1I else 0I
-  | C_ast.GEqual -> if l >= r then 1I else 0I
-  | C_ast.Less -> if l < r then 1I else 0I
-  | C_ast.Greater -> if l > r then 1I else 0I
+  | Add -> Int64.add l r
+  | Sub -> Int64.sub l r
+  | Mul -> if r = 0L then 0L else Int64.mul l r
+  | Div -> if r = 0L then 0L else Int64.div l r
+  | Rem -> Int64.rem l r
+  | BAnd -> Int64.logand l r
+  | BOr -> Int64.logor l r
+  | Xor -> Int64.logxor l r
+  | Lsft -> Int64.shift_left l (Int64.to_int r)
+  | Rsft -> Int64.shift_right l (Int64.to_int r)
+  | And -> if l != 0L && r != 0L then 1L else 0L
+  | Or -> if l != 0L || r != 0L then 1L else 0L
+  | Equal -> if l = r then 1L else 0L
+  | NEqual -> if l <> r then 1L else 0L
+  | LEqual -> if l <= r then 1L else 0L
+  | GEqual -> if l >= r then 1L else 0L
+  | Less -> if l < r then 1L else 0L
+  | Greater -> if l > r then 1L else 0L
 ;;
 
-let evaluate_binary_expression bop l r =
+let evaluate_uint64_binary bop l r =
+  match bop with
+  | Add -> Uint64.add l r
+  | Sub -> Uint64.sub l r
+  | Mul -> Uint64.mul l r
+  | Div -> if r = 0I then 0I else Uint64.div l r
+  | Rem -> if r = 0I then 0I else Uint64.rem l r
+  | BAnd -> Uint64.logand l r
+  | BOr -> Uint64.logor l r
+  | Xor -> Uint64.logxor l r
+  | Lsft -> Uint64.shift_left l (Uint64.to_int r)
+  | Rsft -> Uint64.shift_right l (Uint64.to_int r)
+  | And -> if l != 0I && r != 0I then 1I else 0I
+  | Or -> if l != 0I || r != 0I then 1I else 0I
+  | Equal -> if l = r then 1I else 0I
+  | NEqual -> if l <> r then 1I else 0I
+  | LEqual -> if l <= r then 1I else 0I
+  | GEqual -> if l >= r then 1I else 0I
+  | Less -> if l < r then 1I else 0I
+  | Greater -> if l > r then 1I else 0I
+;;
+
+let evaluate_double_binary bop l r =
+  match bop with
+  | Add -> l +. r
+  | Sub -> l -. r
+  | Mul -> l *. r
+  | Div -> if r = 0.0 then 0.0 else l /. r
+  | Rem -> assert false
+  | BAnd -> assert false
+  | BOr -> assert false
+  | Xor -> assert false
+  | Lsft -> assert false
+  | Rsft -> assert false
+  | And -> if l != 0.0 && r != 0.0 then 1.0 else 0.0
+  | Or -> if l != 0.0 || r != 0.0 then 1.0 else 0.0
+  | Equal -> if l = r then 1.0 else 0.0
+  | NEqual -> if l <> r then 1.0 else 0.0
+  | LEqual -> if l <= r then 1.0 else 0.0
+  | GEqual -> if l >= r then 1.0 else 0.0
+  | Less -> if l < r then 1.0 else 0.0
+  | Greater -> if l > r then 1.0 else 0.0
+;;
+
+let evaluate_binary bop l r =
   assert (const_type l = const_type r);
   let ctp = const_type l in
   match ctp with
-  | Int ->
-    ConstInt (evaluate_int32_binary_expression bop (convert_to_int l) (convert_to_int r))
-  | UInt ->
-    ConstUInt
-      (evaluate_uint32_binary_expression bop (convert_to_uint l) (convert_to_uint r))
-  | Long ->
-    ConstLong
-      (evaluate_int64_binary_expression bop (convert_to_long l) (convert_to_long r))
+  | Int -> ConstInt (evaluate_int32_binary bop (convert_to_int l) (convert_to_int r))
+  | UInt -> ConstUInt (evaluate_uint32_binary bop (convert_to_uint l) (convert_to_uint r))
+  | Long -> ConstLong (evaluate_int64_binary bop (convert_to_long l) (convert_to_long r))
   | ULong ->
-    ConstULong
-      (evaluate_uint64_binary_expression bop (convert_to_ulong l) (convert_to_ulong r))
-  | Double -> assert false
+    ConstULong (evaluate_uint64_binary bop (convert_to_ulong l) (convert_to_ulong r))
+  | Double ->
+    ConstDouble (evaluate_double_binary bop (convert_to_double l) (convert_to_double r))
   | FunType _ -> assert false
   | Pointer _ -> assert false
   | CArray _ -> assert false
 ;;
 
-let evaluate_int32_unary_expression uop x =
+let evaluate_int32_unary uop x =
   match uop with
-  | C_ast.Complement -> Int32.lognot x
-  | C_ast.Negate -> Int32.neg x
-  | C_ast.Not -> if x = 0l then 1l else 0l
+  | Complement -> Int32.lognot x
+  | Negate -> Int32.neg x
+  | Not -> if x = 0l then 1l else 0l
 ;;
 
-let evaluate_uint32_unary_expression uop x =
+let evaluate_uint32_unary uop x =
   match uop with
-  | C_ast.Complement -> Uint32.lognot x
-  | C_ast.Negate -> Uint32.neg x
-  | C_ast.Not -> if x = 0i then 1i else 0i
+  | Complement -> Uint32.lognot x
+  | Negate -> Uint32.neg x
+  | Not -> if x = 0i then 1i else 0i
 ;;
 
-let evaluate_int64_unary_expression uop x =
+let evaluate_int64_unary uop x =
   match uop with
-  | C_ast.Complement -> Int64.lognot x
-  | C_ast.Negate -> Int64.neg x
-  | C_ast.Not -> if x = 0L then 1L else 0L
+  | Complement -> Int64.lognot x
+  | Negate -> Int64.neg x
+  | Not -> if x = 0L then 1L else 0L
 ;;
 
-let evaluate_uint64_unary_expression uop x =
+let evaluate_uint64_unary uop x =
   match uop with
-  | C_ast.Complement -> Uint64.lognot x
-  | C_ast.Negate -> Uint64.neg x
-  | C_ast.Not -> if x = 0I then 1I else 0I
+  | Complement -> Uint64.lognot x
+  | Negate -> Uint64.neg x
+  | Not -> if x = 0I then 1I else 0I
 ;;
 
-let evaluate_unary_expression uop x =
+let evaluate_double_unary uop x =
+  match uop with
+  | Complement -> assert false
+  | Negate -> -.x
+  | Not -> if x = 0.0 then 1.0 else 0.0
+;;
+
+let evaluate_unary uop x =
   let ctp = const_type x in
   match ctp with
-  | Int -> ConstInt (evaluate_int32_unary_expression uop (convert_to_int x))
-  | UInt -> ConstUInt (evaluate_uint32_unary_expression uop (convert_to_uint x))
-  | Long -> ConstLong (evaluate_int64_unary_expression uop (convert_to_long x))
-  | ULong -> ConstULong (evaluate_uint64_unary_expression uop (convert_to_ulong x))
-  | Double -> assert false
+  | Int -> ConstInt (evaluate_int32_unary uop (convert_to_int x))
+  | UInt -> ConstUInt (evaluate_uint32_unary uop (convert_to_uint x))
+  | Long -> ConstLong (evaluate_int64_unary uop (convert_to_long x))
+  | ULong -> ConstULong (evaluate_uint64_unary uop (convert_to_ulong x))
+  | Double -> ConstDouble (evaluate_double_unary uop (convert_to_double x))
   | FunType _ -> assert false
   | Pointer _ -> assert false
   | CArray _ -> assert false
 ;;
 
-let evaluate_conditional_expression cnd lhs rhs =
+let evaluate_conditional cnd lhs rhs =
   assert (const_type lhs = const_type rhs);
   let ctp = const_type cnd in
   let zr = c_type_zero ctp in
