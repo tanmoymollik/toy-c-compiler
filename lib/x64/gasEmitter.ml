@@ -19,7 +19,7 @@ let emit_operand = function
     Printf.sprintf "%d(%%%s)" (-i) rv
   | Data iden, _ -> Printf.sprintf "%s(%%rip)" (emit_identifier iden)
   | Indexed { base; ind; scale }, _ ->
-    Printf.sprintf "(%s, %s, %d)" (emit_reg base QWord) (emit_reg ind QWord) scale
+    Printf.sprintf "(%%%s, %%%s, %d)" (emit_reg base QWord) (emit_reg ind QWord) scale
   | PseudoMem _, _ -> assert false
 ;;
 
@@ -183,11 +183,11 @@ let emit_top_level = function
   | StaticConstant { name; alignment; init } ->
     let entry =
       Printf.sprintf
-        "%s.align %d\n%s%s .quad %s"
+        "%s.align %d\n%s:\n%s.quad %s"
         indent
         alignment
-        indent
         (emit_identifier name)
+        indent
         (match init with
          | DoubleInit d -> emit_double d
          | _ -> assert false)

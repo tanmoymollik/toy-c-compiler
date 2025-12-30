@@ -1,4 +1,4 @@
-module TackyCfg = TackyCfg.TackyCfg
+open TackyCfg
 
 let is_visited visited = function
   | TackyCfg.Entry | TackyCfg.Exit -> true
@@ -67,7 +67,7 @@ let remove_redundant_jump_inner g sorted_graph =
          match Hashtbl.find_opt nodes nid with
          | Some (TackyCfg.EntryNode _ | TackyCfg.ExitNode _) | None -> assert false
          | Some (TackyCfg.BasicBlock { id; ins; succ; pred }) ->
-           let last_ins = List.hd (List.rev ins) in
+           let last_ins = TackyInstruction.strip_annotation (List.hd (List.rev ins)) in
            (match last_ins with
             | Tacky.Ast.(Jump _ | JumpIfNotZero _ | JumpIfZero _) ->
               let keep_jump = List.exists (fun s -> s <> !default_succ) succ in
@@ -107,7 +107,7 @@ let remove_redundant_label_inner g sorted_graph =
       (fun nid ->
          match Hashtbl.find_opt nodes nid with
          | Some (TackyCfg.BasicBlock { id; ins; succ; pred }) ->
-           let first_ins = List.hd ins in
+           let first_ins = TackyInstruction.strip_annotation (List.hd ins) in
            (match first_ins with
             | Tacky.Ast.Label _ ->
               let keep_label = List.exists (fun s -> s <> !default_pred) pred in

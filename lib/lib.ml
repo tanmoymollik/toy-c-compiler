@@ -102,8 +102,8 @@ end = struct
       astdump := dump;
       if gas_emit
       then (
-        Core.lbl_sep := "_";
-        Core.num_sep := "_");
+        Core.lbl_sep := ".";
+        Core.num_sep := ".");
       let inx = In_channel.open_text infile in
       let lexbuf = Lexing.from_channel inx in
       Lexing.set_filename lexbuf infile;
