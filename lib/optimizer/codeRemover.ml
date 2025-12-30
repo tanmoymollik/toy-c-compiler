@@ -59,35 +59,35 @@ let sort_graph = function
 let remove_redundant_jump_inner g sorted_graph =
   match g with
   | TackyCfg.Graph { nodes; _ } ->
-    let sorted_graph = Array.of_list (List.rev sorted_graph) in
+    let sorted_graph = List.rev sorted_graph in
     let fl = ref false in
-    let default_succ = ref sorted_graph.(0) in
-    let loop_itr nid =
-      match Hashtbl.find_opt nodes nid with
-      | Some (TackyCfg.BasicBlock { id; ins; succ; pred }) ->
-        let last_ins = List.hd (List.rev ins) in
-        (match last_ins with
-         | Tacky.Ast.(Jump _ | JumpIfNotZero _ | JumpIfZero _) ->
-           let keep_jump = List.exists (fun s -> s <> !default_succ) succ in
-           fl := !fl || not keep_jump;
-           let ins = if keep_jump then ins else List.rev (List.tl (List.rev ins)) in
-           if List.length ins > 0
-           then (
-             default_succ := nid;
-             let nd = TackyCfg.BasicBlock { id; ins; succ; pred } in
-             Hashtbl.replace nodes nid nd)
-           else (
-             let id =
-               match nid with
-               | BlockId i -> i
-               | _ -> assert false
-             in
-             TackyCfg.remove_basic_block g id;
-             TackyCfg.add_edges g pred succ)
-         | _ -> default_succ := nid)
-      | Some (TackyCfg.EntryNode _ | TackyCfg.ExitNode _) | None -> assert false
-    in
-    Array.iteri (fun i nid -> if i > 0 then loop_itr nid) sorted_graph;
+    let default_succ = ref (List.hd sorted_graph) in
+    List.iter
+      (fun nid ->
+         match Hashtbl.find_opt nodes nid with
+         | Some (TackyCfg.EntryNode _ | TackyCfg.ExitNode _) | None -> assert false
+         | Some (TackyCfg.BasicBlock { id; ins; succ; pred }) ->
+           let last_ins = List.hd (List.rev ins) in
+           (match last_ins with
+            | Tacky.Ast.(Jump _ | JumpIfNotZero _ | JumpIfZero _) ->
+              let keep_jump = List.exists (fun s -> s <> !default_succ) succ in
+              fl := !fl || not keep_jump;
+              let ins = if keep_jump then ins else List.rev (List.tl (List.rev ins)) in
+              if List.length ins > 0
+              then (
+                default_succ := nid;
+                let nd = TackyCfg.BasicBlock { id; ins; succ; pred } in
+                Hashtbl.replace nodes nid nd)
+              else (
+                let id =
+                  match nid with
+                  | BlockId i -> i
+                  | _ -> assert false
+                in
+                TackyCfg.remove_basic_block g id;
+                TackyCfg.add_edges g pred succ)
+            | _ -> default_succ := nid))
+      (List.tl sorted_graph);
     !fl
 ;;
 
@@ -102,9 +102,8 @@ let remove_redundant_label_inner g sorted_graph =
   match g with
   | TackyCfg.Graph { nodes; _ } ->
     let fl = ref false in
-    let sorted_graph = Array.of_list sorted_graph in
     let default_pred = ref TackyCfg.Entry in
-    Array.iter
+    List.iter
       (fun nid ->
          match Hashtbl.find_opt nodes nid with
          | Some (TackyCfg.BasicBlock { id; ins; succ; pred }) ->
