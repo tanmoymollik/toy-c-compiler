@@ -1,9 +1,8 @@
 open Optimizations
+module TackyCfg = TackyCfg.TackyCfg
 
-let make_control_flow_graph func_body = func_body
-let propagate_copies func_body = func_body, false
-let eliminate_unreachable_code func_body = func_body, false
-let eliminate_dead_stores func_body = func_body, false
+let propagate_copies _ = false
+let eliminate_dead_stores _ = false
 
 (* Recursively optimizes the func_body.
    func_body must be a Tacky.Ast.Function. *)
@@ -20,22 +19,23 @@ let rec optimize_impl func_body optimizations =
     then ConstFolder.fold_constants func_body
     else func_body, false
   in
-  let cfg = make_control_flow_graph post_constant_folding in
-  let cfg, cont =
+  let cfg = TackyCfg.make_control_flow_graph post_constant_folding in
+  let cont =
     List.fold_left
-      (fun (cfg, cont) opt ->
-         let cfg, ncont =
+      (fun cont opt ->
+         let ncont =
            match opt with
-           | FoldConstants -> cfg, cont
+           | FoldConstants -> cont
            | PropagateCopies -> propagate_copies cfg
-           | EliminateUnreachableCode -> eliminate_unreachable_code cfg
+           | EliminateUnreachableCode -> CodeRemover.eliminate_unreachable_code cfg
            | EliminateDeadStores -> eliminate_dead_stores cfg
          in
-         cfg, cont || ncont)
-      (cfg, cont)
+         cont || ncont)
+      cont
       optimizations
   in
-  if cont then optimize_impl cfg optimizations else cfg
+  let func_body = TackyCfg.make_body cfg in
+  if cont then optimize_impl func_body optimizations else func_body
 ;;
 
 let optimize optimizations = function
