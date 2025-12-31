@@ -279,7 +279,7 @@ and gen_expression_and_convert stk exp =
     dst
 ;;
 
-let rec gen_c_initializer stk dst offset = function
+let rec gen_compound_initializer stk dst offset = function
   | C_ast.SingleInit (exp, _) ->
     let src = gen_expression_and_convert stk exp in
     Stack.push (CopyToOffset { src; dst; offset }) stk
@@ -290,13 +290,19 @@ let rec gen_c_initializer stk dst offset = function
       | _ -> assert false
     in
     List.iteri
-      (fun ind exp -> gen_c_initializer stk dst (offset + (ind * size atp)) exp)
+      (fun ind exp -> gen_compound_initializer stk dst (offset + (ind * size atp)) exp)
       exp_list
 ;;
 
 let gen_variable_decl stk = function
-  | C_ast.{ name; init = Some c_init; storage = None; _ } ->
-    gen_c_initializer stk (Var name) 0 c_init
+  | C_ast.{ name; init = Some c_init; vtp; storage = None } ->
+    let dst = Var name in
+    (match vtp, c_init with
+     | CArray _, _ -> gen_compound_initializer stk dst 0 c_init
+     | _, C_ast.SingleInit (exp, _) ->
+       let src = gen_expression_and_convert stk exp in
+       Stack.push (Copy { src; dst }) stk
+     | _ -> assert false)
   | _ -> ()
 ;;
 
