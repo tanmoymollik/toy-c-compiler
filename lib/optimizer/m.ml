@@ -1,7 +1,6 @@
 open Optimizations
 open TackyCfg
 
-let propagate_copies _ = false
 let eliminate_dead_stores _ = false
 
 (* Recursively optimizes the func_body.
@@ -29,7 +28,7 @@ let rec optimize_impl func_body optimizations =
          let ncont =
            match opt with
            | FoldConstants -> cont
-           | PropagateCopies -> propagate_copies cfg
+           | PropagateCopies -> CopyPropagater.propagate_copies cfg
            | EliminateUnreachableCode -> CodeRemover.eliminate_unreachable_code cfg
            | EliminateDeadStores -> eliminate_dead_stores cfg
          in

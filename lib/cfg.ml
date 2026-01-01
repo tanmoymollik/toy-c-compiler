@@ -34,13 +34,12 @@ module MakeCfg (I : Instruction) = struct
   [@@deriving show]
 
   type graph =
-    | Graph of
-        { nodes : (node_id, node) Hashtbl.t
-        ; basic_blocks : int
-        }
+    { nodes : (node_id, node) Hashtbl.t
+    ; basic_blocks : int
+    }
 
   let show_graph = function
-    | Graph { nodes; basic_blocks } ->
+    | { nodes; basic_blocks } ->
       let entry = show_node (Hashtbl.find nodes Entry) in
       let exit = show_node (Hashtbl.find nodes Exit) in
       let nids = List.init basic_blocks (fun i -> BlockId i) in
@@ -80,10 +79,7 @@ module MakeCfg (I : Instruction) = struct
     | BasicBlock { id; _ } -> id
   ;;
 
-  let get_node g nid =
-    match g with
-    | Graph { nodes; _ } -> Hashtbl.find nodes nid
-  ;;
+  let get_node g nid = Hashtbl.find g.nodes nid
 
   let add_succ nd1 nid2 =
     match nd1 with
@@ -120,10 +116,8 @@ module MakeCfg (I : Instruction) = struct
   ;;
 
   let add_edge g nid1 nid2 =
-    match g with
-    | Graph { nodes; _ } ->
-      Hashtbl.replace nodes nid1 (add_succ (get_node g nid1) nid2);
-      Hashtbl.replace nodes nid2 (add_pred (get_node g nid2) nid1)
+    Hashtbl.replace g.nodes nid1 (add_succ (get_node g nid1) nid2);
+    Hashtbl.replace g.nodes nid2 (add_pred (get_node g nid2) nid1)
   ;;
 
   let add_edges g nids1 nids2 =
@@ -153,15 +147,12 @@ module MakeCfg (I : Instruction) = struct
          Hashtbl.add nodes nid (BasicBlock { id = nid; ins; pred = []; succ = [] }))
       blocks;
     Hashtbl.add nodes Exit (ExitNode { pred = [] });
-    Graph { nodes; basic_blocks = List.length blocks }
+    { nodes; basic_blocks = List.length blocks }
   ;;
 
   (* TODO: Use a hashtable for better performance. *)
   let get_block_by_label g lbl =
-    let node_cnt =
-      match g with
-      | Graph { basic_blocks; _ } -> basic_blocks
-    in
+    let node_cnt = g.basic_blocks in
     let loop_itr ind =
       let instr = get_first g (BlockId ind) in
       let instr = I.convert instr in
@@ -174,10 +165,7 @@ module MakeCfg (I : Instruction) = struct
   ;;
 
   let add_all_edges g =
-    let node_cnt =
-      match g with
-      | Graph { basic_blocks; _ } -> basic_blocks
-    in
+    let node_cnt = g.basic_blocks in
     (* Function must have at least a return instruction. So there must
        be at least 1 block. *)
     add_edge g Entry (BlockId 0);
@@ -209,10 +197,7 @@ module MakeCfg (I : Instruction) = struct
   ;;
 
   let remove_basic_block g bi =
-    let nodes =
-      match g with
-      | Graph { nodes; _ } -> nodes
-    in
+    let nodes = g.nodes in
     let nid = BlockId bi in
     match Hashtbl.find_opt nodes (BlockId bi) with
     | Some (BasicBlock { succ; pred; _ }) ->
@@ -232,7 +217,7 @@ module MakeCfg (I : Instruction) = struct
   ;;
 
   let make_body = function
-    | Graph { nodes; basic_blocks } ->
+    | { nodes; basic_blocks } ->
       let loop_itr id =
         match Hashtbl.find_opt nodes id with
         | Some (BasicBlock { ins; _ }) -> ins

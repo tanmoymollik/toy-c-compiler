@@ -1,16 +1,18 @@
-type annotation = (Tacky.Ast.instruction, bool) Hashtbl.t
+type annotation = (Tacky.Ast.instruction, unit) Hashtbl.t
 
 let pp_annotation fmt v =
   let acc =
     Hashtbl.fold
       (fun k _ acc ->
          let ins_str = Tacky.Ast.show_instruction k in
-         ins_str ^ if acc = "" then acc else ", ")
+         ins_str ^ if acc = "" then acc else ", " ^ acc)
       v
       ""
   in
   Format.fprintf fmt "annotation:\n[\n%s\n]" acc
 ;;
+
+let show_annotation v = Format.asprintf "%a" pp_annotation v
 
 module TackyInstruction = struct
   type elm = Tacky.Ast.instruction * annotation [@@deriving show]
@@ -24,7 +26,7 @@ module TackyInstruction = struct
     | _ -> Cfg.Other
   ;;
 
-  let add_annotation i = i, Hashtbl.create 5
+  let add_annotation i = i, Hashtbl.create 0
 
   let strip_annotation = function
     | a, _ -> a
