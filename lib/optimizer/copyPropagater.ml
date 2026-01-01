@@ -245,7 +245,8 @@ let remove_empty_blocks (g : TackyCfg.graph) =
   let _ =
     List.init g.basic_blocks (fun i ->
       match Hashtbl.find_opt g.nodes (TackyCfg.BlockId i) with
-      | Some (TackyCfg.BasicBlock { ins = []; _ }) -> TackyCfg.remove_basic_block g i
+      | Some (TackyCfg.BasicBlock { ins = []; _ }) ->
+        TackyCfg.remove_basic_block_and_connect g i
       | _ -> ())
   in
   ()

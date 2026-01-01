@@ -124,14 +124,14 @@ module MakeCfg (I : Instruction) = struct
     List.iter (fun nid1 -> List.iter (fun nid2 -> add_edge g nid1 nid2) nids2) nids1
   ;;
 
-  let get_first g nid =
+  let get_first_ins g nid =
     let nd = get_node g nid in
     match nd with
     | BasicBlock { ins; _ } -> List.hd ins
     | EntryNode _ | ExitNode _ -> assert false
   ;;
 
-  let get_last g nid =
+  let get_last_ins g nid =
     let nd = get_node g nid in
     match nd with
     | BasicBlock { ins; _ } -> List.hd (List.rev ins)
@@ -154,7 +154,7 @@ module MakeCfg (I : Instruction) = struct
   let get_block_by_label g lbl =
     let node_cnt = g.basic_blocks in
     let loop_itr ind =
-      let instr = get_first g (BlockId ind) in
+      let instr = get_first_ins g (BlockId ind) in
       let instr = I.convert instr in
       match instr with
       | Label tgt -> lbl = tgt
@@ -172,7 +172,7 @@ module MakeCfg (I : Instruction) = struct
     let loop_itr ind =
       let next_id = if ind + 1 = node_cnt then Exit else BlockId (ind + 1) in
       let nid = BlockId ind in
-      let instr = get_last g nid in
+      let instr = get_last_ins g nid in
       let instr = I.convert instr in
       match instr with
       | Return -> add_edge g nid Exit
@@ -197,21 +197,29 @@ module MakeCfg (I : Instruction) = struct
   ;;
 
   let remove_basic_block g bi =
-    let nodes = g.nodes in
     let nid = BlockId bi in
-    match Hashtbl.find_opt nodes (BlockId bi) with
+    match Hashtbl.find_opt g.nodes nid with
     | Some (BasicBlock { succ; pred; _ }) ->
       List.iter
         (fun sid ->
            let sd = remove_pred (get_node g sid) nid in
-           Hashtbl.replace nodes sid sd)
+           Hashtbl.replace g.nodes sid sd)
         succ;
       List.iter
         (fun pid ->
            let pd = remove_succ (get_node g pid) nid in
-           Hashtbl.replace nodes pid pd)
+           Hashtbl.replace g.nodes pid pd)
         pred;
-      Hashtbl.remove nodes nid
+      Hashtbl.remove g.nodes nid
+    | Some (EntryNode _ | ExitNode _) -> assert false
+    | None -> ()
+  ;;
+
+  let remove_basic_block_and_connect g bi =
+    match Hashtbl.find_opt g.nodes (BlockId bi) with
+    | Some (BasicBlock { succ; pred; _ }) ->
+      remove_basic_block g bi;
+      add_edges g pred succ
     | Some (EntryNode _ | ExitNode _) -> assert false
     | None -> ()
   ;;

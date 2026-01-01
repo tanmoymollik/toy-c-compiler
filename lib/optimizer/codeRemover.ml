@@ -118,8 +118,7 @@ let remove_redundant_label_inner (g : TackyCfg.graph) sorted_graph =
                 | BlockId i -> i
                 | _ -> assert false
               in
-              TackyCfg.remove_basic_block g id;
-              TackyCfg.add_edges g pred succ)
+              TackyCfg.remove_basic_block_and_connect g id)
           | _ -> default_pred := nid)
        | Some (TackyCfg.EntryNode _ | TackyCfg.ExitNode _) | None -> assert false)
     sorted_graph;
