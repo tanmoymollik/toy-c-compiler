@@ -18,10 +18,7 @@ let rec optimize_impl func_body optimizations =
     then ConstFolder.fold_constants func_body
     else func_body, false
   in
-  let post_constant_elms =
-    List.map (fun a -> TackyInstruction.add_annotation a) post_constant_folding
-  in
-  let cfg = TackyCfg.make_control_flow_graph post_constant_elms in
+  let cfg = TackyCfg.make_control_flow_graph post_constant_folding in
   let cont =
     List.fold_left
       (fun cont opt ->
@@ -36,10 +33,7 @@ let rec optimize_impl func_body optimizations =
       cont
       optimizations
   in
-  let annotated_func_body = TackyCfg.make_body cfg in
-  let func_body =
-    List.map (fun i -> TackyInstruction.strip_annotation i) annotated_func_body
-  in
+  let func_body = TackyCfg.make_body cfg in
   if cont then optimize_impl func_body optimizations else func_body
 ;;
 
