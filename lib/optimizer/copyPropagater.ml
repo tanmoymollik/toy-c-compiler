@@ -1,5 +1,6 @@
 open TackyCfg
 open Tacky.Ast
+open AnnotCommon
 
 type annotation = (instruction, unit) Hashtbl.t
 
@@ -18,34 +19,6 @@ let pp_annotation fmt v =
 let show_annotation v = Format.asprintf "%a" pp_annotation v
 let block_ann_table = ref (Hashtbl.create 0)
 let block_ins_table = ref (Hashtbl.create 0)
-
-let intersect ann1 ann2 =
-  let res = Hashtbl.create (Hashtbl.length ann1) in
-  Hashtbl.iter
-    (fun k v ->
-       match Hashtbl.find_opt ann2 k with
-       | Some _ -> Hashtbl.add res k v
-       | None -> ())
-    ann1;
-  res
-;;
-
-let equal ann1 ann2 =
-  if Hashtbl.length ann1 <> Hashtbl.length ann2
-  then false
-  else (
-    let cnt =
-      Hashtbl.fold
-        (fun k _ acc ->
-           match Hashtbl.find_opt ann2 k with
-           | Some _ -> acc + 1
-           | None -> acc)
-        ann1
-        0
-    in
-    cnt = Hashtbl.length ann1)
-;;
-
 let annotate_block nid copies = Hashtbl.replace !block_ann_table nid copies
 
 let get_block_annotation nid =
@@ -202,7 +175,7 @@ let replace_operand reaching_copies op =
       (fun k _ acc ->
          match k with
          | Copy { src; dst } ->
-           if dst = op
+           if src <> op && dst = op
            then (
              operand_changed := true;
              src)
@@ -256,17 +229,6 @@ let rewrite_instruction ins reaching_copies =
   | _ -> assert false
 ;;
 
-let remove_empty_blocks (g : TackyCfg.graph) =
-  let _ =
-    List.init g.basic_blocks (fun i ->
-      match Hashtbl.find_opt g.nodes (TackyCfg.BlockId i) with
-      | Some (TackyCfg.BasicBlock { ins = []; _ }) ->
-        TackyCfg.remove_basic_block_and_connect g i
-      | _ -> ())
-  in
-  ()
-;;
-
 let propagate_copies (cfg : TackyCfg.graph) =
   block_ann_table := Hashtbl.create (Hashtbl.length cfg.nodes);
   block_ins_table := Hashtbl.create (Hashtbl.length cfg.nodes);
@@ -280,12 +242,12 @@ let propagate_copies (cfg : TackyCfg.graph) =
          let reaching_copies_list = get_instructions_annotation id in
          let converted_ins = List.map2 rewrite_instruction ins reaching_copies_list in
          let converted_ins = List.filter_map (fun x -> x) converted_ins in
-         if !operand_changed || List.length converted_ins != List.length ins
+         if !operand_changed || List.length converted_ins <> List.length ins
          then (
            fl := true;
            Some (TackyCfg.BasicBlock { id; ins = converted_ins; pred; succ }))
          else Some v)
     cfg.nodes;
-  remove_empty_blocks cfg;
+  TackyCfg.remove_empty_blocks cfg;
   !fl
 ;;

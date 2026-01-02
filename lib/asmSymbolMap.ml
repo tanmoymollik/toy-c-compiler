@@ -96,3 +96,13 @@ let extern_decls () =
     asm_symbol_map
     []
 ;;
+
+let static_vars () =
+  Hashtbl.fold
+    (fun iden info acc ->
+       match info with
+       | ObjInfo { is_static = true; _ } -> iden :: acc
+       | _ -> acc)
+    asm_symbol_map
+    []
+;;

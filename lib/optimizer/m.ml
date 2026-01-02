@@ -1,8 +1,6 @@
 open Optimizations
 open TackyCfg
 
-let eliminate_dead_stores _ = false
-
 (* Recursively optimizes the func_body.
    func_body must be a Tacky.Ast.Function. *)
 let rec optimize_impl func_body optimizations =
@@ -27,7 +25,7 @@ let rec optimize_impl func_body optimizations =
            | FoldConstants -> cont
            | PropagateCopies -> CopyPropagater.propagate_copies cfg
            | EliminateUnreachableCode -> CodeRemover.eliminate_unreachable_code cfg
-           | EliminateDeadStores -> eliminate_dead_stores cfg
+           | EliminateDeadStores -> DeadStoreElim.eliminate_dead_stores cfg
          in
          cont || ncont)
       cont

@@ -234,4 +234,14 @@ module MakeCfg (I : Instruction) = struct
       in
       List.concat_map loop_itr (List.init basic_blocks (fun i -> BlockId i))
   ;;
+
+  let remove_empty_blocks g =
+    let _ =
+      List.init g.basic_blocks (fun i ->
+        match Hashtbl.find_opt g.nodes (BlockId i) with
+        | Some (BasicBlock { ins = []; _ }) -> remove_basic_block_and_connect g i
+        | _ -> ())
+    in
+    ()
+  ;;
 end
