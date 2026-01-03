@@ -39,3 +39,10 @@ let resolve_instruction fun_name = function
   | Push x -> Push (resolve_operand fun_name x)
   | x -> x
 ;;
+
+let resolve_top_level = function
+  | Function { name; global; body } ->
+    let body = List.map (resolve_instruction name) body in
+    Function { name; global; body }
+  | (StaticVar _ | StaticConstant _) as ret -> ret
+;;

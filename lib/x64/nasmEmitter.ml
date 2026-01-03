@@ -13,7 +13,7 @@ let emit_operand_size = function
 ;;
 
 let emit_operand = function
-  | Imm i, sz -> Printf.sprintf "%s%s" (emit_operand_size sz) (Uint64.to_string i)
+  | Imm i, sz -> Printf.sprintf "%s%s" (emit_operand_size sz) (emit_imm i sz)
   | Reg r, sz -> emit_reg r sz
   | Pseudo _, _ -> assert false
   | Memory (r, i), sz ->

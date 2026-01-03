@@ -3,13 +3,6 @@ open Ast
 open Common
 open CommonEmitter
 
-let emit_imm ul = function
-  | Byte -> Uint8.to_string (Uint64.to_uint8 ul)
-  | Word -> Uint16.to_string (Uint64.to_uint16 ul)
-  | DWord -> Uint32.to_string (Uint64.to_uint32 ul)
-  | _ -> Uint64.to_string ul
-;;
-
 let emit_operand = function
   | Imm i, sz -> Printf.sprintf "$%s" (emit_imm i sz)
   | Reg r, sz -> "%" ^ emit_reg r sz

@@ -73,7 +73,6 @@ let is_arg_reg = function
 type operand =
   | Imm of (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
   | Reg of reg
-  | Pseudo of identifier
   | Memory of reg * int
   | Data of identifier
   | Indexed of
@@ -81,6 +80,7 @@ type operand =
       ; ind : reg
       ; scale : int
       }
+  | Pseudo of identifier
   | PseudoMem of identifier * int
 [@@deriving show]
 

@@ -1,3 +1,4 @@
+open Stdint
 open Common
 open Ast
 
@@ -127,4 +128,11 @@ let rec emit_reg r tp =
      | Xmm14
      | Xmm15 -> "xmm" ^ name)
   | ByteArray _ -> assert false
+;;
+
+let emit_imm ul = function
+  | Byte -> Uint8.to_string (Uint64.to_uint8 ul)
+  | Word -> Uint16.to_string (Uint64.to_uint16 ul)
+  | DWord -> Uint32.to_string (Uint64.to_uint32 ul)
+  | _ -> Uint64.to_string ul
 ;;

@@ -70,7 +70,7 @@ end = struct
       None
     | _ ->
       (match target with
-       | Arch.X86_64 -> Some (X64 (X64.Gen.gen_program prog))
+       | Arch.X86_64 -> Some (X64 (X64.M.gen_program prog))
        | Arch.RISCV64 -> Some (Riscv64 (Riscv64.Gen.gen_program prog)))
   ;;
 

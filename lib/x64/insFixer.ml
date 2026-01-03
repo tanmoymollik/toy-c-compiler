@@ -236,3 +236,10 @@ let fix_instruction = function
     else [ ret ]
   | _ as ret -> [ ret ]
 ;;
+
+let fix_top_level = function
+  | Function { name; global; body } ->
+    let body = List.concat_map fix_instruction body in
+    Function { name; global; body }
+  | (StaticVar _ | StaticConstant _) as ret -> ret
+;;
