@@ -1,4 +1,5 @@
 open Stdint
+open AsmUtils
 open Ast
 
 let imm_out_of_range32 i = i > Uint64.of_int32 Int32.max_int
@@ -240,6 +241,9 @@ let fix_instruction = function
 let fix_top_level = function
   | Function { name; global; body } ->
     let body = List.concat_map fix_instruction body in
+    let alloc_stack = get_fun_stack_alloc name in
+    let align16 = align_by alloc_stack 16 in
+    let body = if align16 > 0 then alloc_stack_ins align16 :: body else body in
     Function { name; global; body }
   | (StaticVar _ | StaticConstant _) as ret -> ret
 ;;

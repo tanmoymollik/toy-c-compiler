@@ -121,9 +121,6 @@ let find_reaching_vars (g : TackyCfg.graph) =
     | TackyCfg.BasicBlock { pred; _ } as block ->
       let end_live_vars = meet block all_static_vars in
       transfer block end_live_vars all_static_vars;
-      (* print_endline (TackyCfg.show_node_id nid);
-      print_endline (show_annotation old_annotation);
-      print_endline (show_annotation (get_block_annotation nid)); *)
       if not (equal old_annotation (get_block_annotation nid))
       then
         List.iter

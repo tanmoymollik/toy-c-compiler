@@ -1,11 +1,13 @@
+open Tacky.Ast
+
 module TackyInstruction = struct
-  type elm = Tacky.Ast.instruction [@@deriving show]
+  type elm = instruction [@@deriving show]
 
   let convert = function
-    | Tacky.Ast.Ret _ -> Cfg.Return
-    | Tacky.Ast.Jump tgt -> Cfg.Jump tgt
-    | Tacky.Ast.JumpIfZero (_, tgt) | Tacky.Ast.JumpIfNotZero (_, tgt) -> Cfg.CondJump tgt
-    | Tacky.Ast.Label tgt -> Cfg.Label tgt
+    | Ret _ -> Cfg.Return
+    | Jump tgt -> Cfg.Jump tgt
+    | JumpIfZero (_, tgt) | JumpIfNotZero (_, tgt) -> Cfg.CondJump tgt
+    | Label tgt -> Cfg.Label tgt
     | _ -> Cfg.Other
   ;;
 end

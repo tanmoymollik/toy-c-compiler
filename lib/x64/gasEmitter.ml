@@ -126,7 +126,8 @@ let emit_instruction = function
   | SetC (cc, operand) ->
     Printf.sprintf "%sset%s %s" indent (emit_cond_code cc) (emit_operand (operand, Byte))
   | Label iden -> Printf.sprintf ".L%s:" (emit_identifier iden)
-  | Push operand -> Printf.sprintf "%spush %s" indent (emit_operand (operand, QWord))
+  | Push operand -> Printf.sprintf "%spushq %s" indent (emit_operand (operand, QWord))
+  | Pop r -> Printf.sprintf "%spopq %s" indent (emit_reg r QWord)
   | Call name ->
     let platform_name = emit_platform_name name in
     let name =

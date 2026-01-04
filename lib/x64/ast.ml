@@ -34,6 +34,7 @@ type cond_code =
 
 type reg =
   | Ax
+  | Bx
   | Cx
   | Dx
   | Di
@@ -42,6 +43,10 @@ type reg =
   | R9
   | R10
   | R11
+  | R12
+  | R13
+  | R14
+  | R15
   | Sp
   | Bp
   | Xmm0
@@ -133,6 +138,7 @@ type instruction =
   | SetC of cond_code * operand
   | Label of identifier
   | Push of operand
+  | Pop of reg
   | Call of identifier
   | Ret
 [@@deriving show]

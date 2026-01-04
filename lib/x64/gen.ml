@@ -451,11 +451,6 @@ let gen_top_level = function
     let params = List.map (fun param -> Tacky.Ast.Var param) params in
     let param_ins = set_up_params params in
     let body = param_ins @ List.concat_map gen_instruction body in
-    let body = List.map (PseudoResolver.resolve_instruction name) body in
-    let alloc_stack = get_fun_stack_alloc name in
-    let align16 = align_by alloc_stack 16 in
-    let body = if align16 > 0 then alloc_stack_ins align16 :: body else body in
-    let body = List.concat_map InsFixer.fix_instruction body in
     Function { name; global; body }
   | Tacky.Ast.StaticVar { name; global; tp; init_list } ->
     let alignment =

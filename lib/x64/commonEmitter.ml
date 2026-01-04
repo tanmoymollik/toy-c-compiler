@@ -54,6 +54,7 @@ let emit_cond_code = function
 
 let emit_reg_name = function
   | Ax -> "a"
+  | Bx -> "b"
   | Cx -> "c"
   | Dx -> "d"
   | Di -> "di"
@@ -62,6 +63,10 @@ let emit_reg_name = function
   | R9 -> "r9"
   | R10 -> "r10"
   | R11 -> "r11"
+  | R12 -> "r12"
+  | R13 -> "r13"
+  | R14 -> "r14"
+  | R15 -> "r15"
   | Sp -> "sp"
   | Bp -> "bp"
   | Xmm0 -> "0"
@@ -87,30 +92,31 @@ let rec emit_reg r tp =
   match tp with
   | Byte ->
     (match r with
-     | Ax | Cx | Dx | Di | Si -> name ^ "l"
-     | R8 | R9 | R10 | R11 -> name ^ "b"
+     | Ax | Bx | Cx | Dx | Di | Si -> name ^ "l"
+     | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 -> name ^ "b"
      | _ -> assert false)
   | Word ->
     (match r with
-     | Ax | Cx | Dx -> name ^ "x"
+     | Ax | Bx | Cx | Dx -> name ^ "x"
      | Di | Si | Sp | Bp -> name
-     | R8 | R9 | R10 | R11 -> name ^ "w"
+     | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 -> name ^ "w"
      | _ -> assert false)
   | DWord ->
     (match r with
-     | Ax | Cx | Dx -> "e" ^ name ^ "x"
+     | Ax | Bx | Cx | Dx -> "e" ^ name ^ "x"
      | Di | Si | Sp | Bp -> "e" ^ name
-     | R8 | R9 | R10 | R11 -> name ^ "d"
+     | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 -> name ^ "d"
      | _ -> assert false)
   | QWord ->
     (match r with
-     | Ax | Cx | Dx -> "r" ^ name ^ "x"
+     | Ax | Bx | Cx | Dx -> "r" ^ name ^ "x"
      | Di | Si | Sp | Bp -> "r" ^ name
-     | R8 | R9 | R10 | R11 -> name
+     | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 -> name
      | _ -> assert false)
   | AsmDouble ->
     (match r with
-     | Ax | Cx | Dx | Di | Si | Sp | Bp | R8 | R9 | R10 | R11 -> emit_reg r QWord
+     | Ax | Bx | Cx | Dx | Di | Si | Sp | Bp | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15
+       -> emit_reg r QWord
      | Xmm0
      | Xmm1
      | Xmm2
