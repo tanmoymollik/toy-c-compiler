@@ -1,6 +1,6 @@
 open TackyCfg
 open Tacky.Ast
-open AnnotCommon
+open SetOp
 
 type annotation = (instruction, unit) Hashtbl.t
 

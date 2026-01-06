@@ -1,46 +1,84 @@
 open Ast
 open AsmUtils
 
-let resolve_operand fun_name = function
+let resolve_operand fun_name register_map = function
   | Pseudo name ->
-    let addr = get_stack_address (fun_name, name) in
-    if AsmSymbolMap.is_static_var name then Data name else Memory (Bp, addr)
+    if AsmSymbolMap.is_static_var name
+    then Data name
+    else (
+      match Hashtbl.find_opt register_map name with
+      | Some r -> Reg r
+      | None ->
+        let addr = get_stack_address (fun_name, name) in
+        Memory (Bp, addr))
   | PseudoMem (name, offset) ->
     let addr = get_stack_address (fun_name, name) in
     if AsmSymbolMap.is_static_var name then Data name else Memory (Bp, addr - offset)
   | x -> x
 ;;
 
-let resolve_instruction fun_name = function
+let resolve_instruction fun_name register_map = function
   | Mov { src; dst; tp } ->
-    Mov { src = resolve_operand fun_name src; dst = resolve_operand fun_name dst; tp }
+    Mov
+      { src = resolve_operand fun_name register_map src
+      ; dst = resolve_operand fun_name register_map dst
+      ; tp
+      }
   | Movsx { src; dst } ->
-    Movsx { src = resolve_operand fun_name src; dst = resolve_operand fun_name dst }
+    Movsx
+      { src = resolve_operand fun_name register_map src
+      ; dst = resolve_operand fun_name register_map dst
+      }
   | MovZeroExtend { src; dst } ->
     MovZeroExtend
-      { src = resolve_operand fun_name src; dst = resolve_operand fun_name dst }
+      { src = resolve_operand fun_name register_map src
+      ; dst = resolve_operand fun_name register_map dst
+      }
   | Lea { src; dst } ->
-    Lea { src = resolve_operand fun_name src; dst = resolve_operand fun_name dst }
+    Lea
+      { src = resolve_operand fun_name register_map src
+      ; dst = resolve_operand fun_name register_map dst
+      }
   | Cvttsd2si { src; dst; dst_tp } ->
     Cvttsd2si
-      { src = resolve_operand fun_name src; dst = resolve_operand fun_name dst; dst_tp }
+      { src = resolve_operand fun_name register_map src
+      ; dst = resolve_operand fun_name register_map dst
+      ; dst_tp
+      }
   | Cvtsi2sd { src; dst; src_tp } ->
     Cvtsi2sd
-      { src = resolve_operand fun_name src; dst = resolve_operand fun_name dst; src_tp }
-  | Unary (uop, src, tp) -> Unary (uop, resolve_operand fun_name src, tp)
+      { src = resolve_operand fun_name register_map src
+      ; dst = resolve_operand fun_name register_map dst
+      ; src_tp
+      }
+  | Unary (uop, src, tp) -> Unary (uop, resolve_operand fun_name register_map src, tp)
   | Binary { bop; src; dst; tp } ->
     Binary
-      { bop; src = resolve_operand fun_name src; dst = resolve_operand fun_name dst; tp }
+      { bop
+      ; src = resolve_operand fun_name register_map src
+      ; dst = resolve_operand fun_name register_map dst
+      ; tp
+      }
   | Cmp { lhs; rhs; tp } ->
-    Cmp { lhs = resolve_operand fun_name lhs; rhs = resolve_operand fun_name rhs; tp }
-  | Idiv (src, tp) -> Idiv (resolve_operand fun_name src, tp)
-  | Div (src, tp) -> Div (resolve_operand fun_name src, tp)
-  | SetC (cnd, dst) -> SetC (cnd, resolve_operand fun_name dst)
-  | Push x -> Push (resolve_operand fun_name x)
+    Cmp
+      { lhs = resolve_operand fun_name register_map lhs
+      ; rhs = resolve_operand fun_name register_map rhs
+      ; tp
+      }
+  | Idiv (src, tp) -> Idiv (resolve_operand fun_name register_map src, tp)
+  | Div (src, tp) -> Div (resolve_operand fun_name register_map src, tp)
+  | SetC (cnd, dst) -> SetC (cnd, resolve_operand fun_name register_map dst)
+  | Push x -> Push (resolve_operand fun_name register_map x)
   | x -> x
 ;;
 
-let resolve_instructions fun_name body _ =
-  let body = List.map (resolve_instruction fun_name) body in
+let remove_redundant_mov = function
+  | Mov { src; dst; _ } as ret -> if src = dst then None else Some ret
+  | ret -> Some ret
+;;
+
+let resolve_instructions fun_name body register_map =
+  let body = List.map (resolve_instruction fun_name register_map) body in
+  let body = List.filter_map remove_redundant_mov body in
   body
 ;;

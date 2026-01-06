@@ -164,6 +164,11 @@ type top_level =
 
 type program = Program of top_level list [@@deriving show]
 
+let is_callee_saved_reg = function
+  | Bx | R12 | R13 | R14 | R15 -> true
+  | _ -> false
+;;
+
 let alloc_stack_ins offset =
   assert (offset > 0);
   Binary { bop = Sub; src = Imm (Uint64.of_int offset); dst = Reg Sp; tp = QWord }

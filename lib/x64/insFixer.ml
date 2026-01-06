@@ -131,7 +131,7 @@ let fix_ins_binary = function
   | _ -> assert false
 ;;
 
-let fix_instruction = function
+let fix_instruction func_name = function
   | Mov { src; dst; tp } as ret ->
     (match src, dst with
      | (Memory _ | Data _), (Memory _ | Data _) ->
@@ -235,15 +235,32 @@ let fix_instruction = function
       ; Mov { src = tmp_dst; dst; tp = AsmDouble }
       ])
     else [ ret ]
+  | Ret ->
+    let callee_saved_regs = FuncInfo.get_callee_saved_regs func_name in
+    let ins = List.fold_left (fun acc r -> Pop r :: acc) [] callee_saved_regs in
+    List.rev ins @ [ Ret ]
   | _ as ret -> [ ret ]
+;;
+
+let calculate_stack_alloc local_bytes callee_saved_bytes =
+  let total_stack_bytes = local_bytes + callee_saved_bytes in
+  let adjusted_stack_bytes = align_by total_stack_bytes 16 in
+  adjusted_stack_bytes - callee_saved_bytes
 ;;
 
 let fix_top_level = function
   | Function { name; global; body } ->
-    let body = List.concat_map fix_instruction body in
+    let body = List.concat_map (fix_instruction name) body in
     let alloc_stack = get_fun_stack_alloc name in
-    let align16 = align_by alloc_stack 16 in
-    let body = if align16 > 0 then alloc_stack_ins align16 :: body else body in
+    let callee_saved_regs = FuncInfo.get_callee_saved_regs name in
+    let ins = List.fold_left (fun acc r -> Push (Reg r) :: acc) [] callee_saved_regs in
+    let adjusted_stack_bytes =
+      calculate_stack_alloc alloc_stack (8 * List.length callee_saved_regs)
+    in
+    let alloc_ins =
+      if adjusted_stack_bytes > 0 then [ alloc_stack_ins adjusted_stack_bytes ] else []
+    in
+    let body = alloc_ins @ ins @ body in
     Function { name; global; body }
   | (StaticVar _ | StaticConstant _) as ret -> ret
 ;;

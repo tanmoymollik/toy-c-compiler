@@ -268,6 +268,11 @@ let gen_instruction = function
   | Tacky.Ast.Label iden -> [ Label iden ]
   | Tacky.Ast.FunCall { name; args; dst } ->
     let int_args, double_args, stk_args = classify_params args in
+    let take_n n lst = List.filteri (fun i _ -> i < n) lst in
+    FuncInfo.save_func_params
+      name
+      (take_n (List.length int_args) int_regs)
+      (take_n (List.length double_args) double_regs);
     let stack_padding = if List.length stk_args mod 2 = 1 then 8 else 0 in
     let stack_alloc = if stack_padding <> 0 then [ alloc_stack_ins 8 ] else [] in
     let f reg_list ind (operand, tp) =

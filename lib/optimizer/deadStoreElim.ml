@@ -1,6 +1,6 @@
 open TackyCfg
 open Tacky.Ast
-open AnnotCommon
+open SetOp
 
 type annotation = (string, unit) Hashtbl.t
 
@@ -151,8 +151,6 @@ let rewrite_instruction ins live_vars =
 ;;
 
 let eliminate_dead_stores (cfg : TackyCfg.graph) =
-  (* print_endline "\n\n------------------Begin------------------";
-  print_endline (TackyCfg.show_graph cfg); *)
   block_ann_table := Hashtbl.create (Hashtbl.length cfg.nodes);
   block_ins_table := Hashtbl.create (Hashtbl.length cfg.nodes);
   find_reaching_vars cfg;
@@ -171,7 +169,5 @@ let eliminate_dead_stores (cfg : TackyCfg.graph) =
          else Some v)
     cfg.nodes;
   TackyCfg.remove_empty_blocks cfg;
-  (* print_endline "\n\n------------------End------------------";
-  print_endline (TackyCfg.show_graph cfg); *)
   !fl
 ;;
