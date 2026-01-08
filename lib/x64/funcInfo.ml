@@ -25,5 +25,7 @@ let get_callee_saved_regs = function
   | Identifier name ->
     (match Hashtbl.find_opt func_callee_saved_regs name with
      | Some v -> v
-     | None -> failwith "Function callee-saved registers should have been recorded")
+     | None -> [])
 ;;
+(* TODO: Make this default after finishing part 2. *)
+(* | None -> failwith "Function callee-saved registers should have been recorded") *)

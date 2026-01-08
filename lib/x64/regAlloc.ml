@@ -392,29 +392,30 @@ let rewrite_coalesced reg_map instructions =
   List.filter_map (rewrite_instruction reg_map) instructions
 ;;
 
-let allocate_registers func_name body =
-  let k = 12 in
-  let rec loop instructions =
-    let interference_graph = build_graph instructions in
-    let coalesced_regs = coalesce interference_graph k instructions in
-    if DisjointSet.nothing_was_coalesced coalesced_regs
-    then interference_graph, instructions
-    else (
-      let instructions = rewrite_coalesced coalesced_regs instructions in
-      loop instructions)
-  in
-  let interference_graph, body = loop body in
-  add_spill_costs interference_graph body;
-  color_graph interference_graph k;
-  let register_map = create_register_map func_name interference_graph k in
-  PseudoResolver.resolve_instructions func_name body register_map
+let allocate_registers func_name body regalloc =
+  if regalloc
+  then (
+    let k = 12 in
+    let rec loop instructions =
+      let interference_graph = build_graph instructions in
+      let coalesced_regs = coalesce interference_graph k instructions in
+      if DisjointSet.nothing_was_coalesced coalesced_regs
+      then interference_graph, instructions
+      else (
+        let instructions = rewrite_coalesced coalesced_regs instructions in
+        loop instructions)
+    in
+    let interference_graph, body = loop body in
+    add_spill_costs interference_graph body;
+    color_graph interference_graph k;
+    let register_map = create_register_map func_name interference_graph k in
+    PseudoResolver.resolve_instructions func_name body register_map)
+  else PseudoResolver.resolve_instructions func_name body (Hashtbl.create 0)
 ;;
 
-let resolve_top_level = function
+let resolve_top_level regalloc = function
   | Function { name; global; body } ->
-    (* TODO: Remove disabling regalloc. *)
-    let disable_regalloc = false in
-    let converted_body = allocate_registers name body in
-    Function { name; global; body = (if disable_regalloc then body else converted_body) }
+    let converted_body = allocate_registers name body regalloc in
+    Function { name; global; body = converted_body }
   | (StaticConstant _ | StaticVar _) as ret -> ret
 ;;

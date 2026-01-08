@@ -12,6 +12,7 @@ type compile_args =
   ; outfile : string
   ; dump : bool
   ; gas_emit : bool
+  ; regalloc : bool
   }
 
 module Impl : sig
@@ -63,14 +64,14 @@ end = struct
     | X64 of X64.Ast.program
     | Riscv64 of Riscv64.Ast.program
 
-  let code_gen stage target prog =
+  let code_gen stage target regalloc prog =
     match stage with
     | `Tacky ->
       if !astdump then print_endline Tacky.Ast.(show_program prog);
       None
     | _ ->
       (match target with
-       | Arch.X86_64 -> Some (X64 (X64.M.gen_program prog))
+       | Arch.X86_64 -> Some (X64 (X64.M.gen_program regalloc prog))
        | Arch.RISCV64 -> Some (Riscv64 (Riscv64.Gen.gen_program prog)))
   ;;
 
@@ -98,7 +99,7 @@ end = struct
   ;;
 
   let compile = function
-    | { stage; target; optimizations; infile; outfile; dump; gas_emit } ->
+    | { stage; target; optimizations; infile; outfile; dump; gas_emit; regalloc } ->
       astdump := dump;
       if gas_emit
       then (
@@ -112,7 +113,7 @@ end = struct
         parse lexbuf
         >>= validate stage
         >>= tacky_gen stage optimizations
-        >>= code_gen stage target
+        >>= code_gen stage target regalloc
         >>= code_emit stage gas_emit
       in
       (match code with

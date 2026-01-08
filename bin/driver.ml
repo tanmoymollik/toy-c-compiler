@@ -12,6 +12,7 @@ let astdump = ref false
 let link_math = ref false
 let optimizations = ref []
 let use_gas = ref false
+let regalloc = ref false
 let usage_msg = "Usage: dune exec c_compiler -- [options] <input_file>.c"
 
 let spec =
@@ -58,6 +59,13 @@ let spec =
     , "Optimization - eliminate dead stores" )
   ; "--gas", Arg.Unit (fun () -> use_gas := true), "Emit code in GAS syntax"
   ; "--dump", Arg.Unit (fun () -> astdump := true), "Dump ast"
+    (* TODO: remove regalloc after finishing part 2. *)
+  ; ( "--regalloc"
+    , Arg.Unit
+        (fun () ->
+          use_gas := true;
+          regalloc := true)
+    , "Dump ast" )
   ]
 ;;
 
@@ -137,6 +145,7 @@ let drive_single stage target infile =
       ; outfile = assembly_file
       ; dump = !astdump
       ; gas_emit = !use_gas
+      ; regalloc = !regalloc
       }
     in
     runCommand
