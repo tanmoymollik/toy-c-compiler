@@ -146,7 +146,6 @@ let rewrite_instruction ins live_vars =
        (match Hashtbl.find_opt live_vars name with
         | Some _ -> Some ins
         | None -> None))
-  | FunCall _ -> Some ins
   | _ -> Some ins
 ;;
 

@@ -53,6 +53,18 @@ let is_in_graph ig oprnd =
   | None -> false
 ;;
 
+let are_neighbors ig nid1 nid2 =
+  let nd1 = Hashtbl.find ig.nodes nid1 in
+  match Hashtbl.find_opt nd1.neighbors nid2 with
+  | Some _ -> true
+  | None -> false
+;;
+
+let is_hard_reg = function
+  | Reg _ -> true
+  | _ -> false
+;;
+
 let base_graph () =
   let regs = [ Ax; Bx; Cx; Dx; Di; Si; R8; R9; R12; R13; R14; R15 ] in
   let nodes = Hashtbl.create (List.length regs) in
@@ -109,11 +121,23 @@ let add_neighbor ig nid1 nid2 =
   Hashtbl.replace nd1.neighbors nid2 ()
 ;;
 
+let remove_neighbor ig nid1 nid2 =
+  let nd1 = Hashtbl.find ig.nodes nid1 in
+  Hashtbl.remove nd1.neighbors nid2
+;;
+
 let add_edge ig nid1 nid2 =
   assert (is_in_graph ig nid1);
   assert (is_in_graph ig nid2);
   add_neighbor ig nid1 nid2;
   add_neighbor ig nid2 nid1
+;;
+
+let remove_edge ig nid1 nid2 =
+  assert (is_in_graph ig nid1);
+  assert (is_in_graph ig nid2);
+  remove_neighbor ig nid1 nid2;
+  remove_neighbor ig nid2 nid1
 ;;
 
 let add_edges (cfg : X64Cfg.graph) ig =
@@ -270,26 +294,127 @@ let create_register_map func_name ig k =
   register_map
 ;;
 
+let briggs_test ig k x y =
+  let x_node = Hashtbl.find ig.nodes x in
+  let y_node = Hashtbl.find ig.nodes y in
+  let combined_neighbors = SetOp.union x_node.neighbors y_node.neighbors in
+  let significant_neighbors =
+    Hashtbl.fold
+      (fun nid _ acc ->
+         let neighbor_node = Hashtbl.find ig.nodes nid in
+         let degree = node_degree ig neighbor_node in
+         let degree =
+           if are_neighbors ig nid x && are_neighbors ig nid y then degree - 1 else degree
+         in
+         if degree >= k then acc + 1 else acc)
+      combined_neighbors
+      0
+  in
+  significant_neighbors < k
+;;
+
+let george_test ig k hardreg pseudoreg =
+  let pseudo_node = Hashtbl.find ig.nodes pseudoreg in
+  Hashtbl.fold
+    (fun nid _ acc ->
+       if are_neighbors ig nid hardreg
+       then acc
+       else (
+         let neighbor_node = Hashtbl.find ig.nodes nid in
+         if Hashtbl.length neighbor_node.neighbors < k then acc else false))
+    pseudo_node.neighbors
+    true
+;;
+
+let conservative_coalesceable ig k src dst =
+  if briggs_test ig k src dst
+  then true
+  else if is_hard_reg src
+  then george_test ig k src dst
+  else if is_hard_reg dst
+  then george_test ig k dst src
+  else false
+;;
+
+let update_graph ig to_merge to_keep =
+  let node_to_remove = Hashtbl.find ig.nodes to_merge in
+  Hashtbl.iter
+    (fun nid _ ->
+       add_edge ig to_keep nid;
+       remove_neighbor ig nid to_merge)
+    node_to_remove.neighbors;
+  Hashtbl.remove ig.nodes to_merge
+;;
+
+let coalesce ig k instructions =
+  let coalesced_regs = DisjointSet.init_disjoint_sets () in
+  List.iter
+    (function
+      | Mov { src; dst; _ } ->
+        let src = DisjointSet.find coalesced_regs src in
+        let dst = DisjointSet.find coalesced_regs dst in
+        if
+          is_in_graph ig src
+          && is_in_graph ig dst
+          && src <> dst
+          && are_neighbors ig src dst |> not
+          && conservative_coalesceable ig k src dst
+        then (
+          let to_keep, to_merge = if is_hard_reg src then src, dst else dst, src in
+          DisjointSet.union coalesced_regs to_merge to_keep;
+          update_graph ig to_merge to_keep)
+      | _ -> ())
+    instructions;
+  coalesced_regs
+;;
+
+let rewrite_instruction reg_map = function
+  | Mov { src; dst; tp } ->
+    let src = DisjointSet.find reg_map src in
+    let dst = DisjointSet.find reg_map dst in
+    if src = dst then None else Some (Mov { src; dst; tp })
+  | Unary (uop, dst, tp) -> Some (Unary (uop, DisjointSet.find reg_map dst, tp))
+  | Binary { bop; src; dst; tp } ->
+    let src = DisjointSet.find reg_map src in
+    let dst = DisjointSet.find reg_map dst in
+    Some (Binary { bop; src; dst; tp })
+  | Cmp { lhs; rhs; tp } ->
+    let lhs = DisjointSet.find reg_map lhs in
+    let rhs = DisjointSet.find reg_map rhs in
+    Some (Cmp { lhs; rhs; tp })
+  | Idiv (src, tp) -> Some (Idiv (DisjointSet.find reg_map src, tp))
+  | SetC (cc, dst) -> Some (SetC (cc, DisjointSet.find reg_map dst))
+  | Push src -> Some (Push (DisjointSet.find reg_map src))
+  | x -> Some x
+;;
+
+let rewrite_coalesced reg_map instructions =
+  List.filter_map (rewrite_instruction reg_map) instructions
+;;
+
 let allocate_registers func_name body =
   let k = 12 in
-  let interference_graph = build_graph body in
+  let rec loop instructions =
+    let interference_graph = build_graph instructions in
+    let coalesced_regs = coalesce interference_graph k instructions in
+    if DisjointSet.nothing_was_coalesced coalesced_regs
+    then interference_graph, instructions
+    else (
+      let instructions = rewrite_coalesced coalesced_regs instructions in
+      loop instructions)
+  in
+  let interference_graph, body = loop body in
   add_spill_costs interference_graph body;
   color_graph interference_graph k;
   let register_map = create_register_map func_name interference_graph k in
-  register_map
+  PseudoResolver.resolve_instructions func_name body register_map
 ;;
 
 let resolve_top_level = function
   | Function { name; global; body } ->
     (* TODO: Remove disabling regalloc. *)
     let disable_regalloc = false in
-    let register_map = allocate_registers name body in
-    let converted_body =
-      PseudoResolver.resolve_instructions
-        name
-        body
-        (if disable_regalloc then Hashtbl.create 0 else register_map)
-    in
-    Function { name; global; body = converted_body }
+    let converted_body = allocate_registers name body in
+    Function { name; global; body = (if disable_regalloc then body else converted_body) }
   | (StaticConstant _ | StaticVar _) as ret -> ret
 ;;
