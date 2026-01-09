@@ -5,6 +5,14 @@ along with the book "Writing a C Compiler" by Nora Sandler. 📚
 
 Currently this implementation passes tests upto chapter 15 with extra credits.
 
+This includes expressions, static variables, functions, integer, long, double,
+pointers, arrays etc. Currently I am working on adding support for char, void
+pointers and struct.
+
+I also implemented chapter 19 (tacky optimizations) and chapter 20 (register
+allocation) for integer types. After finishing chapters 16-18 I will add support
+for other types.
+
 My first implementation was written in Rust because I had recently learnt it and
 wanted to try it out on something. But then I pivoted to OCaml because I found
 it better suited for writing a compiler.
@@ -15,9 +23,11 @@ My compiler uses intel x64 assembly syntax. Thus I found nasm is better suited
 to assemble the assembly file produced by the compiler. The book uses gcc for
 this step however. This mean that the instructions produced by this compiiler
 and the book is different (src and dst are swapped). In order to use this
-compiler `gcc` and `nasm` must be installed. To understand the differences in
-assembly produced by the book and this repo look at
-[emitter internals](lib/emitter.ml).
+compiler `gcc` and `nasm` must be installed. 
+
+*UPDATE:* I ended up implementing gnu style assembly emission too in the end.
+The optimization and register allocation tests for chapter 19 and 20 require gnu
+style assembly.
 
 This repo contains a single driver binary. To build it run:
 
@@ -27,29 +37,39 @@ dune build
 
 Driver binary uses `gcc` to pre-process the file, then compile the pre-processed
 file, assemble it using `nasm` and then use `gcc` to link the generated object
-file. This binary also takes an optional stage option as demanded in the book to
-test intermediate stages:
-- `--lex`
-- `--parse`
-- `--codegen`
-- `-S`
+file. This binary also takes optional stage arguments mandated by the book to run
+the test suite. I also implemented a few other command line flags for development.
+To see the full list of options available run:
 
 ```sh
-dune exec c_compiler -- --codegen test.c
+dune exec c_compiler -- -h
 ```
+
+To simply compile a file run:
+
+```sh
+dune exec c_compiler -- my_file.c
+```
+
+*NOTE:* The tacky optimization and register allocation passes require command line
+flags to be specified. To know which flags will enable them run the command to list
+all options.
+
+## Tests ##
 
 This repository entirely depends on the tests provided by
 [writing-a-c-compiler-tests](https://github.com/nlsandler/writing-a-c-compiler-tests/tree/main)
-for validation. I might add some tests of my own later.
+for validation for now. The test suite is pretty comprehensive.
 
-This compiler support development on both macos and linux. Currently I am
-working on macos, so by default the compiler emits assembly code suitable for
-macos. For linux development, set `platform` to `Lib.Platform.Linux` in
-[driver binary](bin/driver.ml).
+I created a [fork](https://github.com/tanmoymollik/toy-c-compiler-tests.git) of
+my own to add support for riscv architecture. The fork supports tests upto chapter
+18 for riscv. But chapter 19 and 20 won't work because they are tied to x86_64
+architecture.
 
 ## Implementation Notes ##
-Loop labels are set as dummy when parsing and resolved in semantic analysis pass.
-Case and Default statements converted to Label statements in semantic analysis pass.
 - This implementation lexes and parses at the same time. So just stopping after lex
   stage is not possible. --lex option does nothing.
 - Implementation assumes x64 architecture. Both int and long in c are parsed as ocaml int.
+- Loop labels are set as dummy when parsing and resolved in semantic analysis pass.
+- Case and Default statements are converted to Label statements in semantic analysis pass.
+- **TBD**
