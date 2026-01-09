@@ -56,6 +56,20 @@ let convert_to_double = function
   | ConstDouble d -> d
 ;;
 
+(* Converts to c signed char which is 8 bits wide. *)
+let convert_to_char = function
+  | c ->
+    let c = convert_to_int c in
+    Int32.of_int8 (Int8.of_int32 c)
+;;
+
+(* Converts to c unsigned char which is 8 bits wide. *)
+let convert_to_uchar = function
+  | c ->
+    let c = convert_to_int c in
+    Int32.of_uint8 (Uint8.of_int32 c)
+;;
+
 let is_zero = function
   | ConstInt 0l -> true
   | ConstUInt ui -> ui = 0i

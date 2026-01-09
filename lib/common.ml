@@ -65,8 +65,15 @@ type static_init =
   | LongInit of int64
   | ULongInit of
       (uint64[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint64.to_string v)])
+  | CharInit of int32
+  | UCharInit of int32
   | DoubleInit of float
   | ZeroInit of { bytes : int }
+  | StringInit of
+      { str : string
+      ; null_terminated : bool
+      }
+  | PointerInit of { name : string }
 [@@deriving show]
 
 type asm_type =
@@ -83,8 +90,7 @@ type asm_type =
 
 (* Returns the size of type in bytes. *)
 let rec size = function
-  | SChar -> assert false
-  | Char | UChar -> 1
+  | Char | SChar | UChar -> 1
   | Int -> 4
   | UInt -> 4
   | Long -> 8
@@ -97,8 +103,7 @@ let rec size = function
 
 (* Returns whether the type is signed. *)
 let signed_c_type = function
-  | SChar -> assert false
-  | Char | Int | Long | Double -> true
+  | Char | SChar | Int | Long | Double -> true
   | UChar | UInt | ULong | Pointer _ | CArray _ -> false
   | FunType _ -> assert false
 ;;
@@ -109,14 +114,12 @@ let signed_const = function
 ;;
 
 let is_arithmetic_type = function
-  | SChar -> assert false
-  | Char | UChar | Int | UInt | Long | ULong | Double -> true
+  | Char | SChar | UChar | Int | UInt | Long | ULong | Double -> true
   | FunType _ | Pointer _ | CArray _ -> false
 ;;
 
 let is_integer_type = function
-  | SChar -> assert false
-  | Char | UChar | Int | UInt | Long | ULong -> true
+  | Char | SChar | UChar | Int | UInt | Long | ULong -> true
   | Double | FunType _ | Pointer _ | CArray _ -> false
 ;;
 
@@ -130,9 +133,18 @@ let is_array_type = function
   | _ -> false
 ;;
 
+let is_char_type = function
+  | Char | SChar | UChar -> true
+  | _ -> false
+;;
+
 (* Returns the type both t1 and t2 should be converted to. *)
-let get_common_type t1 t2 =
-  if t1 = t2
+let rec get_common_type t1 t2 =
+  if is_char_type t1
+  then get_common_type Int t2
+  else if is_char_type t2
+  then get_common_type t1 Int
+  else if t1 = t2
   then t1
   else if t1 = Double || t2 = Double
   then Double
@@ -144,8 +156,7 @@ let get_common_type t1 t2 =
 ;;
 
 let c_type_zero = function
-  | SChar -> assert false
-  | Char -> ConstChar 0l
+  | Char | SChar -> ConstChar 0l
   | UChar -> ConstUChar 0l
   | Int -> ConstInt 0l
   | UInt -> ConstUInt 0i
@@ -158,8 +169,7 @@ let c_type_zero = function
 ;;
 
 let c_type_one = function
-  | SChar -> assert false
-  | Char -> ConstChar 1l
+  | Char | SChar -> ConstChar 1l
   | UChar -> ConstUChar 1l
   | Int -> ConstInt 1l
   | UInt -> ConstUInt 1i
@@ -172,8 +182,7 @@ let c_type_one = function
 ;;
 
 let rec scalar_type_alignment = function
-  | SChar -> assert false
-  | Char | UChar -> 1
+  | Char | SChar | UChar -> 1
   | Int | UInt -> 4
   | Long | ULong | Double | Pointer _ -> 8
   | FunType _ -> assert false
@@ -188,8 +197,7 @@ let get_asm_type_for_const = function
 ;;
 
 let get_asm_type_for_c_type = function
-  | SChar -> assert false
-  | Char | UChar -> Byte
+  | Char | SChar | UChar -> Byte
   | Int | UInt -> DWord
   | Long | ULong | Pointer _ -> QWord
   | Double -> AsmDouble

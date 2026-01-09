@@ -15,6 +15,7 @@ type identifier_attrs =
       { init : initial_value
       ; global : bool
       }
+  | ConstantAttr of static_init
   | LocalAttr
 [@@deriving show]
 

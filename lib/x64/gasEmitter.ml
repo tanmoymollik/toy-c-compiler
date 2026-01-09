@@ -158,12 +158,14 @@ let emit_top_level = function
   | StaticVar { name; global; alignment; init_list } ->
     let pname = emit_platform_name name in
     let emit_static_init = function
+      | CharInit i | UCharInit i -> ".byte " ^ Int32.to_string i
       | IntInit i -> ".long " ^ Int32.to_string i
       | UIntInit ui -> ".long " ^ Uint32.to_string ui
       | LongInit l -> ".quad " ^ Int64.to_string l
       | ULongInit ul -> ".quad " ^ Uint64.to_string ul
       | DoubleInit d -> ".quad " ^ emit_double d
       | ZeroInit { bytes } -> Printf.sprintf ".zero %d" bytes
+      | StringInit _ | PointerInit _ -> assert false
     in
     let static_inits = List.map emit_static_init init_list in
     let static_inits = String.concat ("\n" ^ indent) static_inits in

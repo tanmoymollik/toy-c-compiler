@@ -7,7 +7,7 @@ type tunary_op =
 
 type expression =
   | Constant of const * c_type
-  | CString of string
+  | CString of string * c_type
   | Var of identifier * c_type
   | Cast of
       { tgt : c_type
@@ -128,19 +128,19 @@ type program = Program of declaration list [@@deriving show]
 
 (* Returns the type of the expression. *)
 let get_type = function
-  | Constant (_, etp) -> etp
-  | CString _ -> SChar
-  | Var (_, etp) -> etp
-  | Cast { etp; _ } -> etp
-  | Unary (_, _, etp) -> etp
-  | TUnary (_, _, _, etp) -> etp
-  | Binary { etp; _ } -> etp
-  | CompoundAssign { etp; _ } -> etp
-  | Assignment { etp; _ } -> etp
-  | Conditional { etp; _ } -> etp
-  | FunctionCall (_, _, etp) -> etp
-  | Dereference (_, etp) -> etp
-  | AddrOf (_, etp) -> etp
+  | Constant (_, etp)
+  | CString (_, etp)
+  | Var (_, etp)
+  | Cast { etp; _ }
+  | Unary (_, _, etp)
+  | TUnary (_, _, _, etp)
+  | Binary { etp; _ }
+  | CompoundAssign { etp; _ }
+  | Assignment { etp; _ }
+  | Conditional { etp; _ }
+  | FunctionCall (_, _, etp)
+  | Dereference (_, etp)
+  | AddrOf (_, etp)
   | Subscript (_, _, etp) -> etp
 ;;
 
@@ -148,6 +148,7 @@ let is_lvalue = function
   | Var _ -> true
   | Dereference _ -> true
   | Subscript _ -> true
+  | CString _ -> true
   | _ -> false
 ;;
 

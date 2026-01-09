@@ -3,6 +3,7 @@ open Common
 open AsmUtils
 open Ast
 
+(* Maps static double constants to label. *)
 let static_consts : (int64 * int, string) Hashtbl.t = Hashtbl.create 10
 let imm_zr = Imm 0I
 let imm_one = Imm 1I

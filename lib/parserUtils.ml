@@ -104,6 +104,8 @@ let type_of specs =
   then Double
   else if cnt.(5) + cnt.(3) = 2
   then UChar
+  else if cnt.(4) + cnt.(3) = 2
+  then SChar
   else if cnt.(3) = 1
   then Char
   else if cnt.(5) + cnt.(1) = 2

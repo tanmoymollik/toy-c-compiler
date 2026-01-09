@@ -5,12 +5,29 @@ exception SemanticError = Errors.SemanticError
 
 (* Maps switch labels to their condition type. *)
 let switch_label_map : (string, c_type) Hashtbl.t = Hashtbl.create 100
+
+(* Maps statis string literals to labels. *)
+let static_consts : (string, string) Hashtbl.t = Hashtbl.create 10
 let add_for_label k v = Hashtbl.replace switch_label_map k v
 
 let get_for_label lbl =
   match Hashtbl.find_opt switch_label_map lbl with
   | Some v -> v
   | None -> assert false
+;;
+
+let get_const_string_label str =
+  match Hashtbl.find_opt static_consts str with
+  | Some lbl -> lbl
+  | None ->
+    let lbl = Core.make_unique_label Core.static_const_label in
+    Hashtbl.replace static_consts str lbl;
+    let str_init = StringInit { str; null_terminated = true } in
+    Hashtbl.replace
+      SymbolMap.symbol_map
+      lbl
+      { tp = CArray (Char, String.length str + 1); attrs = ConstantAttr str_init };
+    lbl
 ;;
 
 let typecheck_expression_binary bop lexp rexp =
@@ -96,7 +113,7 @@ let typecheck_expression_binary bop lexp rexp =
 
 let rec typecheck_expression symbol_map = function
   | Constant (c, _) -> Constant (c, TypeConverter.const_type c)
-  | CString _ -> assert false
+  | CString (s, _) -> CString (s, CArray (Char, String.length s + 1))
   | Var (Identifier iden, _) ->
     (match Hashtbl.find_opt symbol_map iden with
      | Some SymbolMap.{ tp = FunType _; _ } ->
@@ -115,10 +132,16 @@ let rec typecheck_expression symbol_map = function
     Cast { tgt; exp; etp = tgt }
   | Unary (uop, exp, _) ->
     let exp = typecheck_expression_and_convert symbol_map exp in
-    if uop = Complement && get_type exp = Double
+    let exp_t = get_type exp in
+    if uop = Complement && exp_t = Double
     then raise (SemanticError "Can't take the bitwise complement of a double");
-    if (uop = Complement || uop = Negate) && is_pointer_type (get_type exp)
+    if (uop = Complement || uop = Negate) && is_pointer_type exp_t
     then raise (SemanticError "Invalid unary operation on pointer type");
+    let exp =
+      if (uop = Complement || uop = Negate) && is_char_type exp_t
+      then convert_to Int exp
+      else exp
+    in
     let etp =
       match uop with
       | Not -> Int
@@ -219,10 +242,32 @@ and typecheck_expression_and_convert symbol_map exp =
 ;;
 
 let rec typecheck_static_init vtp = function
+  | SingleInit (CString (s, _), _) ->
+    (match vtp with
+     | CArray (tp, sz) ->
+       let s_len = String.length s in
+       if is_char_type tp |> not
+       then
+         raise (SemanticError "Can't initialize a non-character type with string literal");
+       if s_len > sz then raise (SemanticError "Too many characters in string literal");
+       let null_terminated = s_len < sz in
+       let zero_bytes = sz - s_len - 1 in
+       if zero_bytes > 0
+       then [ StringInit { str = s; null_terminated }; ZeroInit { bytes = zero_bytes } ]
+       else [ StringInit { str = s; null_terminated } ]
+     | Pointer tp ->
+       if tp <> Char
+       then
+         raise (SemanticError "Can't initialize a non-character type with string literal");
+       let name = get_const_string_label s in
+       [ PointerInit { name } ]
+     | _ ->
+       raise (SemanticError "Can't initialize a non-character type with string literal"))
   | SingleInit (Constant (c, _), _) ->
     let c =
       match vtp with
-      | Char | SChar | UChar -> assert false
+      | Char | SChar -> CharInit (TypeConverter.convert_to_char c)
+      | UChar -> UCharInit (TypeConverter.convert_to_uchar c)
       | Int -> IntInit (TypeConverter.convert_to_int c)
       | UInt -> UIntInit (TypeConverter.convert_to_uint c)
       | Long -> LongInit (TypeConverter.convert_to_long c)
@@ -294,6 +339,12 @@ let typecheck_file_scope_variable_decl symbol_map = function
 
 let rec typecheck_var_init symbol_map tgt init =
   match tgt, init with
+  | CArray (tp, sz), SingleInit (CString (s, _), _) ->
+    if is_char_type tp |> not
+    then raise (SemanticError "Can't initialize a non-character type with string literal");
+    if String.length s > sz
+    then raise (SemanticError "Too many characters in string literal");
+    SingleInit (CString (s, (* notused= *) Int), tgt)
   | _, SingleInit (exp, _) ->
     let exp = typecheck_expression_and_convert symbol_map exp in
     let exp = convert_by_assignment tgt exp in

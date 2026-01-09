@@ -191,7 +191,7 @@ primary_expression:
   | exp = postfix_expression; tuop = tuop
     { C_ast.TUnary (tuop, false, exp, Common.Int) }
   | strs = nonempty_list(CONST_STRING)
-    { C_ast.CString (String.concat "" strs) }
+    { C_ast.CString (String.concat "" strs, Common.Int) }
 
 simple_declarator:
   | name = identifier              { Ident name }
