@@ -30,6 +30,9 @@ type binary_op =
 [@@deriving show]
 
 type c_type =
+  | Char
+  | UChar
+  | SChar
   | Int
   | UInt
   | Long
@@ -44,6 +47,8 @@ type c_type =
 [@@deriving show]
 
 type const =
+  | ConstChar of int32
+  | ConstUChar of int32
   | ConstInt of int32
   | ConstUInt of
       (uint32[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint32.to_string v)])
@@ -78,6 +83,8 @@ type asm_type =
 
 (* Returns the size of type in bytes. *)
 let rec size = function
+  | SChar -> assert false
+  | Char | UChar -> 1
   | Int -> 4
   | UInt -> 4
   | Long -> 8
@@ -90,23 +97,26 @@ let rec size = function
 
 (* Returns whether the type is signed. *)
 let signed_c_type = function
-  | Int | Long | Double -> true
-  | UInt | ULong | Pointer _ | CArray _ -> false
+  | SChar -> assert false
+  | Char | Int | Long | Double -> true
+  | UChar | UInt | ULong | Pointer _ | CArray _ -> false
   | FunType _ -> assert false
 ;;
 
 let signed_const = function
-  | ConstInt _ | ConstLong _ -> true
-  | ConstUInt _ | ConstULong _ | ConstDouble _ -> false
+  | ConstChar _ | ConstInt _ | ConstLong _ -> true
+  | ConstUChar _ | ConstUInt _ | ConstULong _ | ConstDouble _ -> false
 ;;
 
 let is_arithmetic_type = function
-  | Int | UInt | Long | ULong | Double -> true
+  | SChar -> assert false
+  | Char | UChar | Int | UInt | Long | ULong | Double -> true
   | FunType _ | Pointer _ | CArray _ -> false
 ;;
 
 let is_integer_type = function
-  | Int | UInt | Long | ULong -> true
+  | SChar -> assert false
+  | Char | UChar | Int | UInt | Long | ULong -> true
   | Double | FunType _ | Pointer _ | CArray _ -> false
 ;;
 
@@ -134,6 +144,9 @@ let get_common_type t1 t2 =
 ;;
 
 let c_type_zero = function
+  | SChar -> assert false
+  | Char -> ConstChar 0l
+  | UChar -> ConstUChar 0l
   | Int -> ConstInt 0l
   | UInt -> ConstUInt 0i
   | Long -> ConstLong 0L
@@ -145,6 +158,9 @@ let c_type_zero = function
 ;;
 
 let c_type_one = function
+  | SChar -> assert false
+  | Char -> ConstChar 1l
+  | UChar -> ConstUChar 1l
   | Int -> ConstInt 1l
   | UInt -> ConstUInt 1i
   | Long -> ConstLong 1L
@@ -156,13 +172,24 @@ let c_type_one = function
 ;;
 
 let rec scalar_type_alignment = function
+  | SChar -> assert false
+  | Char | UChar -> 1
   | Int | UInt -> 4
   | Long | ULong | Double | Pointer _ -> 8
   | FunType _ -> assert false
   | CArray (tp, _) -> scalar_type_alignment tp
 ;;
 
+let get_asm_type_for_const = function
+  | ConstChar _ | ConstUChar _ -> Byte
+  | ConstInt _ | ConstUInt _ -> DWord
+  | ConstLong _ | ConstULong _ -> QWord
+  | ConstDouble _ -> AsmDouble
+;;
+
 let get_asm_type_for_c_type = function
+  | SChar -> assert false
+  | Char | UChar -> Byte
   | Int | UInt -> DWord
   | Long | ULong | Pointer _ -> QWord
   | Double -> AsmDouble

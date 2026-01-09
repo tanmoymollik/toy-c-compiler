@@ -45,6 +45,7 @@ let make_unique_name iden =
 
 let rec resolve_expression iden_map = function
   | Constant _ as ret -> ret
+  | CString _ -> assert false
   | Var (Identifier iden, etp) -> Var (Identifier (get_iden iden_map iden), etp)
   | Cast { tgt; exp; etp } -> Cast { tgt; exp = resolve_expression iden_map exp; etp }
   | Unary (uop, exp, etp) -> Unary (uop, resolve_expression iden_map exp, etp)

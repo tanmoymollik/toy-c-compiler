@@ -2,6 +2,8 @@ open Stdint
 open Common
 
 let const_type = function
+  | ConstChar _ -> Char
+  | ConstUChar _ -> UChar
   | ConstInt _ -> Int
   | ConstUInt _ -> UInt
   | ConstLong _ -> Long
@@ -11,7 +13,7 @@ let const_type = function
 
 (* Converts to c int which is 32 bits wide. *)
 let convert_to_int = function
-  | ConstInt i -> i
+  | ConstInt i | ConstChar i | ConstUChar i -> i
   | ConstUInt ui -> Int32.of_uint32 ui
   | ConstLong l -> Int32.of_int64 l
   | ConstULong ul -> Int32.of_uint64 ul
@@ -20,7 +22,7 @@ let convert_to_int = function
 
 (* Converts to c unsigned int which is 32 bits wide. *)
 let convert_to_uint = function
-  | ConstInt i -> Uint32.of_int32 i
+  | ConstInt i | ConstChar i | ConstUChar i -> Uint32.of_int32 i
   | ConstUInt ui -> ui
   | ConstLong l -> Uint32.of_int64 l
   | ConstULong ul -> Uint32.of_uint64 ul
@@ -29,7 +31,7 @@ let convert_to_uint = function
 
 (* Converts to c long which is 64 bits wide. *)
 let convert_to_long = function
-  | ConstInt i -> Int64.of_int32 i
+  | ConstInt i | ConstChar i | ConstUChar i -> Int64.of_int32 i
   | ConstUInt ui -> Int64.of_uint32 ui
   | ConstLong l -> l
   | ConstULong ul -> Int64.of_uint64 ul
@@ -38,7 +40,7 @@ let convert_to_long = function
 
 (* Converts to c unsigned long which is 64 bits wide. *)
 let convert_to_ulong = function
-  | ConstInt i -> Uint64.of_int32 i
+  | ConstInt i | ConstChar i | ConstUChar i -> Uint64.of_int32 i
   | ConstUInt ui -> Uint64.of_uint32 ui
   | ConstLong l -> Uint64.of_int64 l
   | ConstULong ul -> ul
@@ -47,7 +49,7 @@ let convert_to_ulong = function
 
 (* Converts to c double which is 64 bits wide. *)
 let convert_to_double = function
-  | ConstInt i -> Int32.to_float i
+  | ConstInt i | ConstChar i | ConstUChar i -> Int32.to_float i
   | ConstUInt ui -> Uint32.to_float ui
   | ConstLong l -> Int64.to_float l
   | ConstULong ul -> Uint64.to_float ul
@@ -177,6 +179,7 @@ let evaluate_binary bop l r =
   assert (const_type l = const_type r);
   let ctp = const_type l in
   match ctp with
+  | Char | SChar | UChar -> assert false
   | Int -> ConstInt (evaluate_int32_binary bop (convert_to_int l) (convert_to_int r))
   | UInt -> ConstUInt (evaluate_uint32_binary bop (convert_to_uint l) (convert_to_uint r))
   | Long -> ConstLong (evaluate_int64_binary bop (convert_to_long l) (convert_to_long r))
@@ -227,6 +230,7 @@ let evaluate_double_unary uop x =
 let evaluate_unary uop x =
   let ctp = const_type x in
   match ctp with
+  | Char | SChar | UChar -> assert false
   | Int -> ConstInt (evaluate_int32_unary uop (convert_to_int x))
   | UInt -> ConstUInt (evaluate_uint32_unary uop (convert_to_uint x))
   | Long -> ConstLong (evaluate_int64_unary uop (convert_to_long x))

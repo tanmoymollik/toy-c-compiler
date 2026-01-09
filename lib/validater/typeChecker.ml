@@ -96,6 +96,7 @@ let typecheck_expression_binary bop lexp rexp =
 
 let rec typecheck_expression symbol_map = function
   | Constant (c, _) -> Constant (c, TypeConverter.const_type c)
+  | CString _ -> assert false
   | Var (Identifier iden, _) ->
     (match Hashtbl.find_opt symbol_map iden with
      | Some SymbolMap.{ tp = FunType _; _ } ->
@@ -221,6 +222,7 @@ let rec typecheck_static_init vtp = function
   | SingleInit (Constant (c, _), _) ->
     let c =
       match vtp with
+      | Char | SChar | UChar -> assert false
       | Int -> IntInit (TypeConverter.convert_to_int c)
       | UInt -> UIntInit (TypeConverter.convert_to_uint c)
       | Long -> LongInit (TypeConverter.convert_to_long c)

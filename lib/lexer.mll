@@ -18,11 +18,15 @@ let const_ulong = digits+ (long_spec unsigned_spec | unsigned_spec long_spec)
 let fraction = digits* '.' digits+ | digits+ '.'
 let scientific = (digits* '.' digits+ | digits+ '.'?) ['E' 'e'] ['+' '-']? digits+
 let const_double = fraction | scientific
+let escape_char = '\\' ['\'' '"' '?' '\\' 'a' 'b' 'f' 'n' 'r' 't' 'v']
+let const_char = '\'' ([^ '\'' '\\' '\n'] | escape_char) '\''
+let const_string = '"' ([^ '"' '\\' '\n'] | escape_char)* '"'
 
 rule read =
   parse
   | "int"        { Parser.INT }
   | "long"       { Parser.LONG }
+  | "char"       { Parser.CHAR }
   | "signed"     { Parser.SIGNED }
   | "unsigned"   { Parser.UNSIGNED }
   | "double"     { Parser.DOUBLE }
@@ -90,6 +94,8 @@ rule read =
   | const_long   { parse_long (Lexing.lexeme lexbuf) }
   | const_ulong  { parse_ulong (Lexing.lexeme lexbuf) }
   | const_double { Parser.CONST_DOUBLE (Float.of_string (Lexing.lexeme lexbuf)) }
+  | const_char   { parse_char (Lexing.lexeme lexbuf) }
+  | const_string { parse_string (Lexing.lexeme lexbuf) }
   | white        { read lexbuf }
   | newline      { Lexing.new_line lexbuf; read lexbuf }
   | eof          { Parser.EOF }

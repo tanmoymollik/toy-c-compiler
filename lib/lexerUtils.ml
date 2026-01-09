@@ -47,3 +47,45 @@ let parse_ulong str =
   with
   | Failure msg -> raise_error msg str
 ;;
+
+let escape_char_value = function
+  | '\'' -> 39
+  | '"' -> 34
+  | '?' -> 63
+  | '\\' -> 92
+  | 'a' -> 7
+  | 'b' -> 8
+  | 'f' -> 12
+  | 'n' -> 10
+  | 'r' -> 13
+  | 't' -> 9
+  | 'v' -> 11
+  | _ -> assert false
+;;
+
+let parse_char str =
+  let c =
+    if String.get str 1 = '\\'
+    then String.get str 2 |> escape_char_value
+    else String.get str 1 |> Char.code
+  in
+  Parser.CONST_INT (Int32.of_int c)
+;;
+
+let parse_string str =
+  let str = String.length str - 2 |> String.sub str 1 in
+  let _, str =
+    String.fold_left
+      (fun (b, acc) c ->
+         if b
+         then (
+           let c = escape_char_value c |> Char.chr in
+           false, String.make 1 c |> String.cat acc)
+         else if c = '\\'
+         then true, acc
+         else false, String.make 1 c |> String.cat acc)
+      (false, "")
+      str
+  in
+  Parser.CONST_STRING str
+;;

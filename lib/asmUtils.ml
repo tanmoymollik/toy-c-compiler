@@ -37,10 +37,6 @@ let get_stack_address = function
 ;;
 
 let get_asm_type_for_val = function
-  | Tacky.Ast.Constant c ->
-    (match c with
-     | ConstInt _ | ConstUInt _ -> DWord
-     | ConstLong _ | ConstULong _ -> QWord
-     | ConstDouble _ -> AsmDouble)
+  | Tacky.Ast.Constant c -> get_asm_type_for_const c
   | Tacky.Ast.Var iden -> AsmSymbolMap.get_var_type iden
 ;;

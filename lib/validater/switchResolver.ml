@@ -37,10 +37,12 @@ let add_default k = Hashtbl.add default_map k true
 
 let rec evaluate_case_expression = function
   | Constant (c, _) -> c
+  | CString _ -> assert false
   | Var _ -> raise (SemanticError "Non-const value for switch-case")
   | Cast { tgt; exp; _ } ->
     let exp = evaluate_case_expression exp in
     (match tgt with
+     | Char | SChar | UChar -> assert false
      | Int -> ConstInt (TypeConverter.convert_to_int exp)
      | UInt -> ConstUInt (TypeConverter.convert_to_uint exp)
      | Long -> ConstLong (TypeConverter.convert_to_long exp)

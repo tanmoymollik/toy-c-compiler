@@ -171,6 +171,7 @@ and gen_expression_binary stk = function
 
 and gen_expression stk = function
   | C_ast.Constant (c, _) -> PlainOperand (Constant c)
+  | C_ast.CString _ -> assert false
   | C_ast.Var (iden, _) -> PlainOperand (Var iden)
   | C_ast.Cast { tgt; exp; _ } ->
     let src = gen_expression_and_convert stk exp in

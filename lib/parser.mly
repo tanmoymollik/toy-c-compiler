@@ -11,7 +11,8 @@ open ParserUtils
 %token <int64> CONST_LONG
 %token <Stdint.uint64> CONST_ULONG
 %token <float> CONST_DOUBLE
-%token INT LONG DOUBLE VOID
+%token <string> CONST_STRING
+%token INT LONG DOUBLE VOID CHAR
 %token SIGNED UNSIGNED STATIC EXTERN
 %token RETURN
 %token IF ELSE
@@ -189,6 +190,8 @@ primary_expression:
     { C_ast.FunctionCall (id, args, Common.Int) }
   | exp = postfix_expression; tuop = tuop
     { C_ast.TUnary (tuop, false, exp, Common.Int) }
+  | strs = nonempty_list(CONST_STRING)
+    { C_ast.CString (String.concat "" strs) }
 
 simple_declarator:
   | name = identifier              { Ident name }
@@ -261,6 +264,7 @@ c_initializer_tail:
   | INT       { IntSpec }
   | LONG      { LongSpec }
   | DOUBLE    { DoubleSpec }
+  | CHAR      { CharSpec }
   | SIGNED    { SignedSpec }
   | UNSIGNED  { UnsignedSpec }
 

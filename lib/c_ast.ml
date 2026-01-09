@@ -7,6 +7,7 @@ type tunary_op =
 
 type expression =
   | Constant of const * c_type
+  | CString of string
   | Var of identifier * c_type
   | Cast of
       { tgt : c_type
@@ -128,6 +129,7 @@ type program = Program of declaration list [@@deriving show]
 (* Returns the type of the expression. *)
 let get_type = function
   | Constant (_, etp) -> etp
+  | CString _ -> SChar
   | Var (_, etp) -> etp
   | Cast { etp; _ } -> etp
   | Unary (_, _, etp) -> etp

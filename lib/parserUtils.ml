@@ -6,6 +6,7 @@ type specifier =
   | IntSpec
   | LongSpec
   | DoubleSpec
+  | CharSpec
   | SignedSpec
   | UnsignedSpec
   | StaticSpec
@@ -66,30 +67,33 @@ let process_specs specs =
     | IntSpec -> 0
     | LongSpec -> 1
     | DoubleSpec -> 2
-    | SignedSpec -> 3
-    | UnsignedSpec -> 4
-    | StaticSpec -> 5
-    | ExternSpec -> 6
+    | CharSpec -> 3
+    | SignedSpec -> 4
+    | UnsignedSpec -> 5
+    | StaticSpec -> 6
+    | ExternSpec -> 7
   in
-  let cnt = Array.make 7 0 in
+  let cnt = Array.make 8 0 in
   let f spec = cnt.(idx_of spec) <- cnt.(idx_of spec) + 1 in
   List.iter f specs;
   if not (Array.for_all (fun x -> x <= 1) cnt)
-  then raise (SyntaxError "Multiple specifiers");
-  if cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) + cnt.(4) = 0
+  then raise (SyntaxError "Same specifier used multiple times");
+  if cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) + cnt.(4) + cnt.(5) = 0
   then raise (SyntaxError "No type specifier");
-  if cnt.(2) = 1 && cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) + cnt.(4) > 1
+  if cnt.(2) = 1 && cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) + cnt.(4) + cnt.(5) > 1
   then raise (SyntaxError "Invalid specifier for double");
-  if cnt.(3) + cnt.(4) > 1 then raise (SyntaxError "Multiple sign specifiers");
-  if cnt.(5) + cnt.(6) > 1 then raise (SyntaxError "Multiple storage specifiers");
+  if cnt.(3) = 1 && cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) > 1
+  then raise (SyntaxError "Invalid specifier for char");
+  if cnt.(4) + cnt.(5) > 1 then raise (SyntaxError "Multiple sign specifiers");
+  if cnt.(6) + cnt.(7) > 1 then raise (SyntaxError "Multiple storage specifiers");
   cnt
 ;;
 
 let storage specs =
   let cnt = process_specs specs in
-  if cnt.(5) = 1
+  if cnt.(6) = 1
   then Some C_ast.Static
-  else if cnt.(6) = 1
+  else if cnt.(7) = 1
   then Some C_ast.Extern
   else None
 ;;
@@ -98,9 +102,13 @@ let type_of specs =
   let cnt = process_specs specs in
   if cnt.(2) = 1
   then Double
-  else if cnt.(4) + cnt.(1) = 2
+  else if cnt.(5) + cnt.(3) = 2
+  then UChar
+  else if cnt.(3) = 1
+  then Char
+  else if cnt.(5) + cnt.(1) = 2
   then ULong
-  else if cnt.(4) = 1
+  else if cnt.(5) = 1
   then UInt
   else if cnt.(1) = 1
   then Long
