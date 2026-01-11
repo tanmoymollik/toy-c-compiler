@@ -13,8 +13,8 @@ let const_type = function
 
 (* Converts to c int which is 32 bits wide. *)
 let convert_to_int = function
-  | ConstInt i | ConstChar i | ConstUChar i -> i
-  | ConstUInt ui -> Int32.of_uint32 ui
+  | ConstInt i | ConstChar i -> i
+  | ConstUChar ui | ConstUInt ui -> Int32.of_uint32 ui
   | ConstLong l -> Int32.of_int64 l
   | ConstULong ul -> Int32.of_uint64 ul
   | ConstDouble d -> Int32.of_float d
@@ -22,8 +22,8 @@ let convert_to_int = function
 
 (* Converts to c unsigned int which is 32 bits wide. *)
 let convert_to_uint = function
-  | ConstInt i | ConstChar i | ConstUChar i -> Uint32.of_int32 i
-  | ConstUInt ui -> ui
+  | ConstInt i | ConstChar i -> Uint32.of_int32 i
+  | ConstUChar ui | ConstUInt ui -> ui
   | ConstLong l -> Uint32.of_int64 l
   | ConstULong ul -> Uint32.of_uint64 ul
   | ConstDouble d -> Uint32.of_float d
@@ -31,8 +31,8 @@ let convert_to_uint = function
 
 (* Converts to c long which is 64 bits wide. *)
 let convert_to_long = function
-  | ConstInt i | ConstChar i | ConstUChar i -> Int64.of_int32 i
-  | ConstUInt ui -> Int64.of_uint32 ui
+  | ConstInt i | ConstChar i -> Int64.of_int32 i
+  | ConstUChar ui | ConstUInt ui -> Int64.of_uint32 ui
   | ConstLong l -> l
   | ConstULong ul -> Int64.of_uint64 ul
   | ConstDouble d -> Int64.of_float d
@@ -40,8 +40,8 @@ let convert_to_long = function
 
 (* Converts to c unsigned long which is 64 bits wide. *)
 let convert_to_ulong = function
-  | ConstInt i | ConstChar i | ConstUChar i -> Uint64.of_int32 i
-  | ConstUInt ui -> Uint64.of_uint32 ui
+  | ConstInt i | ConstChar i -> Uint64.of_int32 i
+  | ConstUChar ui | ConstUInt ui -> Uint64.of_uint32 ui
   | ConstLong l -> Uint64.of_int64 l
   | ConstULong ul -> ul
   | ConstDouble d -> Uint64.of_float d
@@ -49,8 +49,8 @@ let convert_to_ulong = function
 
 (* Converts to c double which is 64 bits wide. *)
 let convert_to_double = function
-  | ConstInt i | ConstChar i | ConstUChar i -> Int32.to_float i
-  | ConstUInt ui -> Uint32.to_float ui
+  | ConstInt i | ConstChar i -> Int32.to_float i
+  | ConstUChar ui | ConstUInt ui -> Uint32.to_float ui
   | ConstLong l -> Int64.to_float l
   | ConstULong ul -> Uint64.to_float ul
   | ConstDouble d -> d

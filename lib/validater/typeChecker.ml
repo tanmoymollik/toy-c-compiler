@@ -5,29 +5,12 @@ exception SemanticError = Errors.SemanticError
 
 (* Maps switch labels to their condition type. *)
 let switch_label_map : (string, c_type) Hashtbl.t = Hashtbl.create 100
-
-(* Maps statis string literals to labels. *)
-let static_consts : (string, string) Hashtbl.t = Hashtbl.create 10
 let add_for_label k v = Hashtbl.replace switch_label_map k v
 
 let get_for_label lbl =
   match Hashtbl.find_opt switch_label_map lbl with
   | Some v -> v
   | None -> assert false
-;;
-
-let get_const_string_label str =
-  match Hashtbl.find_opt static_consts str with
-  | Some lbl -> lbl
-  | None ->
-    let lbl = Core.make_unique_label Core.static_const_label in
-    Hashtbl.replace static_consts str lbl;
-    let str_init = StringInit { str; null_terminated = true } in
-    Hashtbl.replace
-      SymbolMap.symbol_map
-      lbl
-      { tp = CArray (Char, String.length str + 1); attrs = ConstantAttr str_init };
-    lbl
 ;;
 
 let typecheck_expression_binary bop lexp rexp =
@@ -259,7 +242,7 @@ let rec typecheck_static_init vtp = function
        if tp <> Char
        then
          raise (SemanticError "Can't initialize a non-character type with string literal");
-       let name = get_const_string_label s in
+       let name = StaticStringMap.get_const_string_label s in
        [ PointerInit { name } ]
      | _ ->
        raise (SemanticError "Can't initialize a non-character type with string literal"))
@@ -344,7 +327,7 @@ let rec typecheck_var_init symbol_map tgt init =
     then raise (SemanticError "Can't initialize a non-character type with string literal");
     if String.length s > sz
     then raise (SemanticError "Too many characters in string literal");
-    SingleInit (CString (s, (* notused= *) Int), tgt)
+    SingleInit (CString (s, tgt), tgt)
   | _, SingleInit (exp, _) ->
     let exp = typecheck_expression_and_convert symbol_map exp in
     let exp = convert_by_assignment tgt exp in

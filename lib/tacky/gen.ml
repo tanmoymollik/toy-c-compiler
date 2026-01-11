@@ -171,7 +171,9 @@ and gen_expression_binary stk = function
 
 and gen_expression stk = function
   | C_ast.Constant (c, _) -> PlainOperand (Constant c)
-  | C_ast.CString _ -> assert false
+  | C_ast.CString (s, _) ->
+    let lbl = StaticStringMap.get_const_string_label s in
+    PlainOperand (Var (Identifier lbl))
   | C_ast.Var (iden, _) -> PlainOperand (Var iden)
   | C_ast.Cast { tgt; exp; _ } ->
     let src = gen_expression_and_convert stk exp in
@@ -281,6 +283,32 @@ and gen_expression_and_convert stk exp =
 ;;
 
 let rec gen_compound_initializer stk dst offset = function
+  | C_ast.SingleInit (CString (s, CArray (_, sz)), _) ->
+    let diff = sz - String.length s in
+    let fill = Char.chr 0 |> Bytes.make diff in
+    let bytes = Bytes.cat (Bytes.of_string s) fill in
+    let rec loop i =
+      let src, nxt =
+        if i + 8 <= sz
+        then (
+          let v = Bytes.get_int64_le bytes i |> Uint64.of_int64 in
+          Constant (ConstULong v), i + 8)
+        else if i + 4 <= sz
+        then (
+          let v = Bytes.get_int32_le bytes i |> Uint32.of_int32 in
+          Constant (ConstUInt v), i + 4)
+        else if i + 1 <= sz
+        then (
+          let v = Bytes.get_uint8 bytes i |> Uint32.of_int in
+          Constant (ConstUChar v), i + 1)
+        else Constant (ConstUChar 0i), 0
+      in
+      if nxt > 0
+      then (
+        Stack.push (CopyToOffset { src; dst; offset = i }) stk;
+        loop nxt)
+    in
+    loop 0
   | C_ast.SingleInit (exp, _) ->
     let src = gen_expression_and_convert stk exp in
     Stack.push (CopyToOffset { src; dst; offset }) stk
@@ -450,8 +478,20 @@ let gen_declaration = function
 ;;
 
 let convert_symbols_to_tacky acc =
-  SymbolMap.fold
-    (fun name global tp init_list -> StaticVar { name; global; tp; init_list })
+  Hashtbl.fold
+    (fun iden SymbolMap.{ tp; attrs } acc ->
+       match attrs with
+       | StaticAttr { init; global } ->
+         let name = Identifier iden in
+         (match init with
+          | Initial i -> StaticVar { name; global; tp; init_list = i } :: acc
+          | Tentative ->
+            let init_list = [ init_zero tp ] in
+            StaticVar { name; global; tp; init_list } :: acc
+          | NoInitial -> acc)
+       | ConstantAttr init -> StaticConstant { name = Identifier iden; tp; init } :: acc
+       | _ -> acc)
+    SymbolMap.symbol_map
     acc
 ;;
 

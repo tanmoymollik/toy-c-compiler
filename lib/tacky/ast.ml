@@ -102,6 +102,11 @@ type top_level =
       ; tp : c_type
       ; init_list : static_init list
       }
+  | StaticConstant of
+      { name : identifier
+      ; tp : c_type
+      ; init : static_init
+      }
 [@@deriving show]
 
 type program = Program of top_level list [@@deriving show]

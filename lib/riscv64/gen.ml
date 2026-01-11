@@ -48,6 +48,7 @@ let gen_top_level = function
     let body = List.concat_map InsFixer.fix_instruction ins in
     Function { name; body }
   | Tacky.Ast.StaticVar _ -> assert false
+  | Tacky.Ast.StaticConstant _ -> assert false
 ;;
 
 let gen_program = function

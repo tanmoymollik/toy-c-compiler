@@ -40,20 +40,3 @@ let is_global_fun = function
      | Some { attrs = FunAttr { global; _ }; _ } -> global
      | _ -> assert false)
 ;;
-
-let fold f acc =
-  Hashtbl.fold
-    (fun iden { tp; attrs } acc ->
-       match attrs with
-       | StaticAttr { init; global } ->
-         let name = Identifier iden in
-         (match init with
-          | Initial i -> f name global tp i :: acc
-          | Tentative ->
-            let init = [ init_zero tp ] in
-            f name global tp init :: acc
-          | NoInitial -> acc)
-       | _ -> acc)
-    symbol_map
-    acc
-;;

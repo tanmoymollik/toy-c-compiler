@@ -48,7 +48,8 @@ type c_type =
 
 type const =
   | ConstChar of int32
-  | ConstUChar of int32
+  | ConstUChar of
+      (uint32[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint32.to_string v)])
   | ConstInt of int32
   | ConstUInt of
       (uint32[@printer fun fmt v -> Format.fprintf fmt "%s" (Uint32.to_string v)])
@@ -157,7 +158,7 @@ let rec get_common_type t1 t2 =
 
 let c_type_zero = function
   | Char | SChar -> ConstChar 0l
-  | UChar -> ConstUChar 0l
+  | UChar -> ConstUChar 0i
   | Int -> ConstInt 0l
   | UInt -> ConstUInt 0i
   | Long -> ConstLong 0L
@@ -170,7 +171,7 @@ let c_type_zero = function
 
 let c_type_one = function
   | Char | SChar -> ConstChar 1l
-  | UChar -> ConstUChar 1l
+  | UChar -> ConstUChar 1i
   | Int -> ConstInt 1l
   | UInt -> ConstUInt 1i
   | Long -> ConstLong 1L

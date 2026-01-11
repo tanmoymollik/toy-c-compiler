@@ -35,7 +35,10 @@ let gen_asm_symbol_map () =
            | _ -> false
          in
          add_obj_info iden tp true is_extern
-       | ConstantAttr _ -> assert false
+       | ConstantAttr init ->
+         (match init with
+          | StringInit _ -> add_obj_info iden tp true false
+          | _ -> assert false)
        | FunAttr { defined; _ } ->
          let ret =
            match tp with

@@ -469,6 +469,7 @@ let gen_top_level = function
       | ByteArray { alignment; _ } -> alignment
     in
     StaticVar { name; global; alignment; init_list }
+  | Tacky.Ast.StaticConstant _ -> assert false
 ;;
 
 let gen_program = function
