@@ -299,9 +299,9 @@ let rec gen_compound_initializer stk dst offset = function
           Constant (ConstUInt v), i + 4)
         else if i + 1 <= sz
         then (
-          let v = Bytes.get_uint8 bytes i |> Uint32.of_int in
+          let v = Bytes.get_uint8 bytes i |> Int32.of_int in
           Constant (ConstUChar v), i + 1)
-        else Constant (ConstUChar 0i), 0
+        else Constant (ConstUChar 0l), 0
       in
       if nxt > 0
       then (

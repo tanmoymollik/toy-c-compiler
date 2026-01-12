@@ -42,9 +42,8 @@ let rec evaluate_case_expression = function
   | Cast { tgt; exp; _ } ->
     let exp = evaluate_case_expression exp in
     (match tgt with
-     | Char | SChar | UChar -> assert false
-     | Int -> ConstInt (TypeConverter.convert_to_int exp)
-     | UInt -> ConstUInt (TypeConverter.convert_to_uint exp)
+     | Char | SChar | Int -> ConstInt (TypeConverter.convert_to_int exp)
+     | UChar | UInt -> ConstUInt (TypeConverter.convert_to_uint exp)
      | Long -> ConstLong (TypeConverter.convert_to_long exp)
      | ULong -> ConstULong (TypeConverter.convert_to_ulong exp)
      | Double -> assert false

@@ -91,6 +91,7 @@ let typecheck_expression_binary bop lexp rexp =
     then raise (SemanticError "Can't use double with shift operator");
     if is_pointer_type tl || is_pointer_type tr
     then raise (SemanticError "Can't use pointer with shift operator");
+    let lexp = if is_char_type (get_type lexp) then convert_to Int lexp else lexp in
     Binary { bop; lexp; rexp; etp = get_type lexp }
 ;;
 
@@ -423,6 +424,12 @@ let rec typecheck_statement symbol_map ftp = function
     if get_type cnd = Double then raise (SemanticError "Double value in switch condition");
     add_for_label label (get_type cnd);
     let body = typecheck_statement symbol_map ftp body in
+    let cnd =
+      match get_type cnd with
+      | Char | SChar -> Cast { tgt = Int; exp = cnd; etp = Int }
+      | UChar -> Cast { tgt = UInt; exp = cnd; etp = UInt }
+      | _ -> cnd
+    in
     Switch { cnd; body; cases; default; label = Identifier label }
   | Case (exp, stmt, Identifier lbl) ->
     let exp = typecheck_expression_and_convert symbol_map exp in

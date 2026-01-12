@@ -13,8 +13,8 @@ let const_type = function
 
 (* Converts to c int which is 32 bits wide. *)
 let convert_to_int = function
-  | ConstInt i | ConstChar i -> i
-  | ConstUChar ui | ConstUInt ui -> Int32.of_uint32 ui
+  | ConstChar i | ConstUChar i | ConstInt i -> i
+  | ConstUInt ui -> Int32.of_uint32 ui
   | ConstLong l -> Int32.of_int64 l
   | ConstULong ul -> Int32.of_uint64 ul
   | ConstDouble d -> Int32.of_float d
@@ -22,8 +22,8 @@ let convert_to_int = function
 
 (* Converts to c unsigned int which is 32 bits wide. *)
 let convert_to_uint = function
-  | ConstInt i | ConstChar i -> Uint32.of_int32 i
-  | ConstUChar ui | ConstUInt ui -> ui
+  | ConstChar i | ConstUChar i | ConstInt i -> Uint32.of_int32 i
+  | ConstUInt ui -> ui
   | ConstLong l -> Uint32.of_int64 l
   | ConstULong ul -> Uint32.of_uint64 ul
   | ConstDouble d -> Uint32.of_float d
@@ -31,8 +31,8 @@ let convert_to_uint = function
 
 (* Converts to c long which is 64 bits wide. *)
 let convert_to_long = function
-  | ConstInt i | ConstChar i -> Int64.of_int32 i
-  | ConstUChar ui | ConstUInt ui -> Int64.of_uint32 ui
+  | ConstChar i | ConstUChar i | ConstInt i -> Int64.of_int32 i
+  | ConstUInt ui -> Int64.of_uint32 ui
   | ConstLong l -> l
   | ConstULong ul -> Int64.of_uint64 ul
   | ConstDouble d -> Int64.of_float d
@@ -40,8 +40,8 @@ let convert_to_long = function
 
 (* Converts to c unsigned long which is 64 bits wide. *)
 let convert_to_ulong = function
-  | ConstInt i | ConstChar i -> Uint64.of_int32 i
-  | ConstUChar ui | ConstUInt ui -> Uint64.of_uint32 ui
+  | ConstChar i | ConstUChar i | ConstInt i -> Uint64.of_int32 i
+  | ConstUInt ui -> Uint64.of_uint32 ui
   | ConstLong l -> Uint64.of_int64 l
   | ConstULong ul -> ul
   | ConstDouble d -> Uint64.of_float d
@@ -49,8 +49,8 @@ let convert_to_ulong = function
 
 (* Converts to c double which is 64 bits wide. *)
 let convert_to_double = function
-  | ConstInt i | ConstChar i -> Int32.to_float i
-  | ConstUChar ui | ConstUInt ui -> Uint32.to_float ui
+  | ConstChar i | ConstUChar i | ConstInt i -> Int32.to_float i
+  | ConstUInt ui -> Uint32.to_float ui
   | ConstLong l -> Int64.to_float l
   | ConstULong ul -> Uint64.to_float ul
   | ConstDouble d -> d
@@ -193,8 +193,8 @@ let evaluate_binary bop l r =
   assert (const_type l = const_type r);
   let ctp = const_type l in
   match ctp with
-  | Char | SChar | UChar -> assert false
-  | Int -> ConstInt (evaluate_int32_binary bop (convert_to_int l) (convert_to_int r))
+  | Char | SChar | UChar | Int ->
+    ConstInt (evaluate_int32_binary bop (convert_to_int l) (convert_to_int r))
   | UInt -> ConstUInt (evaluate_uint32_binary bop (convert_to_uint l) (convert_to_uint r))
   | Long -> ConstLong (evaluate_int64_binary bop (convert_to_long l) (convert_to_long r))
   | ULong ->
@@ -244,8 +244,7 @@ let evaluate_double_unary uop x =
 let evaluate_unary uop x =
   let ctp = const_type x in
   match ctp with
-  | Char | SChar | UChar -> assert false
-  | Int -> ConstInt (evaluate_int32_unary uop (convert_to_int x))
+  | Char | SChar | UChar | Int -> ConstInt (evaluate_int32_unary uop (convert_to_int x))
   | UInt -> ConstUInt (evaluate_uint32_unary uop (convert_to_uint x))
   | Long -> ConstLong (evaluate_int64_unary uop (convert_to_long x))
   | ULong -> ConstULong (evaluate_uint64_unary uop (convert_to_ulong x))
