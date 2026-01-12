@@ -38,15 +38,20 @@ let emit_instruction = function
       mov
       (emit_operand (src, tp))
       (emit_operand (dst, tp))
-  | Movsx { src; dst } ->
+  | Movsx { src; dst; src_tp; dst_tp } ->
     Printf.sprintf
-      "%smovslq %s, %s"
+      "%smovs%s %s, %s"
       indent
-      (emit_operand (src, DWord))
-      (emit_operand (dst, QWord))
-  | MovZeroExtend _ ->
-    (* Changed to Mov during ins fixing phase. *)
-    assert false
+      (emit_instruction_size src_tp ^ emit_instruction_size dst_tp)
+      (emit_operand (src, src_tp))
+      (emit_operand (dst, dst_tp))
+  | MovZeroExtend { src; dst; src_tp; dst_tp } ->
+    Printf.sprintf
+      "%smovz%s %s, %s"
+      indent
+      (emit_instruction_size src_tp ^ emit_instruction_size dst_tp)
+      (emit_operand (src, src_tp))
+      (emit_operand (dst, dst_tp))
   | Lea { src; dst } ->
     Printf.sprintf
       "%sleaq %s, %s"
@@ -142,6 +147,11 @@ let emit_instruction = function
 (* Double is emitted as hex long. *)
 let emit_double d = Printf.sprintf "0x%Lx" (Stdlib.Int64.bits_of_float d)
 
+let emit_string_init str null_terminated =
+  let st = if null_terminated then ".asciz" else ".ascii" in
+  st ^ " \"" ^ emit_string str ^ "\""
+;;
+
 let emit_top_level = function
   | Function { name; global; body } ->
     let name = emit_platform_name name in
@@ -165,7 +175,8 @@ let emit_top_level = function
       | ULongInit ul -> ".quad " ^ Uint64.to_string ul
       | DoubleInit d -> ".quad " ^ emit_double d
       | ZeroInit { bytes } -> Printf.sprintf ".zero %d" bytes
-      | StringInit _ | PointerInit _ -> assert false
+      | PointerInit { name } -> ".quad " ^ name
+      | StringInit { str; null_terminated } -> emit_string_init str null_terminated
     in
     let static_inits = List.map emit_static_init init_list in
     let static_inits = String.concat ("\n" ^ indent) static_inits in
@@ -178,15 +189,19 @@ let emit_top_level = function
     Stack.push entry data_section
   | StaticConstant { name; alignment; init } ->
     let entry =
+      let init =
+        match init with
+        | DoubleInit d -> ".quad " ^ emit_double d
+        | StringInit { str; null_terminated } -> emit_string_init str null_terminated
+        | _ -> assert false
+      in
       Printf.sprintf
-        "%s.align %d\n%s:\n%s.quad %s"
+        "%s.align %d\n%s:\n%s%s"
         indent
         alignment
         (emit_identifier name)
         indent
-        (match init with
-         | DoubleInit d -> emit_double d
-         | _ -> assert false)
+        init
     in
     Stack.push entry rodata_section
 ;;

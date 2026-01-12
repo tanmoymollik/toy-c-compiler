@@ -142,3 +142,14 @@ let emit_imm ul = function
   | DWord -> Uint32.to_string (Uint64.to_uint32 ul)
   | _ -> Uint64.to_string ul
 ;;
+
+let escape_char_value c =
+  let cx = Char.code c in
+  match cx with
+  | 39 | 34 | 63 | 92 | 7 | 8 | 12 | 10 | 13 | 9 | 11 -> Printf.sprintf "\\%03o" cx
+  | _ -> String.make 1 c
+;;
+
+let emit_string str =
+  String.fold_left (fun acc c -> escape_char_value c |> String.cat acc) "" str
+;;

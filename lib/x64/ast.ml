@@ -98,10 +98,14 @@ type instruction =
   | Movsx of
       { src : operand
       ; dst : operand
+      ; src_tp : asm_type
+      ; dst_tp : asm_type
       }
   | MovZeroExtend of
       { src : operand
       ; dst : operand
+      ; src_tp : asm_type
+      ; dst_tp : asm_type
       }
   | Lea of
       { src : operand

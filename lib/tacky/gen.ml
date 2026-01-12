@@ -305,7 +305,7 @@ let rec gen_compound_initializer stk dst offset = function
       in
       if nxt > 0
       then (
-        Stack.push (CopyToOffset { src; dst; offset = i }) stk;
+        Stack.push (CopyToOffset { src; dst; offset = offset + i }) stk;
         loop nxt)
     in
     loop 0

@@ -141,39 +141,59 @@ let fix_instruction func_name = function
          | _ -> Reg R10
        in
        [ Mov { src; dst = tmp_src; tp }; Mov { src = tmp_src; dst; tp } ]
-     | Imm i, _ when imm_out_of_range32 i && tp = DWord ->
+     (* | Imm i, _ when imm_out_of_range32 i && tp = DWord ->
        (* Truncate out of range imm value. *)
-       [ Mov { src = Imm (Uint64.of_int32 (Uint64.to_int32 i)); dst; tp } ]
+       [ Mov { src = Imm (Uint64.of_int32 (Uint64.to_int32 i)); dst; tp } ] *)
      | Imm i, (Memory _ | Data _) when imm_out_of_range32 i && tp != AsmDouble ->
        let tmp_src = Reg R10 in
        [ Mov { src; dst = tmp_src; tp }; Mov { src = tmp_src; dst; tp } ]
      | _ -> [ ret ])
-  | Movsx { src; dst } as ret ->
-    (match src with
-     | Imm _ ->
-       (match dst with
-        | Memory _ | Data _ ->
-          let tmp_src = Reg R10 in
-          let tmp_dst = Reg R11 in
-          [ Mov { src; dst = tmp_src; tp = DWord }
-          ; Movsx { src = tmp_src; dst = tmp_dst }
-          ; Mov { src = tmp_dst; dst; tp = QWord }
-          ]
-        | _ ->
-          let tmp_src = Reg R10 in
-          [ Mov { src; dst = tmp_src; tp = DWord }; Movsx { src = tmp_src; dst } ])
-     | _ ->
-       (match dst with
-        | Memory _ | Data _ ->
-          let tmp_dst = Reg R11 in
-          [ Movsx { src; dst = tmp_dst }; Mov { src = tmp_dst; dst; tp = QWord } ]
-        | _ -> [ ret ]))
-  | MovZeroExtend { src; dst } as ret ->
+  | Movsx { src; dst; src_tp; dst_tp } as ret ->
+    (match src, dst with
+     | Imm _, (Memory _ | Data _) ->
+       let tmp_src = Reg R10 in
+       let tmp_dst = Reg R11 in
+       [ Mov { src; dst = tmp_src; tp = src_tp }
+       ; Movsx { src = tmp_src; dst = tmp_dst; src_tp; dst_tp }
+       ; Mov { src = tmp_dst; dst; tp = dst_tp }
+       ]
+     | Imm _, _ ->
+       let tmp_src = Reg R10 in
+       [ Mov { src; dst = tmp_src; tp = src_tp }
+       ; Movsx { src = tmp_src; dst; src_tp; dst_tp }
+       ]
+     | _, (Memory _ | Data _) ->
+       let tmp_dst = Reg R11 in
+       [ Movsx { src; dst = tmp_dst; src_tp; dst_tp }
+       ; Mov { src = tmp_dst; dst; tp = dst_tp }
+       ]
+     | _ -> [ ret ])
+  | MovZeroExtend { src; dst; src_tp = DWord; dst_tp } ->
     (match dst with
      | Reg _ -> [ Mov { src; dst; tp = DWord } ]
      | Memory _ | Data _ ->
        let tmp_dst = Reg R11 in
-       [ Mov { src; dst = tmp_dst; tp = DWord }; Mov { src = tmp_dst; dst; tp = QWord } ]
+       [ Mov { src; dst = tmp_dst; tp = DWord }; Mov { src = tmp_dst; dst; tp = dst_tp } ]
+     | _ -> assert false)
+  | MovZeroExtend { src; dst; src_tp; dst_tp } as ret ->
+    (match src, dst with
+     | Imm _, (Memory _ | Data _) ->
+       let tmp_src = Reg R10 in
+       let tmp_dst = Reg R11 in
+       [ Mov { src; dst = tmp_src; tp = src_tp }
+       ; MovZeroExtend { src = tmp_src; dst = tmp_dst; src_tp; dst_tp }
+       ; Mov { src = tmp_dst; dst; tp = dst_tp }
+       ]
+     | Imm _, _ ->
+       let tmp_src = Reg R10 in
+       [ Mov { src; dst = tmp_src; tp = src_tp }
+       ; MovZeroExtend { src = tmp_src; dst; src_tp; dst_tp }
+       ]
+     | _, (Memory _ | Data _) ->
+       let tmp_dst = Reg R11 in
+       [ MovZeroExtend { src; dst = tmp_dst; src_tp; dst_tp }
+       ; Mov { src = tmp_dst; dst; tp = dst_tp }
+       ]
      | _ -> [ ret ])
   | Lea { src; dst } as ret ->
     (match dst with

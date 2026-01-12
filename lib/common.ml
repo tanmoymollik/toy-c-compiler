@@ -209,4 +209,22 @@ let get_asm_type_for_c_type = function
     ByteArray { sz; alignment }
 ;;
 
+let alignment_for_asm_type = function
+  | Byte -> 1
+  | Word -> 2
+  | DWord -> 4
+  | QWord -> 8
+  | AsmDouble -> 8
+  | ByteArray { alignment; _ } -> alignment
+;;
+
+let size_for_asm_type = function
+  | Byte -> 1
+  | Word -> 2
+  | DWord -> 4
+  | QWord -> 8
+  | AsmDouble -> 8
+  | ByteArray { sz; _ } -> sz
+;;
+
 let init_zero tp = ZeroInit { bytes = size tp }

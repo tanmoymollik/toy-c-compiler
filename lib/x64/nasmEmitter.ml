@@ -51,15 +51,18 @@ let emit_instruction = function
       mov
       (emit_operand (dst, tp))
       (emit_operand (src, tp))
-  | Movsx { src; dst } ->
+  | Movsx { src; dst; src_tp; dst_tp } ->
     Printf.sprintf
       "%smovsx %s, %s"
       indent
-      (emit_operand (dst, QWord))
-      (emit_operand (src, DWord))
-  | MovZeroExtend _ ->
-    (* Changed to Mov during ins fixing phase. *)
-    assert false
+      (emit_operand (dst, dst_tp))
+      (emit_operand (src, src_tp))
+  | MovZeroExtend { src; dst; src_tp; dst_tp } ->
+    Printf.sprintf
+      "%smovzx %s, %s"
+      indent
+      (emit_operand (dst, dst_tp))
+      (emit_operand (src, src_tp))
   | Lea { src; dst } ->
     Printf.sprintf
       "%slea %s, %s"
@@ -136,6 +139,11 @@ let emit_instruction = function
 
 let emit_double d = Printf.sprintf "0x%Lx" (Stdlib.Int64.bits_of_float d)
 
+let emit_string_init str null_terminated =
+  let en = if null_terminated then "\\000" else "" in
+  "db `" ^ emit_string str ^ en ^ "`"
+;;
+
 let emit_top_level = function
   | Function { name; global; body } ->
     let name = emit_platform_name name in
@@ -159,7 +167,8 @@ let emit_top_level = function
       | ULongInit ul -> "dq " ^ Uint64.to_string ul
       | DoubleInit d -> "dq " ^ emit_double d
       | ZeroInit { bytes } -> Printf.sprintf "times %d db 0" bytes
-      | StringInit _ | PointerInit _ -> assert false
+      | PointerInit { name } -> "dq " ^ name
+      | StringInit { str; null_terminated } -> emit_string_init str null_terminated
     in
     let static_inits = List.map emit_static_init init_list in
     let static_inits = String.concat (",\n" ^ indent) static_inits in
@@ -172,15 +181,19 @@ let emit_top_level = function
     Stack.push entry data_section
   | StaticConstant { name; alignment; init } ->
     let entry =
+      let init =
+        match init with
+        | DoubleInit d -> "dq " ^ emit_double d
+        | StringInit { str; null_terminated } -> emit_string_init str null_terminated
+        | _ -> assert false
+      in
       Printf.sprintf
-        "%salign %d\n%s%s dq %s"
+        "%salign %d\n%s%s %s"
         indent
         alignment
         indent
         (emit_identifier name)
-        (match init with
-         | DoubleInit d -> emit_double d
-         | _ -> assert false)
+        init
     in
     Stack.push entry rodata_section
 ;;

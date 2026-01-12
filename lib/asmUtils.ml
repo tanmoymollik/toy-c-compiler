@@ -21,14 +21,9 @@ let get_stack_address = function
     (match Hashtbl.find_opt var_map var_name with
      | Some v -> v
      | None ->
-       let b_sz, alignment =
-         match AsmSymbolMap.get_var_type var_iden with
-         | DWord -> 4, 1
-         | QWord -> 8, 1
-         | AsmDouble -> 8, 1
-         | ByteArray { sz; alignment } -> sz, alignment
-         | _ -> assert false
-       in
+       let asm_tp = AsmSymbolMap.get_var_type var_iden in
+       let b_sz = size_for_asm_type asm_tp in
+       let alignment = alignment_for_asm_type asm_tp in
        let stk_ptr = get_fun_stack_alloc fun_iden + b_sz in
        let stk_ptr = align_by stk_ptr alignment in
        Hashtbl.replace fun_map fun_name stk_ptr;

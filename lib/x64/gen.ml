@@ -311,27 +311,44 @@ let gen_instruction = function
     @ stack_dealloc
     @ ret_ins
   | Tacky.Ast.SignExtend { src; dst } ->
+    let src_tp = get_asm_type_for_val src in
+    let dst_tp = get_asm_type_for_val dst in
     let src = gen_value src in
     let dst = gen_value dst in
-    [ Movsx { src; dst } ]
+    [ Movsx { src; dst; src_tp; dst_tp } ]
   | Tacky.Ast.Truncate { src; dst } ->
+    let tp = get_asm_type_for_val dst in
     let src = gen_value src in
     let dst = gen_value dst in
-    [ Mov { src; dst; tp = DWord } ]
+    [ Mov { src; dst; tp } ]
   | Tacky.Ast.ZeroExtend { src; dst } ->
+    let src_tp = get_asm_type_for_val src in
+    let dst_tp = get_asm_type_for_val dst in
     let src = gen_value src in
     let dst = gen_value dst in
-    [ MovZeroExtend { src; dst } ]
+    [ MovZeroExtend { src; dst; src_tp; dst_tp } ]
   | Tacky.Ast.IntToDouble { src; dst } ->
     let src_tp = get_asm_type_for_val src in
     let src = gen_value src in
     let dst = gen_value dst in
-    [ Cvtsi2sd { src; dst; src_tp } ]
+    (match src_tp with
+     | Byte ->
+       let tmp_src = Reg Ax in
+       [ Movsx { src; dst = tmp_src; src_tp; dst_tp = DWord }
+       ; Cvtsi2sd { src = tmp_src; dst; src_tp = DWord }
+       ]
+     | _ -> [ Cvtsi2sd { src; dst; src_tp } ])
   | Tacky.Ast.DoubleToInt { src; dst } ->
     let dst_tp = get_asm_type_for_val dst in
     let src = gen_value src in
     let dst = gen_value dst in
-    [ Cvttsd2si { src; dst; dst_tp } ]
+    (match dst_tp with
+     | Byte ->
+       let tmp_dst = Reg Ax in
+       [ Cvttsd2si { src; dst = tmp_dst; dst_tp = DWord }
+       ; Mov { src = tmp_dst; dst; tp = Byte }
+       ]
+     | _ -> [ Cvttsd2si { src; dst; dst_tp } ])
   | Tacky.Ast.UIntToDouble { src; dst } ->
     let src_tp = get_asm_type_for_val src in
     let src = gen_value src in
@@ -339,9 +356,14 @@ let gen_instruction = function
     let label1 = Core.make_unique_label "UIntToDouble" in
     let label2 = Core.make_unique_label "UIntToDoubleEnd" in
     (match src_tp with
+     | Byte ->
+       let tmp_src = Reg Ax in
+       [ MovZeroExtend { src; dst = tmp_src; src_tp; dst_tp = DWord }
+       ; Cvtsi2sd { src = tmp_src; dst; src_tp = DWord }
+       ]
      | DWord ->
        let tmp_src = Reg Ax in
-       [ MovZeroExtend { src; dst = tmp_src }
+       [ MovZeroExtend { src; dst = tmp_src; src_tp; dst_tp = QWord }
        ; Cvtsi2sd { src = tmp_src; dst; src_tp = QWord }
        ]
      | QWord ->
@@ -367,6 +389,11 @@ let gen_instruction = function
     let src = gen_value src in
     let dst = gen_value dst in
     (match dst_tp with
+     | Byte ->
+       let tmp_dst = Reg Ax in
+       [ Cvttsd2si { src; dst = tmp_dst; dst_tp = DWord }
+       ; Mov { src = tmp_dst; dst; tp = Byte }
+       ]
      | DWord ->
        let tmp_dst = Reg Ax in
        [ Cvttsd2si { src; dst = tmp_dst; dst_tp = QWord }
@@ -459,17 +486,11 @@ let gen_top_level = function
     let body = param_ins @ List.concat_map gen_instruction body in
     Function { name; global; body }
   | Tacky.Ast.StaticVar { name; global; tp; init_list } ->
-    let alignment =
-      match get_asm_type_for_c_type tp with
-      | Byte -> 1
-      | Word -> 2
-      | DWord -> 4
-      | QWord -> 8
-      | AsmDouble -> 8
-      | ByteArray { alignment; _ } -> alignment
-    in
+    let alignment = get_asm_type_for_c_type tp |> alignment_for_asm_type in
     StaticVar { name; global; alignment; init_list }
-  | Tacky.Ast.StaticConstant _ -> assert false
+  | Tacky.Ast.StaticConstant { name; tp; init } ->
+    let alignment = get_asm_type_for_c_type tp |> alignment_for_asm_type in
+    StaticConstant { name; alignment; init }
 ;;
 
 let gen_program = function

@@ -24,15 +24,19 @@ let resolve_instruction fun_name register_map = function
       ; dst = resolve_operand fun_name register_map dst
       ; tp
       }
-  | Movsx { src; dst } ->
+  | Movsx { src; dst; src_tp; dst_tp } ->
     Movsx
       { src = resolve_operand fun_name register_map src
       ; dst = resolve_operand fun_name register_map dst
+      ; src_tp
+      ; dst_tp
       }
-  | MovZeroExtend { src; dst } ->
+  | MovZeroExtend { src; dst; src_tp; dst_tp } ->
     MovZeroExtend
       { src = resolve_operand fun_name register_map src
       ; dst = resolve_operand fun_name register_map dst
+      ; src_tp
+      ; dst_tp
       }
   | Lea { src; dst } ->
     Lea
