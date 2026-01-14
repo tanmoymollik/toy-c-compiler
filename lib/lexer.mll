@@ -33,6 +33,7 @@ rule read =
   | "static"     { Parser.STATIC }
   | "extern"     { Parser.EXTERN }
   | "void"       { Parser.VOID }
+  | "sizeof"     { Parser.SIZEOF }
   | "return"     { Parser.RETURN }
   | "if"         { Parser.IF }
   | "else"       { Parser.ELSE }

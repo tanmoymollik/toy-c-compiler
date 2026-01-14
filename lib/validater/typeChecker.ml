@@ -217,6 +217,7 @@ let rec typecheck_expression symbol_map = function
       | _ -> assert false
     in
     Subscript (e1, e2, ptr_ref)
+  | C_ast.SizeOf _ | C_ast.SizeOfT _ -> assert false
 
 and typecheck_expression_and_convert symbol_map exp =
   let exp = typecheck_expression symbol_map exp in
@@ -257,6 +258,7 @@ let rec typecheck_static_init vtp = function
       | Long -> LongInit (TypeConverter.convert_to_long c)
       | ULong -> ULongInit (TypeConverter.convert_to_ulong c)
       | Double -> DoubleInit (TypeConverter.convert_to_double c)
+      | Void -> assert false
       | FunType _ -> assert false
       | Pointer _ ->
         let v = TypeConverter.convert_to_long c in
@@ -392,8 +394,8 @@ let typecheck_for_init symbol_map = function
 
 let rec typecheck_statement symbol_map ftp = function
   | Return exp ->
-    let exp = typecheck_expression_and_convert symbol_map exp in
-    let exp = convert_by_assignment ftp exp in
+    let exp = Option.map (typecheck_expression_and_convert symbol_map) exp in
+    let exp = Option.map (convert_by_assignment ftp) exp in
     Return exp
   | Expression exp -> Expression (typecheck_expression_and_convert symbol_map exp)
   | If { cnd; thn; els } ->

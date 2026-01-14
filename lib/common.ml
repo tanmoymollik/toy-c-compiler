@@ -38,6 +38,7 @@ type c_type =
   | Long
   | ULong
   | Double
+  | Void
   | FunType of
       { params : c_type list
       ; ret : c_type
@@ -96,6 +97,7 @@ let rec size = function
   | Long -> 8
   | ULong -> 8
   | Double -> 8
+  | Void -> assert false
   | FunType _ -> assert false
   | Pointer _ -> 8
   | CArray (tp, sz) -> sz * size tp
@@ -105,6 +107,7 @@ let rec size = function
 let signed_c_type = function
   | Char | SChar | Int | Long | Double -> true
   | UChar | UInt | ULong | Pointer _ | CArray _ -> false
+  | Void -> assert false
   | FunType _ -> assert false
 ;;
 
@@ -115,11 +118,13 @@ let signed_const = function
 
 let is_arithmetic_type = function
   | Char | SChar | UChar | Int | UInt | Long | ULong | Double -> true
+  | Void -> assert false
   | FunType _ | Pointer _ | CArray _ -> false
 ;;
 
 let is_integer_type = function
   | Char | SChar | UChar | Int | UInt | Long | ULong -> true
+  | Void -> assert false
   | Double | FunType _ | Pointer _ | CArray _ -> false
 ;;
 
@@ -163,6 +168,7 @@ let c_type_zero = function
   | Long -> ConstLong 0L
   | ULong -> ConstULong 0I
   | Double -> ConstDouble 0.0
+  | Void -> assert false
   | FunType _ -> assert false
   | Pointer _ -> ConstULong 0I
   | CArray _ -> assert false
@@ -176,6 +182,7 @@ let c_type_one = function
   | Long -> ConstLong 1L
   | ULong -> ConstULong 1I
   | Double -> ConstDouble 1.0
+  | Void -> assert false
   | FunType _ -> assert false
   | Pointer _ -> ConstLong 1L
   | CArray _ -> assert false
@@ -185,6 +192,7 @@ let rec scalar_type_alignment = function
   | Char | SChar | UChar -> 1
   | Int | UInt -> 4
   | Long | ULong | Double | Pointer _ -> 8
+  | Void -> assert false
   | FunType _ -> assert false
   | CArray (tp, _) -> scalar_type_alignment tp
 ;;
@@ -201,6 +209,7 @@ let get_asm_type_for_c_type = function
   | Int | UInt -> DWord
   | Long | ULong | Pointer _ -> QWord
   | Double -> AsmDouble
+  | Void -> assert false
   | FunType _ -> assert false
   | CArray (tp, sz) ->
     let sz = sz * size tp in

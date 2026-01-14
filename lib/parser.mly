@@ -14,7 +14,7 @@ open ParserUtils
 %token <string> CONST_STRING
 %token INT LONG DOUBLE VOID CHAR
 %token SIGNED UNSIGNED STATIC EXTERN
-%token RETURN
+%token SIZEOF RETURN
 %token IF ELSE
 %token <string> GOTO
 %token DO WHILE FOR
@@ -99,7 +99,7 @@ block_item:
   | d = declaration { C_ast.D d }
 
 statement:
-  | RETURN; exp = expression; SEMICOLON
+  | RETURN; exp = option(expression); SEMICOLON
     { C_ast.Return exp }
   | exp = expression; SEMICOLON                              
     { C_ast.Expression exp }
@@ -143,7 +143,7 @@ for_init:
   | e = option(expression); SEMICOLON { C_ast.InitExp e }
 
 expression:
-  | f = unary_expression
+  | f = cast_expression
     { f }
   | lexp = expression; bop = bop; rexp = expression
     { C_ast.Binary { bop; lexp; rexp; etp = Common.Int } }
@@ -153,24 +153,27 @@ expression:
     { C_ast.Conditional { cnd; lhs; rhs; etp = Common.Int } }
 
 unary_expression:
-  | uop = uop; exp = unary_expression           { C_ast.Unary (uop, exp, Common.Int) }
-  | ASTERISK; exp = unary_expression            { C_ast.Dereference (exp, Common.Int) }
-  | AMPERSAND; exp = unary_expression           { C_ast.AddrOf (exp, Common.Int) }
-  | tuop = tuop; exp = unary_expression         { C_ast.TUnary (tuop, true, exp, Common.Int) }
-  | LPAREN;
-    specs = nonempty_list(type_specifier);
-    d = option(abstract_declarator); RPAREN; exp = unary_expression 
+  | uop = uop; exp = cast_expression        { C_ast.Unary (uop, exp, Common.Int) }
+  | ASTERISK; exp = cast_expression         { C_ast.Dereference (exp, Common.Int) }
+  | AMPERSAND; exp = cast_expression        { C_ast.AddrOf (exp, Common.Int) }
+  | tuop = tuop; exp = unary_expression     { C_ast.TUnary (tuop, true, exp, Common.Int) }
+  | SIZEOF; exp = unary_expression          { C_ast.SizeOf (exp, Common.Int) }
+  | SIZEOF; LPAREN; tgt = type_name; RPAREN { C_ast.SizeOfT (tgt, Common.Int) }
+  | p = postfix_expression                  { p }
+
+type_name:
+  | specs = nonempty_list(type_specifier); d = option(abstract_declarator)
     {
       let tp = type_of specs in
-      let tgt =
-        match d with
-        | Some d -> process_abstract_declarator tp d
-        | None -> tp
-      in
-      C_ast.Cast { tgt; exp; etp = Common.Int }
+      match d with
+      | Some d -> process_abstract_declarator tp d
+      | None -> tp
     }
-  | p = postfix_expression
-    { p }
+
+cast_expression:
+  | LPAREN; tgt = type_name; RPAREN; exp = cast_expression
+    { C_ast.Cast { tgt; exp; etp = Common.Int } }
+  | exp = unary_expression    { exp }
 
 postfix_expression:
   | p = primary_expression; inds = list(postfix_expression_suffix)
@@ -265,6 +268,7 @@ c_initializer_tail:
   | LONG      { LongSpec }
   | DOUBLE    { DoubleSpec }
   | CHAR      { CharSpec }
+  | VOID      { VoidSpec }
   | SIGNED    { SignedSpec }
   | UNSIGNED  { UnsignedSpec }
 

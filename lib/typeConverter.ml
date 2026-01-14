@@ -201,6 +201,7 @@ let evaluate_binary bop l r =
     ConstULong (evaluate_uint64_binary bop (convert_to_ulong l) (convert_to_ulong r))
   | Double ->
     ConstDouble (evaluate_double_binary bop (convert_to_double l) (convert_to_double r))
+  | Void -> assert false
   | FunType _ -> assert false
   | Pointer _ -> assert false
   | CArray _ -> assert false
@@ -249,6 +250,7 @@ let evaluate_unary uop x =
   | Long -> ConstLong (evaluate_int64_unary uop (convert_to_long x))
   | ULong -> ConstULong (evaluate_uint64_unary uop (convert_to_ulong x))
   | Double -> ConstDouble (evaluate_double_unary uop (convert_to_double x))
+  | Void -> assert false
   | FunType _ -> assert false
   | Pointer _ -> assert false
   | CArray _ -> assert false

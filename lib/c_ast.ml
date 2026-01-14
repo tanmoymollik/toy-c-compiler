@@ -44,6 +44,8 @@ type expression =
   | Dereference of expression * c_type
   | AddrOf of expression * c_type
   | Subscript of expression * expression * c_type
+  | SizeOf of expression * c_type
+  | SizeOfT of c_type * c_type
 [@@deriving show]
 
 type c_initializer =
@@ -70,7 +72,7 @@ type for_init =
 [@@deriving show]
 
 type statement =
-  | Return of expression
+  | Return of expression option
   | Expression of expression
   | If of
       { cnd : expression
@@ -142,6 +144,8 @@ let get_type = function
   | Dereference (_, etp)
   | AddrOf (_, etp)
   | Subscript (_, _, etp) -> etp
+  | SizeOf (_, etp) -> etp
+  | SizeOfT (_, etp) -> etp
 ;;
 
 let is_lvalue = function

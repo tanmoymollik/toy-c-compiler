@@ -271,6 +271,7 @@ and gen_expression stk = function
     let ind = gen_expression_and_convert stk ind in
     Stack.push (AddPtr { src_ptr = ptr; ind; scale = size etp; dst }) stk;
     DereferencedPointer dst
+  | C_ast.SizeOf _ | C_ast.SizeOfT _ -> assert false
 
 and gen_expression_and_convert stk exp =
   let res = gen_expression stk exp in
@@ -346,7 +347,8 @@ let gen_for_init stk = function
 ;;
 
 let rec gen_statement stk = function
-  | C_ast.Return exp ->
+  | C_ast.Return None -> assert false
+  | C_ast.Return (Some exp) ->
     let exp_val = gen_expression_and_convert stk exp in
     Stack.push (Ret exp_val) stk
   | C_ast.Expression exp ->

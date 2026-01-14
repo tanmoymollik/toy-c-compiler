@@ -47,6 +47,7 @@ let rec evaluate_case_expression = function
      | Long -> ConstLong (TypeConverter.convert_to_long exp)
      | ULong -> ConstULong (TypeConverter.convert_to_ulong exp)
      | Double -> assert false
+     | Void -> assert false
      | FunType _ -> assert false
      | Pointer _ -> assert false
      | CArray _ -> assert false)
@@ -68,6 +69,7 @@ let rec evaluate_case_expression = function
   | Dereference _ -> raise (SemanticError "Non-const value for switch-case")
   | AddrOf _ -> raise (SemanticError "Non-const value for switch-case")
   | Subscript _ -> raise (SemanticError "Non-const value for switch-case")
+  | C_ast.SizeOf _ | C_ast.SizeOfT _ -> assert false
 ;;
 
 let rec resolve_statement = function
