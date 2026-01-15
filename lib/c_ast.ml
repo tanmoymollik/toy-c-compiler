@@ -179,6 +179,10 @@ let get_common_pointer_type e1 e2 =
   then t2
   else if is_null_pointer_const e2
   then t1
+  else if t1 = Pointer Void && is_pointer_type t2
+  then t1
+  else if t2 = Pointer Void && is_pointer_type t1
+  then t2
   else raise (Errors.SemanticError "Incompatible pointer types")
 ;;
 
@@ -186,9 +190,13 @@ let convert_by_assignment tgt exp =
   if get_type exp = tgt
   then exp
   else if is_arithmetic_type (get_type exp) && is_arithmetic_type tgt
-  then Cast { tgt; exp; etp = tgt }
+  then convert_to tgt exp
   else if is_null_pointer_const exp && is_pointer_type tgt
-  then Cast { tgt; exp; etp = tgt }
+  then convert_to tgt exp
+  else if tgt = Pointer Void && get_type exp |> is_pointer_type
+  then convert_to tgt exp
+  else if is_pointer_type tgt && get_type exp = Pointer Void
+  then convert_to tgt exp
   else raise (Errors.SemanticError "Cannot convert type for assignment")
 ;;
 

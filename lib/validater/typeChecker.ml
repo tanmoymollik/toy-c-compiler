@@ -13,6 +13,17 @@ let get_for_label lbl =
   | None -> assert false
 ;;
 
+let rec validate_type_specifier = function
+  | CArray (tp, _) ->
+    if is_complete tp |> not then raise (SemanticError "Illegal array of incomplete type");
+    validate_type_specifier tp
+  | Pointer tp -> validate_type_specifier tp
+  | FunType { params; ret } ->
+    List.iter validate_type_specifier params;
+    validate_type_specifier ret
+  | _ -> ()
+;;
+
 let typecheck_expression_binary bop lexp rexp =
   let tl = get_type lexp in
   let tr = get_type rexp in
@@ -23,17 +34,20 @@ let typecheck_expression_binary bop lexp rexp =
     convert_to common_t lexp, convert_to common_t rexp
   in
   match bop with
-  | And | Or -> Binary { bop; lexp; rexp; etp = Int }
+  | And | Or ->
+    if is_scalar tl |> not || is_scalar tr |> not
+    then raise (SemanticError "Logical operators can't have non-scalar expressions");
+    Binary { bop; lexp; rexp; etp = Int }
   | Add ->
     if is_arithmetic_type tl && is_arithmetic_type tr
     then (
       let lexp, rexp = convert lexp rexp in
       Binary { bop; lexp; rexp; etp = get_type lexp })
-    else if is_pointer_type tl && is_integer_type tr
+    else if is_pointer_to_complete tl && is_integer_type tr
     then (
       let rexp = convert_to Long rexp in
       Binary { bop; lexp; rexp; etp = get_type lexp })
-    else if is_integer_type tl && is_pointer_type tr
+    else if is_integer_type tl && is_pointer_to_complete tr
     then (
       let lexp = convert_to Long lexp in
       Binary { bop; lexp; rexp; etp = get_type rexp })
@@ -43,11 +57,11 @@ let typecheck_expression_binary bop lexp rexp =
     then (
       let lexp, rexp = convert lexp rexp in
       Binary { bop; lexp; rexp; etp = get_type lexp })
-    else if is_pointer_type tl && is_integer_type tr
+    else if is_pointer_to_complete tl && is_integer_type tr
     then (
       let rexp = convert_to Long rexp in
       Binary { bop; lexp; rexp; etp = get_type lexp })
-    else if is_pointer_type tl && tl = tr
+    else if is_pointer_to_complete tl && tl = tr
     then Binary { bop; lexp; rexp; etp = Long }
     else raise (SemanticError "Invalid operands for subtraction")
   | Mul | Div ->
@@ -73,7 +87,9 @@ let typecheck_expression_binary bop lexp rexp =
     let common_t =
       if is_pointer_type tl || is_pointer_type tr
       then get_common_pointer_type lexp rexp
-      else get_common_type tl tr
+      else if is_arithmetic_type tl && is_arithmetic_type tr
+      then get_common_type tl tr
+      else raise (SemanticError "Invalid operands for equality expression")
     in
     let lexp = convert_to common_t lexp in
     let rexp = convert_to common_t rexp in
@@ -105,15 +121,21 @@ let rec typecheck_expression symbol_map = function
      | Some SymbolMap.{ tp; _ } -> Var (Identifier iden, tp)
      | None -> assert false)
   | Cast { tgt; exp; _ } ->
+    validate_type_specifier tgt;
     let exp = typecheck_expression_and_convert symbol_map exp in
     let etp = get_type exp in
     (match tgt with
+     | Void -> Cast { tgt; exp; etp = tgt }
      | Double when is_pointer_type etp ->
        raise (SemanticError "Can't cast pointer to double")
      | Pointer _ when etp = Double -> raise (SemanticError "Can't cast double to pointer")
      | CArray _ -> raise (SemanticError "Can't cast to array type")
-     | _ -> ());
-    Cast { tgt; exp; etp = tgt }
+     | t when is_scalar t |> not ->
+       raise (SemanticError "Can only cast to scalar type or void")
+     | _ ->
+       if is_scalar etp |> not
+       then raise (SemanticError "Can't cast non-scalar expressions to scalar type");
+       Cast { tgt; exp; etp = tgt })
   | Unary (uop, exp, _) ->
     let exp = typecheck_expression_and_convert symbol_map exp in
     let exp_t = get_type exp in
@@ -121,6 +143,8 @@ let rec typecheck_expression symbol_map = function
     then raise (SemanticError "Can't take the bitwise complement of a double");
     if (uop = Complement || uop = Negate) && is_pointer_type exp_t
     then raise (SemanticError "Invalid unary operation on pointer type");
+    if is_scalar exp_t |> not
+    then raise (SemanticError "Logical operators only apply to scalar expressions");
     let exp =
       if (uop = Complement || uop = Negate) && is_char_type exp_t
       then convert_to Int exp
@@ -165,19 +189,25 @@ let rec typecheck_expression symbol_map = function
     let rval = convert_by_assignment etp rval in
     Assignment { lval; rval; etp }
   | Conditional { cnd; lhs; rhs; _ } ->
+    let cnd = typecheck_expression_and_convert symbol_map cnd in
     let lhs = typecheck_expression_and_convert symbol_map lhs in
     let rhs = typecheck_expression_and_convert symbol_map rhs in
     let tl = get_type lhs in
     let tr = get_type rhs in
+    if get_type cnd |> is_scalar |> not
+    then raise (SemanticError "Condition in conditional operator must be scalar");
     let common_t =
-      if is_pointer_type tl || is_pointer_type tr
+      if tl = Void && tr = Void
+      then Void
+      else if is_pointer_type tl || is_pointer_type tr
       then get_common_pointer_type lhs rhs
-      else get_common_type tl tr
+      else if is_arithmetic_type tl && is_arithmetic_type tr
+      then get_common_type tl tr
+      else raise (SemanticError "Cannot convert branches of conditional to a common type")
     in
     let lhs = convert_to common_t lhs in
     let rhs = convert_to common_t rhs in
-    Conditional
-      { cnd = typecheck_expression_and_convert symbol_map cnd; lhs; rhs; etp = common_t }
+    Conditional { cnd; lhs; rhs; etp = common_t }
   | FunctionCall (Identifier iden, exps, _) ->
     (match Hashtbl.find_opt symbol_map iden with
      | Some SymbolMap.{ tp = FunType { params; ret }; _ } ->
@@ -192,6 +222,8 @@ let rec typecheck_expression symbol_map = function
   | Dereference (exp, _) ->
     let exp = typecheck_expression_and_convert symbol_map exp in
     (match get_type exp with
+     | Pointer ptp when ptp = Void ->
+       raise (SemanticError "Can't dereference void pointer")
      | Pointer ptp -> Dereference (exp, ptp)
      | _ -> raise (SemanticError "Dereferencing a non-pointer type"))
   | AddrOf (exp, _) ->
@@ -205,9 +237,9 @@ let rec typecheck_expression symbol_map = function
     let t1 = get_type e1 in
     let t2 = get_type e2 in
     let ptr, e1, e2 =
-      if is_pointer_type t1 && is_integer_type t2
+      if is_pointer_to_complete t1 && is_integer_type t2
       then t1, e1, convert_to Long e2
-      else if is_integer_type t1 && is_pointer_type t2
+      else if is_integer_type t1 && is_pointer_to_complete t2
       then t2, convert_to Long e1, e2
       else raise (SemanticError "Subscript must have integer and pointer operand")
     in
@@ -217,7 +249,15 @@ let rec typecheck_expression symbol_map = function
       | _ -> assert false
     in
     Subscript (e1, e2, ptr_ref)
-  | C_ast.SizeOf _ | C_ast.SizeOfT _ -> assert false
+  | SizeOf (exp, _) ->
+    let exp = typecheck_expression symbol_map exp in
+    if get_type exp |> is_complete |> not then raise (SemanticError "");
+    SizeOf (exp, ULong)
+  | SizeOfT (tp, _) ->
+    validate_type_specifier tp;
+    if is_complete tp |> not
+    then raise (SemanticError "Can't get the size of an incomplete type");
+    SizeOfT (tp, ULong)
 
 and typecheck_expression_and_convert symbol_map exp =
   let exp = typecheck_expression symbol_map exp in
@@ -285,6 +325,8 @@ let rec typecheck_static_init vtp = function
 
 let typecheck_file_scope_variable_decl symbol_map = function
   | { name = Identifier iden; init; vtp; storage } as ret ->
+    validate_type_specifier vtp;
+    if vtp = Void then raise (SemanticError "Can't declare void variables");
     let initial_value =
       ref
         (match init with
@@ -347,6 +389,8 @@ let rec typecheck_var_init symbol_map tgt init =
 
 let typecheck_block_scope_variable_decl symbol_map = function
   | { name = Identifier iden; init; vtp; storage } as ret ->
+    validate_type_specifier vtp;
+    if vtp = Void then raise (SemanticError "Can't declare void variables");
     (match storage with
      | Some Extern ->
        if init <> None
@@ -392,8 +436,13 @@ let typecheck_for_init symbol_map = function
   | InitExp e -> InitExp (Option.map (typecheck_expression_and_convert symbol_map) e)
 ;;
 
+(* ftp - enclosing function return type. *)
 let rec typecheck_statement symbol_map ftp = function
   | Return exp ->
+    if ftp = Void && exp <> None
+    then raise (SemanticError "Can't return value with void return type");
+    if ftp <> Void && exp = None
+    then raise (SemanticError "Not returning a value with non-void return type");
     let exp = Option.map (typecheck_expression_and_convert symbol_map) exp in
     let exp = Option.map (convert_by_assignment ftp) exp in
     Return exp
@@ -402,22 +451,30 @@ let rec typecheck_statement symbol_map ftp = function
     let cnd = typecheck_expression_and_convert symbol_map cnd in
     let thn = typecheck_statement symbol_map ftp thn in
     let els = Option.map (typecheck_statement symbol_map ftp) els in
+    if get_type cnd |> is_scalar |> not
+    then raise (SemanticError "Non-scalar type in if condition");
     If { cnd; thn; els }
   | Label (lbl, stmt) -> Label (lbl, typecheck_statement symbol_map ftp stmt)
   | Compound block -> Compound (typecheck_block symbol_map ftp block)
   | While (exp, stmt, lbl) ->
     let exp = typecheck_expression_and_convert symbol_map exp in
     let stmt = typecheck_statement symbol_map ftp stmt in
+    if get_type exp |> is_scalar |> not
+    then raise (SemanticError "Non-scalar type in while condition");
     While (exp, stmt, lbl)
   | DoWhile (stmt, exp, lbl) ->
     let stmt = typecheck_statement symbol_map ftp stmt in
     let exp = typecheck_expression_and_convert symbol_map exp in
+    if get_type exp |> is_scalar |> not
+    then raise (SemanticError "Non-scalar type in do-while condition");
     DoWhile (stmt, exp, lbl)
   | For { init; cnd; post; body; label } ->
     let init = typecheck_for_init symbol_map init in
     let cnd = Option.map (typecheck_expression_and_convert symbol_map) cnd in
     let post = Option.map (typecheck_expression_and_convert symbol_map) post in
     let body = typecheck_statement symbol_map ftp body in
+    if cnd <> None && Option.get cnd |> get_type |> is_scalar |> not
+    then raise (SemanticError "Non-scalar type in while condition");
     For { init; cnd; post; body; label }
   | Switch { cnd; body; cases; default; label = Identifier label } ->
     let cnd = typecheck_expression symbol_map cnd in
@@ -456,6 +513,7 @@ and typecheck_block symbol_map ftp = function
 
 and typecheck_function_decl symbol_map = function
   | { name = Identifier iden; params; body; ftp; storage } ->
+    validate_type_specifier ftp;
     let has_body = Option.is_some body in
     let already_defined = ref false in
     let global = ref (storage <> Some Static) in
@@ -471,6 +529,11 @@ and typecheck_function_decl symbol_map = function
     in
     let ptps = List.map adjust_param ptps in
     let ftp = FunType { params = ptps; ret = rtp } in
+    List.iter
+      (function
+        | Void -> raise (SemanticError "Can't declare void variables")
+        | _ -> ())
+      ptps;
     (match Hashtbl.find_opt symbol_map iden with
      | Some SymbolMap.{ tp; attrs } ->
        if ftp <> tp

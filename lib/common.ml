@@ -106,8 +106,7 @@ let rec size = function
 (* Returns whether the type is signed. *)
 let signed_c_type = function
   | Char | SChar | Int | Long | Double -> true
-  | UChar | UInt | ULong | Pointer _ | CArray _ -> false
-  | Void -> assert false
+  | UChar | UInt | ULong | Void | Pointer _ | CArray _ -> false
   | FunType _ -> assert false
 ;;
 
@@ -118,14 +117,12 @@ let signed_const = function
 
 let is_arithmetic_type = function
   | Char | SChar | UChar | Int | UInt | Long | ULong | Double -> true
-  | Void -> assert false
-  | FunType _ | Pointer _ | CArray _ -> false
+  | Void | FunType _ | Pointer _ | CArray _ -> false
 ;;
 
 let is_integer_type = function
   | Char | SChar | UChar | Int | UInt | Long | ULong -> true
-  | Void -> assert false
-  | Double | FunType _ | Pointer _ | CArray _ -> false
+  | Void | Double | FunType _ | Pointer _ | CArray _ -> false
 ;;
 
 let is_pointer_type = function
@@ -140,6 +137,21 @@ let is_array_type = function
 
 let is_char_type = function
   | Char | SChar | UChar -> true
+  | _ -> false
+;;
+
+let is_scalar = function
+  | Void | CArray _ | FunType _ -> false
+  | _ -> true
+;;
+
+let is_complete = function
+  | Void -> false
+  | _ -> true
+;;
+
+let is_pointer_to_complete = function
+  | Pointer tp -> is_complete tp
   | _ -> false
 ;;
 

@@ -86,7 +86,8 @@ let rec resolve_expression iden_map = function
   | AddrOf (exp, etp) -> AddrOf (resolve_expression iden_map exp, etp)
   | Subscript (e1, e2, etp) ->
     Subscript (resolve_expression iden_map e1, resolve_expression iden_map e2, etp)
-  | C_ast.SizeOf _ | C_ast.SizeOfT _ -> assert false
+  | SizeOf (exp, etp) -> SizeOf (resolve_expression iden_map exp, etp)
+  | SizeOfT _ as x -> x
 ;;
 
 let rec resolve_c_initializer iden_map = function
