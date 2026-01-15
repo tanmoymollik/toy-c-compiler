@@ -107,6 +107,8 @@ let typecheck_expression_binary bop lexp rexp =
     then raise (SemanticError "Can't use double with shift operator");
     if is_pointer_type tl || is_pointer_type tr
     then raise (SemanticError "Can't use pointer with shift operator");
+    if is_scalar tr |> not
+    then raise (SemanticError "Can't use non-scalar value with shift operator");
     let lexp = if is_char_type (get_type lexp) then convert_to Int lexp else lexp in
     Binary { bop; lexp; rexp; etp = get_type lexp }
 ;;
@@ -158,8 +160,10 @@ let rec typecheck_expression symbol_map = function
     Unary (uop, exp, etp)
   | TUnary (uop, p, lval, _) ->
     let lval = typecheck_expression_and_convert symbol_map lval in
-    if not (is_lvalue lval)
+    if is_lvalue lval |> not
     then raise (SemanticError "Invalid lvalue of suffix/postfix operator");
+    if get_type lval = Pointer Void
+    then raise (SemanticError "Can't use suffix/postfix operator on void pointers");
     TUnary (uop, p, lval, get_type lval)
   | Binary { bop; lexp; rexp; _ } ->
     let lexp = typecheck_expression_and_convert symbol_map lexp in
@@ -482,11 +486,13 @@ let rec typecheck_statement symbol_map ftp = function
     then raise (SemanticError "Array values can't be used in switch condition");
     if get_type cnd = Double then raise (SemanticError "Double value in switch condition");
     add_for_label label (get_type cnd);
+    if get_type cnd |> is_scalar |> not
+    then raise (SemanticError "Non-scalar values can't be used in switch condition");
     let body = typecheck_statement symbol_map ftp body in
     let cnd =
       match get_type cnd with
-      | Char | SChar -> Cast { tgt = Int; exp = cnd; etp = Int }
-      | UChar -> Cast { tgt = UInt; exp = cnd; etp = UInt }
+      | Char | SChar -> convert_to Int cnd
+      | UChar -> convert_to UInt cnd
       | _ -> cnd
     in
     Switch { cnd; body; cases; default; label = Identifier label }
