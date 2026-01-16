@@ -231,7 +231,8 @@ let classify_params params =
 ;;
 
 let gen_instruction = function
-  | Tacky.Ast.Ret v ->
+  | Tacky.Ast.Ret None -> [ Ret ]
+  | Tacky.Ast.Ret (Some v) ->
     let tp = get_asm_type_for_val v in
     let dst = if tp = AsmDouble then Reg Xmm0 else Reg Ax in
     [ Mov { src = gen_value v; dst; tp }; Ret ]
@@ -299,10 +300,15 @@ let gen_instruction = function
     let stack_dealloc =
       if bytes_to_remove <> 0 then [ dealloc_stack_ins bytes_to_remove ] else []
     in
-    let tp = AsmSymbolMap.get_fun_ret_type name in
-    let dst = gen_value dst in
-    let src = if tp = AsmDouble then Reg Xmm0 else Reg Ax in
-    let ret_ins = [ Mov { src; dst; tp } ] in
+    let ret_ins =
+      match dst with
+      | None -> []
+      | Some dst ->
+        let tp = AsmSymbolMap.get_fun_ret_type name |> Option.get in
+        let src = if tp = AsmDouble then Reg Xmm0 else Reg Ax in
+        let dst = gen_value dst in
+        [ Mov { src; dst; tp } ]
+    in
     stack_alloc
     @ int_reg_ins
     @ double_reg_ins

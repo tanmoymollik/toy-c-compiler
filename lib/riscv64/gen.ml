@@ -36,7 +36,8 @@ let gen_instruction fun_name = function
     [ Unary
         { uop = gen_uop uop; src = gen_value fun_name src; dst = gen_value fun_name dst }
     ]
-  | Tacky.Ast.Ret v -> [ Mov { src = gen_value fun_name v; dst = Reg A0 }; Ret ]
+  | Tacky.Ast.Ret None -> [ Ret ]
+  | Tacky.Ast.Ret (Some v) -> [ Mov { src = gen_value fun_name v; dst = Reg A0 }; Ret ]
   | _ -> assert false
 ;;
 

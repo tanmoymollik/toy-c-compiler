@@ -3,18 +3,19 @@
 This repository contains my personal implementation of a C compiler, following
 along with the book "Writing a C Compiler" by Nora Sandler. 📚
 
-Currently this implementation passes tests upto chapter 16 with extra credits.
+Currently this implementation passes tests upto chapter 17 with extra credits.
 This includes:
 - binary, unary and logical expressions
 - if/else, switch, goto/label
 - for, while, do/while loops
 - local, static and extern variables
 - local, static and extern functions
-- int, char, long, double, unsigned, signed, pointers and arrays
-- void*, struct **[Work in progress]**
+- int, char, long, double, unsigned, signed
+- pointers, void pointers and arrays
+- struct **[Work in progress]**
 
 I also implemented chapter 19 (tacky optimizations) and chapter 20 (register
-allocation) for integer types. After finishing chapters 17-18 I will add support
+allocation) for integer types. After finishing chapters 18 I will add support
 for other types.
 
 My first implementation was written in Rust because I had recently learnt it and

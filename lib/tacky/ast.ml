@@ -11,7 +11,7 @@ type exp_result =
 [@@deriving show]
 
 type instruction =
-  | Ret of value
+  | Ret of value option
   | Unary of
       { uop : unary_op
       ; src : value
@@ -34,7 +34,7 @@ type instruction =
   | FunCall of
       { name : identifier
       ; args : value list
-      ; dst : value
+      ; dst : value option
       }
   | SignExtend of
       { src : value

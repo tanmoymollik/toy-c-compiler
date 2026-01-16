@@ -54,7 +54,7 @@ let update_vars live_vars all_static_vars ins =
     | Var (Identifier name) -> Hashtbl.remove live_vars name
   in
   match ins with
-  | Ret src -> add src
+  | Ret (Some src) -> add src
   | Unary { src; dst; _ } ->
     remove dst;
     add src
@@ -67,7 +67,7 @@ let update_vars live_vars all_static_vars ins =
     add src
   | JumpIfZero (cnd, _) | JumpIfNotZero (cnd, _) -> add cnd
   | FunCall { args; dst; _ } ->
-    remove dst;
+    if dst <> None then Option.get dst |> remove;
     List.iter (fun v -> add v) args;
     Hashtbl.iter (fun k _ -> add (Var (Identifier k))) all_static_vars
   | _ -> ()

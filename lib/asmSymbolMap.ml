@@ -9,7 +9,7 @@ type asm_symbol_info =
       }
   | FunInfo of
       { defined : bool
-      ; ret : asm_type
+      ; ret : asm_type option
       }
 [@@deriving show]
 
@@ -42,7 +42,8 @@ let gen_asm_symbol_map () =
        | FunAttr { defined; _ } ->
          let ret =
            match tp with
-           | FunType { ret; _ } -> get_asm_type_for_c_type ret
+           | FunType { ret = Void; _ } -> None
+           | FunType { ret; _ } -> Some (get_asm_type_for_c_type ret)
            | _ -> assert false
          in
          Hashtbl.replace asm_symbol_map iden (FunInfo { defined; ret })

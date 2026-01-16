@@ -2,10 +2,10 @@ open Stdint
 open Common
 open Ast
 
-let gen_uop uop = uop
-let gen_bop bop = bop
+let dummy_var = Var (Identifier "dummy")
 
 let make_tmp_dst vtp =
+  assert (vtp <> Void);
   let c = Core.get_var_count () in
   let name = Printf.sprintf "tmp.%d" c in
   let name = Identifier name in
@@ -130,7 +130,6 @@ and gen_expression_binary stk = function
        Stack.push (Label en_label) stk;
        PlainOperand dst
      | Add ->
-       let bop = gen_bop bop in
        let src1 = gen_expression_and_convert stk lexp in
        let src2 = gen_expression_and_convert stk rexp in
        let dst = make_tmp_dst etp in
@@ -143,7 +142,6 @@ and gen_expression_binary stk = function
        Stack.push b_ins stk;
        PlainOperand dst
      | Sub ->
-       let bop = gen_bop bop in
        let src1 = gen_expression_and_convert stk lexp in
        let src2 = gen_expression_and_convert stk rexp in
        let dst = make_tmp_dst etp in
@@ -160,7 +158,6 @@ and gen_expression_binary stk = function
         | _, _ -> Stack.push (Binary { bop; src1; src2; dst }) stk);
        PlainOperand dst
      | _ ->
-       let bop = gen_bop bop in
        let src1 = gen_expression_and_convert stk lexp in
        let src2 = gen_expression_and_convert stk rexp in
        let dst = make_tmp_dst etp in
@@ -177,10 +174,12 @@ and gen_expression stk = function
   | C_ast.Var (iden, _) -> PlainOperand (Var iden)
   | C_ast.Cast { tgt; exp; _ } ->
     let src = gen_expression_and_convert stk exp in
-    let ret = gen_cast_value stk tgt src (C_ast.get_type exp) in
-    PlainOperand ret
+    if tgt = Void
+    then PlainOperand dummy_var
+    else (
+      let ret = gen_cast_value stk tgt src (C_ast.get_type exp) in
+      PlainOperand ret)
   | C_ast.Unary (uop, exp, etp) ->
-    let uop = gen_uop uop in
     let src = gen_expression_and_convert stk exp in
     let dst = make_tmp_dst etp in
     let u_ins = Unary { uop; src; dst } in
@@ -189,7 +188,6 @@ and gen_expression stk = function
   | C_ast.TUnary _ as tu -> gen_expression_tunary stk tu
   | C_ast.Binary _ as b -> gen_expression_binary stk b
   | C_ast.CompoundAssign { bop; lexp; rexp; btp; etp } ->
-    let bop = gen_bop bop in
     let lval = gen_expression stk lexp in
     let src2 = gen_expression_and_convert stk (C_ast.convert_to btp rexp) in
     let process src1 dst =
@@ -229,6 +227,17 @@ and gen_expression stk = function
      | DereferencedPointer ptr ->
        Stack.push (Store { src = rval; dst_ptr = ptr }) stk;
        PlainOperand rval)
+  | C_ast.Conditional { cnd; lhs; rhs; etp = Void } ->
+    let cnd = gen_expression_and_convert stk cnd in
+    let rhs_lbl = make_label ("other" ^ Core.conditional_label) in
+    let en_lbl = make_label ("end" ^ Core.conditional_label) in
+    Stack.push (JumpIfZero (cnd, rhs_lbl)) stk;
+    let _ = gen_expression_and_convert stk lhs in
+    Stack.push (Jump en_lbl) stk;
+    Stack.push (Label rhs_lbl) stk;
+    let _ = gen_expression_and_convert stk rhs in
+    Stack.push (Label en_lbl) stk;
+    PlainOperand dummy_var
   | C_ast.Conditional { cnd; lhs; rhs; etp } ->
     let cnd = gen_expression_and_convert stk cnd in
     let rhs_lbl = make_label ("other" ^ Core.conditional_label) in
@@ -245,9 +254,9 @@ and gen_expression stk = function
     PlainOperand dst
   | C_ast.FunctionCall (name, args, etp) ->
     let args = List.map (gen_expression_and_convert stk) args in
-    let dst = make_tmp_dst etp in
+    let dst = if etp <> Void then Some (make_tmp_dst etp) else None in
     Stack.push (FunCall { name; args; dst }) stk;
-    PlainOperand dst
+    PlainOperand (if dst = None then dummy_var else Option.get dst)
   | C_ast.Dereference (exp, _) ->
     let res = gen_expression_and_convert stk exp in
     DereferencedPointer res
@@ -271,7 +280,12 @@ and gen_expression stk = function
     let ind = gen_expression_and_convert stk ind in
     Stack.push (AddPtr { src_ptr = ptr; ind; scale = size etp; dst }) stk;
     DereferencedPointer dst
-  | C_ast.SizeOf _ | C_ast.SizeOfT _ -> assert false
+  | C_ast.SizeOf (exp, _) ->
+    let res = C_ast.get_type exp |> size |> Uint64.of_int in
+    PlainOperand (Constant (ConstULong res))
+  | C_ast.SizeOfT (tp, _) ->
+    let res = size tp |> Uint64.of_int in
+    PlainOperand (Constant (ConstULong res))
 
 and gen_expression_and_convert stk exp =
   let res = gen_expression stk exp in
@@ -347,9 +361,8 @@ let gen_for_init stk = function
 ;;
 
 let rec gen_statement stk = function
-  | C_ast.Return None -> assert false
-  | C_ast.Return (Some exp) ->
-    let exp_val = gen_expression_and_convert stk exp in
+  | C_ast.Return exp ->
+    let exp_val = Option.map (gen_expression_and_convert stk) exp in
     Stack.push (Ret exp_val) stk
   | C_ast.Expression exp ->
     let _ = gen_expression_and_convert stk exp in
@@ -459,10 +472,11 @@ let gen_function_decl = function
     gen_block stk body;
     let ret_val =
       match ftp with
-      | FunType { ret; _ } -> c_type_zero ret
+      | FunType { ret = Void; _ } -> None
+      | FunType { ret; _ } -> Some (Constant (c_type_zero ret))
       | _ -> assert false
     in
-    Stack.push (Ret (Constant ret_val)) stk;
+    Stack.push (Ret ret_val) stk;
     (* The stack is effectively reversed here. *)
     let f acc a = a :: acc in
     let body = Stack.fold f [] stk in

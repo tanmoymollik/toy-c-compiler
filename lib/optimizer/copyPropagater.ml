@@ -76,7 +76,7 @@ let update_copies reaching_copies ins =
     else (
       update_copies_inner dst reaching_copies default_keep;
       Hashtbl.replace reaching_copies v ())
-  | FunCall { dst; _ } ->
+  | FunCall { dst = Some dst; _ } ->
     let keep dst = function
       | Copy { src = tsrc; dst = tdst } ->
         if is_static_value tsrc || is_static_value tdst || tsrc = dst || tdst = dst
@@ -188,7 +188,7 @@ let replace_operand reaching_copies op =
 let rewrite_instruction ins reaching_copies =
   match ins with
   | Ret r ->
-    let ret = Ret (replace_operand reaching_copies r) in
+    let ret = Ret (Option.map (replace_operand reaching_copies) r) in
     Some ret
   | Unary { uop; src; dst } ->
     let ret = Unary { uop; src = replace_operand reaching_copies src; dst } in
