@@ -66,6 +66,7 @@ let resolve_function_decl = function
 let resolve_declaration = function
   | FunDecl f -> FunDecl (resolve_function_decl f)
   | VarDecl _ as ret -> ret
+  | StructDecl _ -> assert false
 ;;
 
 let resolve_program = function

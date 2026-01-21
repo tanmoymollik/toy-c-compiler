@@ -286,6 +286,7 @@ and gen_expression stk = function
   | C_ast.SizeOfT (tp, _) ->
     let res = size tp |> Uint64.of_int in
     PlainOperand (Constant (ConstULong res))
+  | C_ast.Dot _ | C_ast.Arrow _ -> assert false
 
 and gen_expression_and_convert stk exp =
   let res = gen_expression stk exp in
@@ -460,7 +461,8 @@ and gen_block_item stk = function
   | C_ast.D d ->
     (match d with
      | VarDecl v -> gen_variable_decl stk v
-     | FunDecl f -> assert (f.body = None))
+     | FunDecl f -> assert (f.body = None)
+     | StructDecl _ -> assert false)
 
 and gen_block stk = function
   | C_ast.Block items -> List.iter (gen_block_item stk) items
@@ -491,6 +493,7 @@ let gen_function_decl = function
 let gen_declaration = function
   | C_ast.VarDecl _ -> None
   | C_ast.FunDecl f -> gen_function_decl f
+  | C_ast.StructDecl _ -> assert false
 ;;
 
 let convert_symbols_to_tacky acc =

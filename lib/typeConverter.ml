@@ -205,6 +205,7 @@ let evaluate_binary bop l r =
   | FunType _ -> assert false
   | Pointer _ -> assert false
   | CArray _ -> assert false
+  | Structure _ -> assert false
 ;;
 
 let evaluate_int32_unary uop x =
@@ -254,6 +255,7 @@ let evaluate_unary uop x =
   | FunType _ -> assert false
   | Pointer _ -> assert false
   | CArray _ -> assert false
+  | Structure _ -> assert false
 ;;
 
 let evaluate_conditional cnd lhs rhs =

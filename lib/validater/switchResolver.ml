@@ -37,8 +37,6 @@ let add_default k = Hashtbl.add default_map k true
 
 let rec evaluate_case_expression = function
   | Constant (c, _) -> c
-  | CString _ -> raise (SemanticError "Non-const value for switch-case")
-  | Var _ -> raise (SemanticError "Non-const value for switch-case")
   | Cast { tgt; exp; _ } ->
     let exp = evaluate_case_expression exp in
     (match tgt with
@@ -46,30 +44,32 @@ let rec evaluate_case_expression = function
      | UChar | UInt -> ConstUInt (TypeConverter.convert_to_uint exp)
      | Long -> ConstLong (TypeConverter.convert_to_long exp)
      | ULong -> ConstULong (TypeConverter.convert_to_ulong exp)
-     | Double -> assert false
-     | Void -> assert false
-     | FunType _ -> assert false
-     | Pointer _ -> assert false
-     | CArray _ -> assert false)
+     | Double | Void | FunType _ | Pointer _ | CArray _ | Structure _ ->
+       raise (SemanticError "Invalid cast target for switch-case"))
   | Unary (uop, exp, _) -> TypeConverter.evaluate_unary uop (evaluate_case_expression exp)
-  | TUnary _ -> raise (SemanticError "Non-const value for switch-case")
   | Binary { bop; lexp; rexp; _ } ->
     TypeConverter.evaluate_binary
       bop
       (evaluate_case_expression lexp)
       (evaluate_case_expression rexp)
-  | CompoundAssign _ -> raise (SemanticError "Non-const value for switch-case")
-  | Assignment _ -> raise (SemanticError "Non-const value for switch-case")
   | Conditional { cnd; lhs; rhs; _ } ->
     let cnd = evaluate_case_expression cnd in
     let lhs = evaluate_case_expression lhs in
     let rhs = evaluate_case_expression rhs in
     TypeConverter.evaluate_conditional cnd lhs rhs
-  | FunctionCall _ -> raise (SemanticError "Non-const value for switch-case")
-  | Dereference _ -> raise (SemanticError "Non-const value for switch-case")
-  | AddrOf _ -> raise (SemanticError "Non-const value for switch-case")
-  | Subscript _ -> raise (SemanticError "Non-const value for switch-case")
-  | C_ast.SizeOf _ | C_ast.SizeOfT _ -> assert false
+  | CString _
+  | Var _
+  | TUnary _
+  | CompoundAssign _
+  | Assignment _
+  | FunctionCall _
+  | Dereference _
+  | AddrOf _
+  | Subscript _
+  | C_ast.SizeOf _
+  | C_ast.SizeOfT _
+  | C_ast.Dot _
+  | C_ast.Arrow _ -> raise (SemanticError "Non-const value for switch-case")
 ;;
 
 let rec resolve_statement = function
@@ -118,6 +118,7 @@ let resolve_function_decl = function
 let resolve_declaration = function
   | FunDecl f -> FunDecl (resolve_function_decl f)
   | VarDecl _ as ret -> ret
+  | StructDecl _ -> assert false
 ;;
 
 let resolve_program = function

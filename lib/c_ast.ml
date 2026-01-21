@@ -46,6 +46,16 @@ type expression =
   | Subscript of expression * expression * c_type
   | SizeOf of expression * c_type
   | SizeOfT of c_type * c_type
+  | Dot of
+      { struct_exp : expression
+      ; member : identifier
+      ; etp : c_type
+      }
+  | Arrow of
+      { struct_ptr : expression
+      ; member : identifier
+      ; etp : c_type
+      }
 [@@deriving show]
 
 type c_initializer =
@@ -63,6 +73,18 @@ type variable_decl =
   ; init : c_initializer option
   ; vtp : c_type
   ; storage : storage_class option
+  }
+[@@deriving show]
+
+type member_decl =
+  { name : identifier
+  ; mtp : c_type
+  }
+[@@deriving show]
+
+type struct_decl =
+  { tag : identifier
+  ; members : member_decl list
   }
 [@@deriving show]
 
@@ -124,6 +146,7 @@ and function_decl =
 and declaration =
   | FunDecl of function_decl
   | VarDecl of variable_decl
+  | StructDecl of struct_decl
 [@@deriving show]
 
 type program = Program of declaration list [@@deriving show]
@@ -143,9 +166,11 @@ let get_type = function
   | FunctionCall (_, _, etp)
   | Dereference (_, etp)
   | AddrOf (_, etp)
-  | Subscript (_, _, etp) -> etp
-  | SizeOf (_, etp) -> etp
-  | SizeOfT (_, etp) -> etp
+  | Subscript (_, _, etp)
+  | SizeOf (_, etp)
+  | SizeOfT (_, etp)
+  | Dot { etp; _ }
+  | Arrow { etp; _ } -> etp
 ;;
 
 let is_lvalue = function

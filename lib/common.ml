@@ -45,6 +45,7 @@ type c_type =
       }
   | Pointer of c_type
   | CArray of c_type * int
+  | Structure of identifier
 [@@deriving show]
 
 type const =
@@ -101,6 +102,7 @@ let rec size = function
   | FunType _ -> assert false
   | Pointer _ -> 8
   | CArray (tp, sz) -> sz * size tp
+  | Structure _ -> assert false
 ;;
 
 (* Returns whether the type is signed. *)
@@ -108,6 +110,7 @@ let signed_c_type = function
   | Char | SChar | Int | Long | Double -> true
   | UChar | UInt | ULong | Void | Pointer _ | CArray _ -> false
   | FunType _ -> assert false
+  | Structure _ -> assert false
 ;;
 
 let signed_const = function
@@ -118,11 +121,13 @@ let signed_const = function
 let is_arithmetic_type = function
   | Char | SChar | UChar | Int | UInt | Long | ULong | Double -> true
   | Void | FunType _ | Pointer _ | CArray _ -> false
+  | Structure _ -> assert false
 ;;
 
 let is_integer_type = function
   | Char | SChar | UChar | Int | UInt | Long | ULong -> true
   | Void | Double | FunType _ | Pointer _ | CArray _ -> false
+  | Structure _ -> assert false
 ;;
 
 let is_pointer_type = function
@@ -184,6 +189,7 @@ let c_type_zero = function
   | FunType _ -> assert false
   | Pointer _ -> ConstULong 0I
   | CArray _ -> assert false
+  | Structure _ -> assert false
 ;;
 
 let c_type_one = function
@@ -198,6 +204,7 @@ let c_type_one = function
   | FunType _ -> assert false
   | Pointer _ -> ConstLong 1L
   | CArray _ -> assert false
+  | Structure _ -> assert false
 ;;
 
 let rec scalar_type_alignment = function
@@ -207,6 +214,7 @@ let rec scalar_type_alignment = function
   | Void -> assert false
   | FunType _ -> assert false
   | CArray (tp, _) -> scalar_type_alignment tp
+  | Structure _ -> assert false
 ;;
 
 let get_asm_type_for_const = function
@@ -227,6 +235,7 @@ let get_asm_type_for_c_type = function
     let sz = sz * size tp in
     let alignment = if sz >= 16 then 16 else scalar_type_alignment tp in
     ByteArray { sz; alignment }
+  | Structure _ -> assert false
 ;;
 
 let alignment_for_asm_type = function

@@ -40,6 +40,7 @@ open ParserUtils
        ASTERISK_EQ FSLASH_EQ PERCENT_EQ
        LSHIFT_EQ RSHIFT_EQ
        AMPERSAND_EQ PIPE_EQ CARET_EQ
+%token STRUCT ARROW DOT
 %token EOF
 
 // Precedence and associativity
@@ -59,7 +60,6 @@ open ParserUtils
 %left LSHIFT RSHIFT
 %left PLUS MINUS
 %left ASTERISK FSLASH PERCENT
-%left DPLUS DHYPHEN
 
 %start <C_ast.program> prog
 %%
@@ -71,6 +71,7 @@ declaration:
   | v = variable_decl              { C_ast.VarDecl v }
   | f = function_decl              { C_ast.FunDecl f }
   | vf = variable_or_function_decl { vf }
+  | s = struct_decl                { C_ast.StructDecl s }
 
 variable_decl:
   specs = nonempty_list(specifier); d = declarator; init = pair(EQUAL, c_initializer); SEMICOLON
@@ -86,6 +87,30 @@ variable_decl:
 function_decl:
   | specs = nonempty_list(specifier); d = declarator; body = block
     { function_decl_ast specs d (Some body) }
+
+struct_decl:
+  | STRUCT; tag = identifier; members = option(member_decl_list); SEMICOLON
+    {
+      let members =
+        match members with
+        | Some m -> m
+        | None -> []
+      in
+      C_ast.{ tag; members; }
+    }
+
+member_decl_list:
+  | LBRACE; members = nonempty_list(member_decl); RBRACE { members }
+
+member_decl:
+  | specs = nonempty_list(type_specifier); d = declarator; SEMICOLON
+    {
+      let name, mtp, _ = process_declarator (type_of specs) d in
+      (match mtp with
+       | Common.FunType _ -> raise (SyntaxError "Member declarator does not yield variable type")
+       | _ -> ());
+      C_ast.{ name; mtp; }
+    }
 
 variable_or_function_decl:
   | specs = nonempty_list(specifier); d = declarator; SEMICOLON
@@ -139,6 +164,7 @@ for_init:
       match d with
        | C_ast.FunDecl _ -> raise (SyntaxError "For loop init cannot be a function declaration")
        | C_ast.VarDecl d -> C_ast.InitDecl d
+       | C_ast.StructDecl _ -> raise (SyntaxError "For loop init cannot be a struct declaration")
     }
   | e = option(expression); SEMICOLON { C_ast.InitExp e }
 
@@ -176,11 +202,13 @@ cast_expression:
   | exp = unary_expression    { exp }
 
 postfix_expression:
-  | p = primary_expression; inds = list(postfix_expression_suffix)
-    { List.fold_left (fun e acc -> C_ast.Subscript (acc, e, Common.Int)) p inds }
+  | p = primary_expression; inds = list(postfix_op)
+    { parse_postfix_ops p inds }
 
-postfix_expression_suffix:
-  | LBRACKET; e = expression; RBRACKET { e }
+postfix_op:
+  | LBRACKET; e = expression; RBRACKET { SubscriptOp e }
+  | DOT; id = identifier               { DotOp id }
+  | ARROW; id = identifier             { ArrowOp id }
 
 primary_expression:
   | c = const
@@ -271,6 +299,7 @@ c_initializer_tail:
   | VOID      { VoidSpec }
   | SIGNED    { SignedSpec }
   | UNSIGNED  { UnsignedSpec }
+  | STRUCT; tag = identifier { StructSpec tag }
 
 %inline const:
   | i = CONST_INT    { Common.ConstInt i }

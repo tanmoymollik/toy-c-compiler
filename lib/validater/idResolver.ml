@@ -88,6 +88,7 @@ let rec resolve_expression iden_map = function
     Subscript (resolve_expression iden_map e1, resolve_expression iden_map e2, etp)
   | SizeOf (exp, etp) -> SizeOf (resolve_expression iden_map exp, etp)
   | SizeOfT _ as x -> x
+  | Dot _ | Arrow _ -> assert false
 ;;
 
 let rec resolve_c_initializer iden_map = function
@@ -206,6 +207,7 @@ and resolve_declaration iden_map nested = function
     if nested
     then VarDecl (resolve_block_scope_variable_decl iden_map v)
     else VarDecl (resolve_file_scope_variable_decl iden_map v)
+  | StructDecl _ -> assert false
 ;;
 
 let resolve_program = function

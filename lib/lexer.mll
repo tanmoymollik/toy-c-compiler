@@ -46,6 +46,7 @@ rule read =
   | "switch"     { Parser.SWITCH }
   | "case"       { Parser.CASE }
   | "default"    { Parser.DEFAULT }
+  | "struct"     { Parser.STRUCT }
   | '('          { Parser.LPAREN }
   | ')'          { Parser.RPAREN }
   | '{'          { Parser.LBRACE }
@@ -76,6 +77,7 @@ rule read =
   | "&="         { Parser.AMPERSAND_EQ }
   | "|="         { Parser.PIPE_EQ }
   | "^="         { Parser.CARET_EQ }
+  | "->"         { Parser.ARROW }
   | '+'          { Parser.PLUS }
   | '-'          { Parser.MINUS }
   | '*'          { Parser.ASTERISK }
@@ -97,6 +99,7 @@ rule read =
   | const_double { Parser.CONST_DOUBLE (Float.of_string (Lexing.lexeme lexbuf)) }
   | const_char   { parse_char (Lexing.lexeme lexbuf) }
   | const_string { parse_string (Lexing.lexeme lexbuf) }
+  | '.'          { Parser.DOT }
   | white        { read lexbuf }
   | newline      { Lexing.new_line lexbuf; read lexbuf }
   | eof          { Parser.EOF }

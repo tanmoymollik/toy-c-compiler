@@ -10,6 +10,7 @@ type specifier =
   | VoidSpec
   | SignedSpec
   | UnsignedSpec
+  | StructSpec of identifier
   | StaticSpec
   | ExternSpec
 [@@deriving show]
@@ -26,6 +27,12 @@ type assign_op =
   | XEq
   | LsftEq
   | RsftEq
+
+type postfix_op =
+  | SubscriptOp of C_ast.expression
+  | DotOp of identifier
+  | ArrowOp of identifier
+[@@deriving show]
 
 type param_info = Param of c_type * declarator [@@deriving show]
 
@@ -75,22 +82,26 @@ let process_specs specs =
     | UnsignedSpec -> 6
     | StaticSpec -> 7
     | ExternSpec -> 8
+    | StructSpec _ -> 9
   in
-  let cnt = Array.make 9 0 in
+  let cnt = Array.make 10 0 in
   let f spec = cnt.(idx_of spec) <- cnt.(idx_of spec) + 1 in
   List.iter f specs;
   if not (Array.for_all (fun x -> x <= 1) cnt)
   then raise (SyntaxError "Same specifier used multiple times");
-  if cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) + cnt.(4) + cnt.(5) + cnt.(6) = 0
+  if cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) + cnt.(4) + cnt.(5) + cnt.(6) + cnt.(9) = 0
   then raise (SyntaxError "No type specifier");
-  if
-    cnt.(2) = 1 && cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) + cnt.(4) + cnt.(5) + cnt.(6) > 1
+  let sum_of_type_specifiers =
+    cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) + cnt.(4) + cnt.(9)
+  in
+  if cnt.(2) = 1 && sum_of_type_specifiers + cnt.(5) + cnt.(6) > 1
   then raise (SyntaxError "Invalid specifier for double");
-  if cnt.(3) = 1 && cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) + cnt.(4) > 1
+  if cnt.(3) = 1 && sum_of_type_specifiers > 1
   then raise (SyntaxError "Invalid specifier for char");
-  if
-    cnt.(4) = 1 && cnt.(0) + cnt.(1) + cnt.(2) + cnt.(3) + cnt.(4) + cnt.(5) + cnt.(6) > 1
+  if cnt.(4) = 1 && sum_of_type_specifiers + cnt.(5) + cnt.(6) > 1
   then raise (SyntaxError "Invalid specifier for void");
+  if cnt.(9) = 1 && sum_of_type_specifiers + cnt.(5) + cnt.(6) > 1
+  then raise (SyntaxError "Invalid specifier for struct");
   if cnt.(5) + cnt.(6) > 1 then raise (SyntaxError "Multiple sign specifiers");
   if cnt.(7) + cnt.(8) > 1 then raise (SyntaxError "Multiple storage specifiers");
   cnt
@@ -107,7 +118,18 @@ let storage specs =
 
 let type_of specs =
   let cnt = process_specs specs in
-  if cnt.(4) = 1
+  if cnt.(9) = 1
+  then (
+    let filter_tp =
+      List.filter_map
+        (fun spec ->
+           match spec with
+           | StructSpec tag -> Some (Structure tag)
+           | _ -> None)
+        specs
+    in
+    List.hd filter_tp)
+  else if cnt.(4) = 1
   then Void
   else if cnt.(2) = 1
   then Double
@@ -186,4 +208,15 @@ let parse_declaration specs d =
   | FunType _ ->
     C_ast.FunDecl { name; params; body = None; ftp = dtp; storage = storage specs }
   | _ -> C_ast.VarDecl { name; init = None; vtp = dtp; storage = storage specs }
+;;
+
+let parse_postfix_ops base_exp ops =
+  List.fold_left
+    (fun acc op ->
+       match op with
+       | SubscriptOp e -> C_ast.Subscript (acc, e, Common.Int)
+       | DotOp id -> C_ast.Dot { struct_exp = acc; member = id; etp = Common.Int }
+       | ArrowOp id -> C_ast.Arrow { struct_ptr = acc; member = id; etp = Common.Int })
+    base_exp
+    ops
 ;;

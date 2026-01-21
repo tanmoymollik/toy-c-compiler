@@ -262,6 +262,7 @@ let rec typecheck_expression symbol_map = function
     if is_complete tp |> not
     then raise (SemanticError "Can't get the size of an incomplete type");
     SizeOfT (tp, ULong)
+  | Dot _ | Arrow _ -> assert false
 
 and typecheck_expression_and_convert symbol_map exp =
   let exp = typecheck_expression symbol_map exp in
@@ -312,6 +313,7 @@ let rec typecheck_static_init vtp = function
             (SemanticError "Non-null pointer constant used to initialize pointer variable")
         else ULongInit 0I
       | CArray _ -> raise (SemanticError "Invalid static initializer for arrays")
+      | Structure _ -> assert false
     in
     [ c ]
   | CompoundInit (init_list, _) ->
@@ -575,6 +577,7 @@ and typecheck_declaration symbol_map nested = function
     if nested
     then VarDecl (typecheck_block_scope_variable_decl symbol_map v)
     else VarDecl (typecheck_file_scope_variable_decl symbol_map v)
+  | StructDecl _ -> assert false
 ;;
 
 let typecheck_program = function
