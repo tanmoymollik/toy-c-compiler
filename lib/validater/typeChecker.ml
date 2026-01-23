@@ -1,4 +1,5 @@
 open Common
+open CTypeUtils
 open C_ast
 
 exception SemanticError = Errors.SemanticError
@@ -13,14 +14,23 @@ let get_for_label lbl =
   | None -> assert false
 ;;
 
-let rec validate_type_specifier = function
+let struct_map = SymbolMap.struct_map
+
+let rec validate_type_specifier accept_incomplete_struct = function
   | CArray (tp, _) ->
     if is_complete tp |> not then raise (SemanticError "Illegal array of incomplete type");
-    validate_type_specifier tp
-  | Pointer tp -> validate_type_specifier tp
+    validate_type_specifier accept_incomplete_struct tp
+  | Pointer tp ->
+    (* Pointers to incomplete types are allowed. *)
+    validate_type_specifier true tp
   | FunType { params; ret } ->
-    List.iter validate_type_specifier params;
-    validate_type_specifier ret
+    List.iter (validate_type_specifier accept_incomplete_struct) params;
+    validate_type_specifier accept_incomplete_struct ret
+  | s when is_structure_type s ->
+    if accept_incomplete_struct
+    then ()
+    else if is_complete s |> not
+    then raise (SemanticError "Use of incomplete struct type")
   | _ -> ()
 ;;
 
@@ -123,7 +133,7 @@ let rec typecheck_expression symbol_map = function
      | Some SymbolMap.{ tp; _ } -> Var (Identifier iden, tp)
      | None -> assert false)
   | Cast { tgt; exp; _ } ->
-    validate_type_specifier tgt;
+    validate_type_specifier false tgt;
     let exp = typecheck_expression_and_convert symbol_map exp in
     let etp = get_type exp in
     (match tgt with
@@ -207,6 +217,8 @@ let rec typecheck_expression symbol_map = function
       then get_common_pointer_type lhs rhs
       else if is_arithmetic_type tl && is_arithmetic_type tr
       then get_common_type tl tr
+      else if is_structure_type tl && tl = tr
+      then tl
       else raise (SemanticError "Cannot convert branches of conditional to a common type")
     in
     let lhs = convert_to common_t lhs in
@@ -245,7 +257,11 @@ let rec typecheck_expression symbol_map = function
       then t1, e1, convert_to Long e2
       else if is_integer_type t1 && is_pointer_to_complete t2
       then t2, convert_to Long e1, e2
-      else raise (SemanticError "Subscript must have integer and pointer operand")
+      else (
+        print_endline (show_expression e1);
+        print_endline (show_c_type t1);
+        print_endline (Bool.to_string (is_pointer_to_complete t1));
+        raise (SemanticError "Subscript must have integer and pointer operand"))
     in
     let ptr_ref =
       match ptr with
@@ -258,21 +274,75 @@ let rec typecheck_expression symbol_map = function
     if get_type exp |> is_complete |> not then raise (SemanticError "");
     SizeOf (exp, ULong)
   | SizeOfT (tp, _) ->
-    validate_type_specifier tp;
+    validate_type_specifier false tp;
     if is_complete tp |> not
     then raise (SemanticError "Can't get the size of an incomplete type");
     SizeOfT (tp, ULong)
-  | Dot _ | Arrow _ -> assert false
+  | Dot { struct_exp; member; _ } ->
+    let typed_struct_exp = typecheck_expression_and_convert symbol_map struct_exp in
+    (match get_type typed_struct_exp with
+     | Structure tag ->
+       let struct_def = Hashtbl.find struct_map tag in
+       let member_def = SymbolMap.get_struct_member struct_def member in
+       (match member_def with
+        | Some (SymbolMap.MemberEntry { tp; _ }) ->
+          Dot { struct_exp = typed_struct_exp; member; etp = tp }
+        | None -> raise (SemanticError "Structure has no such member"))
+     | _ -> raise (SemanticError "Tried to get member of non-structure type"))
+  | Arrow { struct_ptr; member; _ } ->
+    let typed_struct_ptr = typecheck_expression_and_convert symbol_map struct_ptr in
+    (match get_type typed_struct_ptr with
+     | Pointer (Structure tag) ->
+       let struct_def = Hashtbl.find struct_map tag in
+       let member_def = SymbolMap.get_struct_member struct_def member in
+       (match member_def with
+        | Some (SymbolMap.MemberEntry { tp; _ }) ->
+          Arrow { struct_ptr = typed_struct_ptr; member; etp = tp }
+        | None -> raise (SemanticError "Structure has no such member"))
+     | _ -> raise (SemanticError "Tried to get member of pointer to non-structure type"))
 
 and typecheck_expression_and_convert symbol_map exp =
   let exp = typecheck_expression symbol_map exp in
   match get_type exp with
   | CArray (tp, _) -> AddrOf (exp, Pointer tp)
+  | Structure tag ->
+    (match Hashtbl.find_opt struct_map tag with
+     | Some _ -> exp
+     | None -> raise (SemanticError "Use of incomplete struct type"))
   | _ -> exp
 ;;
 
-let rec typecheck_static_init vtp = function
-  | SingleInit (CString (s, _), _) ->
+let rec typecheck_static_init vtp init =
+  match vtp, init with
+  | Structure tag, CompoundInit (init_list, _) ->
+    let struct_def = Hashtbl.find struct_map tag in
+    (match struct_def with
+     | SymbolMap.StructEntry { members; size; _ } ->
+       if List.length init_list > Array.length members
+       then raise (SemanticError "Wrong number of values in initializer");
+       let curr_offset = ref 0 in
+       let init_list =
+         List.mapi
+           (fun ind el ->
+              let (SymbolMap.MemberEntry { tp; offset; _ }) = members.(ind) in
+              let padding =
+                if !curr_offset < offset
+                then (
+                  let padding = offset - !curr_offset in
+                  [ ZeroInit { bytes = padding } ])
+                else []
+              in
+              curr_offset := offset + c_type_size tp;
+              padding @ typecheck_static_init tp el)
+           init_list
+       in
+       let tail =
+         if !curr_offset < size then [ ZeroInit { bytes = size - !curr_offset } ] else []
+       in
+       List.concat init_list @ tail)
+  | Structure _, SingleInit _ ->
+    raise (SemanticError "Can't initialize static structure with scalar expression")
+  | _, SingleInit (CString (s, _), _) ->
     (match vtp with
      | CArray (tp, sz) ->
        let s_len = String.length s in
@@ -293,7 +363,7 @@ let rec typecheck_static_init vtp = function
        [ PointerInit { name } ]
      | _ ->
        raise (SemanticError "Can't initialize a non-character type with string literal"))
-  | SingleInit (Constant (c, _), _) ->
+  | _, SingleInit (Constant (c, _), _) ->
     let c =
       match vtp with
       | Char | SChar -> CharInit (TypeConverter.convert_to_char c)
@@ -316,12 +386,12 @@ let rec typecheck_static_init vtp = function
       | Structure _ -> assert false
     in
     [ c ]
-  | CompoundInit (init_list, _) ->
+  | _, CompoundInit (init_list, _) ->
     (match vtp with
      | CArray (tp, sz) ->
        if List.length init_list > sz
        then raise (SemanticError "Wrong number of values in initializer");
-       let tail_sz = (sz - List.length init_list) * size tp in
+       let tail_sz = (sz - List.length init_list) * c_type_size tp in
        let tail = if tail_sz > 0 then [ ZeroInit { bytes = tail_sz } ] else [] in
        let init_list = List.concat_map (typecheck_static_init tp) init_list in
        init_list @ tail
@@ -331,7 +401,7 @@ let rec typecheck_static_init vtp = function
 
 let typecheck_file_scope_variable_decl symbol_map = function
   | { name = Identifier iden; init; vtp; storage } as ret ->
-    validate_type_specifier vtp;
+    validate_type_specifier (storage = Some Extern) vtp;
     if vtp = Void then raise (SemanticError "Can't declare void variables");
     let initial_value =
       ref
@@ -373,6 +443,28 @@ let typecheck_file_scope_variable_decl symbol_map = function
 
 let rec typecheck_var_init symbol_map tgt init =
   match tgt, init with
+  | Structure tag, CompoundInit (init_list, _) ->
+    let struct_def = Hashtbl.find struct_map tag in
+    (match struct_def with
+     | SymbolMap.StructEntry { members; _ } ->
+       if List.length init_list > Array.length members
+       then raise (SemanticError "Wrong number of values in initializer");
+       let init_list =
+         List.mapi
+           (fun ind el ->
+              let (SymbolMap.MemberEntry { tp; _ }) = members.(ind) in
+              typecheck_var_init symbol_map tp el)
+           init_list
+       in
+       let offset = List.length init_list in
+       let padding =
+         List.init
+           (Array.length members - List.length init_list)
+           (fun ind ->
+              let (SymbolMap.MemberEntry { tp; _ }) = members.(offset + ind) in
+              zero_initializer tp)
+       in
+       CompoundInit (init_list @ padding, tgt))
   | CArray (tp, sz), SingleInit (CString (s, _), _) ->
     if is_char_type tp |> not
     then raise (SemanticError "Can't initialize a non-character type with string literal");
@@ -395,10 +487,10 @@ let rec typecheck_var_init symbol_map tgt init =
 
 let typecheck_block_scope_variable_decl symbol_map = function
   | { name = Identifier iden; init; vtp; storage } as ret ->
-    validate_type_specifier vtp;
     if vtp = Void then raise (SemanticError "Can't declare void variables");
     (match storage with
      | Some Extern ->
+       validate_type_specifier true vtp;
        if init <> None
        then
          raise
@@ -417,6 +509,7 @@ let typecheck_block_scope_variable_decl symbol_map = function
           Hashtbl.replace symbol_map iden info);
        ret
      | Some Static ->
+       validate_type_specifier false vtp;
        let initial_value =
          match init with
          | Some ci -> SymbolMap.Initial (typecheck_static_init vtp ci)
@@ -429,10 +522,71 @@ let typecheck_block_scope_variable_decl symbol_map = function
        Hashtbl.replace symbol_map iden info;
        ret
      | None ->
+       validate_type_specifier false vtp;
        let info = SymbolMap.{ tp = vtp; attrs = LocalAttr } in
        Hashtbl.replace symbol_map iden info;
        let init = Option.map (typecheck_var_init symbol_map vtp) init in
        { name = Identifier iden; init; vtp; storage })
+;;
+
+let validate_struct_definition tag members =
+  (match Hashtbl.find_opt struct_map tag with
+   | Some _ -> raise (SemanticError "Redefinition of struct - ")
+   | None -> ());
+  let member_names = Hashtbl.create (List.length members) in
+  List.iter
+    (fun { name; mtp } ->
+       if Hashtbl.mem member_names name
+       then raise (SemanticError "Redefinition of struct member")
+       else Hashtbl.add member_names name ();
+       validate_type_specifier false mtp)
+    members;
+  ()
+;;
+
+let typecheck_struct_decl = function
+  | { tag; members } ->
+    validate_struct_definition tag members;
+    let rec alignment struct_map = function
+      | Structure tag ->
+        (match Hashtbl.find_opt struct_map tag with
+         | Some (SymbolMap.StructEntry { alignment; _ }) -> alignment
+         | None -> assert false)
+      | CArray (tp, _) -> alignment struct_map tp
+      | tp -> scalar_type_alignment tp
+    in
+    let round_up addr base =
+      assert (base > 0);
+      let r = addr mod base in
+      if r > 0 then addr + (base - r) else addr
+    in
+    let member_entries, struct_size, struct_alignment =
+      List.fold_left
+        (fun (entries, struct_size, struct_alignment) member ->
+           let member_alignment = alignment struct_map member.mtp in
+           let member_offset = round_up struct_size member_alignment in
+           let m =
+             SymbolMap.MemberEntry
+               { name = member.name; tp = member.mtp; offset = member_offset }
+           in
+           let entries = m :: entries in
+           let struct_alignment = max struct_alignment member_alignment in
+           let struct_size = member_offset + c_type_size member.mtp in
+           entries, struct_size, struct_alignment)
+        ([], 0, 1)
+        members
+    in
+    let struct_size = round_up struct_size struct_alignment in
+    let members = List.rev member_entries |> Array.of_list in
+    let members_map = Array.length members |> Hashtbl.create in
+    Array.iteri
+      (fun ind (SymbolMap.MemberEntry { name; _ }) -> Hashtbl.add members_map name ind)
+      members;
+    let struct_def =
+      SymbolMap.StructEntry
+        { alignment = struct_alignment; size = struct_size; members; members_map }
+    in
+    Hashtbl.replace struct_map tag struct_def
 ;;
 
 let typecheck_for_init symbol_map = function
@@ -521,7 +675,7 @@ and typecheck_block symbol_map ftp = function
 
 and typecheck_function_decl symbol_map = function
   | { name = Identifier iden; params; body; ftp; storage } ->
-    validate_type_specifier ftp;
+    validate_type_specifier (body = None) ftp;
     let has_body = Option.is_some body in
     let already_defined = ref false in
     let global = ref (storage <> Some Static) in
@@ -577,7 +731,9 @@ and typecheck_declaration symbol_map nested = function
     if nested
     then VarDecl (typecheck_block_scope_variable_decl symbol_map v)
     else VarDecl (typecheck_file_scope_variable_decl symbol_map v)
-  | StructDecl _ -> assert false
+  | StructDecl s ->
+    if List.is_empty s.members |> not then typecheck_struct_decl s;
+    StructDecl s
 ;;
 
 let typecheck_program = function

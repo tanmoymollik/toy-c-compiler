@@ -1,9 +1,14 @@
-let tmp_var_count = ref 0
+let tmp_iden_count = ref 0
 
-let get_var_count () =
-  let c = !tmp_var_count in
-  tmp_var_count := c + 1;
+let get_iden_count () =
+  let c = !tmp_iden_count in
+  tmp_iden_count := c + 1;
   c
+;;
+
+let make_unique_iden iden =
+  let c = get_iden_count () in
+  Printf.sprintf "%s.%d" iden c
 ;;
 
 let lbl_sep = ref "@"

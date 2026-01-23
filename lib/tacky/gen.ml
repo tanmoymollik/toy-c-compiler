@@ -1,14 +1,13 @@
 open Stdint
 open Common
+open CTypeUtils
 open Ast
 
 let dummy_var = Var (Identifier "dummy")
 
 let make_tmp_dst vtp =
   assert (vtp <> Void);
-  let c = Core.get_var_count () in
-  let name = Printf.sprintf "tmp.%d" c in
-  let name = Identifier name in
+  let name = Identifier (Core.make_unique_iden "tmp") in
   SymbolMap.add_local_var name vtp;
   Var name
 ;;
@@ -30,9 +29,9 @@ let gen_cast_value stk tgt src inner_tp =
       if signed_c_type inner_tp
       then Stack.push (IntToDouble { src; dst }) stk
       else Stack.push (UIntToDouble { src; dst }) stk
-    else if size tgt = size inner_tp
+    else if c_type_size tgt = c_type_size inner_tp
     then Stack.push (Copy { src; dst }) stk
-    else if size tgt < size inner_tp
+    else if c_type_size tgt < c_type_size inner_tp
     then Stack.push (Truncate { src; dst }) stk
     else if signed_c_type inner_tp
     then Stack.push (SignExtend { src; dst }) stk
@@ -61,14 +60,14 @@ let rec gen_expression_tunary stk = function
       match prefix, bop, etp with
       | true, Add, Pointer tp ->
         Stack.push
-          (AddPtr { src_ptr = src1; ind = src2; scale = size tp; dst = src1 })
+          (AddPtr { src_ptr = src1; ind = src2; scale = c_type_size tp; dst = src1 })
           stk;
         src1
       | true, Sub, Pointer tp ->
         let tmp_dst = make_tmp_dst Long in
         Stack.push (Unary { uop = Negate; src = src2; dst = tmp_dst }) stk;
         Stack.push
-          (AddPtr { src_ptr = src1; ind = tmp_dst; scale = size tp; dst = src1 })
+          (AddPtr { src_ptr = src1; ind = tmp_dst; scale = c_type_size tp; dst = src1 })
           stk;
         src1
       | true, _, _ ->
@@ -78,7 +77,7 @@ let rec gen_expression_tunary stk = function
         let dst = make_tmp_dst etp in
         Stack.push (Copy { src = src1; dst }) stk;
         Stack.push
-          (AddPtr { src_ptr = src1; ind = src2; scale = size tp; dst = src1 })
+          (AddPtr { src_ptr = src1; ind = src2; scale = c_type_size tp; dst = src1 })
           stk;
         dst
       | false, Sub, Pointer tp ->
@@ -87,7 +86,7 @@ let rec gen_expression_tunary stk = function
         let tmp_dst = make_tmp_dst Long in
         Stack.push (Unary { uop = Negate; src = src2; dst = tmp_dst }) stk;
         Stack.push
-          (AddPtr { src_ptr = src1; ind = tmp_dst; scale = size tp; dst = src1 })
+          (AddPtr { src_ptr = src1; ind = tmp_dst; scale = c_type_size tp; dst = src1 })
           stk;
         dst
       | false, _, _ ->
@@ -135,8 +134,10 @@ and gen_expression_binary stk = function
        let dst = make_tmp_dst etp in
        let b_ins =
          match C_ast.get_type lexp, C_ast.get_type rexp with
-         | Pointer tp, _ -> AddPtr { src_ptr = src1; ind = src2; scale = size tp; dst }
-         | _, Pointer tp -> AddPtr { src_ptr = src2; ind = src1; scale = size tp; dst }
+         | Pointer tp, _ ->
+           AddPtr { src_ptr = src1; ind = src2; scale = c_type_size tp; dst }
+         | _, Pointer tp ->
+           AddPtr { src_ptr = src2; ind = src1; scale = c_type_size tp; dst }
          | _, _ -> Binary { bop; src1; src2; dst }
        in
        Stack.push b_ins stk;
@@ -149,12 +150,14 @@ and gen_expression_binary stk = function
         | Pointer tp, Pointer _ ->
           let diff = make_tmp_dst Long in
           Stack.push (Binary { bop; src1; src2; dst = diff }) stk;
-          let src2 = Constant (ConstLong (Int64.of_int (size tp))) in
+          let src2 = Constant (ConstLong (Int64.of_int (c_type_size tp))) in
           Stack.push (Binary { bop = Div; src1 = diff; src2; dst }) stk
         | Pointer tp, _ ->
           let tmp_dst = make_tmp_dst Long in
           Stack.push (Unary { uop = Negate; src = src2; dst = tmp_dst }) stk;
-          Stack.push (AddPtr { src_ptr = src1; ind = tmp_dst; scale = size tp; dst }) stk
+          Stack.push
+            (AddPtr { src_ptr = src1; ind = tmp_dst; scale = c_type_size tp; dst })
+            stk
         | _, _ -> Stack.push (Binary { bop; src1; src2; dst }) stk);
        PlainOperand dst
      | _ ->
@@ -193,11 +196,15 @@ and gen_expression stk = function
     let process src1 dst =
       match bop, etp with
       | Add, Pointer tp ->
-        Stack.push (AddPtr { src_ptr = src1; ind = src2; scale = size tp; dst }) stk
+        Stack.push
+          (AddPtr { src_ptr = src1; ind = src2; scale = c_type_size tp; dst })
+          stk
       | Sub, Pointer tp ->
         let tmp_dst = make_tmp_dst Long in
         Stack.push (Unary { uop = Negate; src = src2; dst = tmp_dst }) stk;
-        Stack.push (AddPtr { src_ptr = src1; ind = tmp_dst; scale = size tp; dst }) stk
+        Stack.push
+          (AddPtr { src_ptr = src1; ind = tmp_dst; scale = c_type_size tp; dst })
+          stk
       | _ -> Stack.push (Binary { bop; src1; src2; dst }) stk
     in
     (match lval with
@@ -278,13 +285,13 @@ and gen_expression stk = function
     let dst = make_tmp_dst (C_ast.get_type ptr) in
     let ptr = gen_expression_and_convert stk ptr in
     let ind = gen_expression_and_convert stk ind in
-    Stack.push (AddPtr { src_ptr = ptr; ind; scale = size etp; dst }) stk;
+    Stack.push (AddPtr { src_ptr = ptr; ind; scale = c_type_size etp; dst }) stk;
     DereferencedPointer dst
   | C_ast.SizeOf (exp, _) ->
-    let res = C_ast.get_type exp |> size |> Uint64.of_int in
+    let res = C_ast.get_type exp |> c_type_size |> Uint64.of_int in
     PlainOperand (Constant (ConstULong res))
   | C_ast.SizeOfT (tp, _) ->
-    let res = size tp |> Uint64.of_int in
+    let res = c_type_size tp |> Uint64.of_int in
     PlainOperand (Constant (ConstULong res))
   | C_ast.Dot _ | C_ast.Arrow _ -> assert false
 
@@ -335,7 +342,8 @@ let rec gen_compound_initializer stk dst offset = function
       | _ -> assert false
     in
     List.iteri
-      (fun ind exp -> gen_compound_initializer stk dst (offset + (ind * size atp)) exp)
+      (fun ind exp ->
+         gen_compound_initializer stk dst (offset + (ind * c_type_size atp)) exp)
       exp_list
 ;;
 

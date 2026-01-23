@@ -90,21 +90,6 @@ type asm_type =
       }
 [@@deriving show]
 
-(* Returns the size of type in bytes. *)
-let rec size = function
-  | Char | SChar | UChar -> 1
-  | Int -> 4
-  | UInt -> 4
-  | Long -> 8
-  | ULong -> 8
-  | Double -> 8
-  | Void -> assert false
-  | FunType _ -> assert false
-  | Pointer _ -> 8
-  | CArray (tp, sz) -> sz * size tp
-  | Structure _ -> assert false
-;;
-
 (* Returns whether the type is signed. *)
 let signed_c_type = function
   | Char | SChar | Int | Long | Double -> true
@@ -120,14 +105,12 @@ let signed_const = function
 
 let is_arithmetic_type = function
   | Char | SChar | UChar | Int | UInt | Long | ULong | Double -> true
-  | Void | FunType _ | Pointer _ | CArray _ -> false
-  | Structure _ -> assert false
+  | Void | FunType _ | Pointer _ | CArray _ | Structure _ -> false
 ;;
 
 let is_integer_type = function
   | Char | SChar | UChar | Int | UInt | Long | ULong -> true
-  | Void | Double | FunType _ | Pointer _ | CArray _ -> false
-  | Structure _ -> assert false
+  | Void | Double | FunType _ | Pointer _ | CArray _ | Structure _ -> false
 ;;
 
 let is_pointer_type = function
@@ -145,36 +128,14 @@ let is_char_type = function
   | _ -> false
 ;;
 
-let is_scalar = function
-  | Void | CArray _ | FunType _ -> false
-  | _ -> true
-;;
-
-let is_complete = function
-  | Void -> false
-  | _ -> true
-;;
-
-let is_pointer_to_complete = function
-  | Pointer tp -> is_complete tp
+let is_structure_type = function
+  | Structure _ -> true
   | _ -> false
 ;;
 
-(* Returns the type both t1 and t2 should be converted to. *)
-let rec get_common_type t1 t2 =
-  if is_char_type t1
-  then get_common_type Int t2
-  else if is_char_type t2
-  then get_common_type t1 Int
-  else if t1 = t2
-  then t1
-  else if t1 = Double || t2 = Double
-  then Double
-  else if size t1 = size t2
-  then if signed_c_type t1 then t2 else t1
-  else if size t1 > size t2
-  then t1
-  else t2
+let is_scalar = function
+  | Void | CArray _ | FunType _ | Structure _ -> false
+  | _ -> true
 ;;
 
 let c_type_zero = function
@@ -224,20 +185,6 @@ let get_asm_type_for_const = function
   | ConstDouble _ -> AsmDouble
 ;;
 
-let get_asm_type_for_c_type = function
-  | Char | SChar | UChar -> Byte
-  | Int | UInt -> DWord
-  | Long | ULong | Pointer _ -> QWord
-  | Double -> AsmDouble
-  | Void -> assert false
-  | FunType _ -> assert false
-  | CArray (tp, sz) ->
-    let sz = sz * size tp in
-    let alignment = if sz >= 16 then 16 else scalar_type_alignment tp in
-    ByteArray { sz; alignment }
-  | Structure _ -> assert false
-;;
-
 let alignment_for_asm_type = function
   | Byte -> 1
   | Word -> 2
@@ -255,5 +202,3 @@ let size_for_asm_type = function
   | AsmDouble -> 8
   | ByteArray { sz; _ } -> sz
 ;;
-
-let init_zero tp = ZeroInit { bytes = size tp }

@@ -1,4 +1,5 @@
 open Common
+open CTypeUtils
 
 type asm_symbol_info =
   | ObjInfo of

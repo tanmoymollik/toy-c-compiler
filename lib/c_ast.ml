@@ -173,11 +173,9 @@ let get_type = function
   | Arrow { etp; _ } -> etp
 ;;
 
-let is_lvalue = function
-  | Var _ -> true
-  | Dereference _ -> true
-  | Subscript _ -> true
-  | CString _ -> true
+let rec is_lvalue = function
+  | Var _ | Dereference _ | Subscript _ | CString _ | Arrow _ -> true
+  | Dot { struct_exp; _ } -> is_lvalue struct_exp
   | _ -> false
 ;;
 
@@ -223,11 +221,4 @@ let convert_by_assignment tgt exp =
   else if is_pointer_type tgt && get_type exp = Pointer Void
   then convert_to tgt exp
   else raise (Errors.SemanticError "Cannot convert type for assignment")
-;;
-
-let rec zero_initializer tp =
-  match tp with
-  | CArray (e_tp, sz) -> CompoundInit (List.init sz (fun _ -> zero_initializer e_tp), tp)
-  | Pointer _ -> SingleInit (Constant (c_type_zero tp, ULong), tp)
-  | _ -> SingleInit (Constant (c_type_zero tp, tp), tp)
 ;;
