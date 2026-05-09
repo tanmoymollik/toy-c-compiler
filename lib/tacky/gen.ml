@@ -348,13 +348,12 @@ let rec gen_compound_initializer stk dst offset = function
 ;;
 
 let gen_variable_decl stk = function
-  | C_ast.{ name; init = Some c_init; vtp; storage = None } ->
-    let dst = Var name in
+  | C_ast.{ name = dst; init = Some c_init; vtp; storage = None } ->
     (match vtp, c_init with
      | CArray _, _ -> gen_compound_initializer stk dst 0 c_init
      | _, C_ast.SingleInit (exp, _) ->
        let src = gen_expression_and_convert stk exp in
-       Stack.push (Copy { src; dst }) stk
+       Stack.push (Copy { src; dst = Var dst }) stk
      | _ -> assert false)
   | _ -> ()
 ;;

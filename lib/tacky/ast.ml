@@ -84,7 +84,7 @@ type instruction =
       }
   | CopyToOffset of
       { src : value
-      ; dst : value
+      ; dst : identifier
       ; offset : int
       }
 [@@deriving show]

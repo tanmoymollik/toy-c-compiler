@@ -458,11 +458,7 @@ let gen_instruction = function
           ; Lea { src = Indexed { base = Ax; ind = Dx; scale = 1 }; dst }
           ]))
   | Tacky.Ast.CopyToOffset { src; dst; offset } ->
-    let dst =
-      match dst with
-      | Var name -> PseudoMem (name, offset)
-      | _ -> assert false
-    in
+    let dst = PseudoMem (dst, offset) in
     [ Mov { src = gen_value src; dst; tp = get_asm_type_for_val src } ]
 ;;
 
