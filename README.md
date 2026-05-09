@@ -5,6 +5,7 @@ along with the book "Writing a C Compiler" by Nora Sandler. 📚
 
 Currently this implementation passes tests upto chapter 17 with extra credits.
 This includes:
+
 - binary, unary and logical expressions
 - if/else, switch, goto/label
 - for, while, do/while loops
@@ -28,7 +29,7 @@ My compiler uses intel x64 assembly syntax. Thus I found nasm is better suited
 to assemble the assembly file produced by the compiler. The book uses gcc for
 this step however. This mean that the instructions produced by this compiiler
 and the book is different (src and dst are swapped). In order to use this
-compiler `gcc` and `nasm` must be installed. 
+compiler `gcc` and `nasm` must be installed.
 
 *UPDATE:* I ended up implementing gnu style assembly emission too in the end.
 The optimization and register allocation tests for chapter 19 and 20 require gnu
@@ -72,9 +73,13 @@ my own to add support for riscv architecture. The fork supports tests upto chapt
 architecture.
 
 ## Implementation Notes ##
-- This implementation lexes and parses at the same time. So just stopping after lex
-  stage is not possible. --lex option does nothing.
-- Implementation assumes x64 architecture. Both int and long in c are parsed as ocaml int.
+
+- This implementation lexes and parses at the same time. So just stopping after
+  lex stage is not possible. --lex option does nothing.
+- Implementation assumes x64 architecture. Both int and long in c are parsed as
+  OCaml int.
 - Loop labels are set as dummy when parsing and resolved in semantic analysis pass.
-- Case and Default statements are converted to Label statements in semantic analysis pass.
+- Case and Default statements are converted to Label statements in semantic
+  analysis pass.
 - **TBD**
+
