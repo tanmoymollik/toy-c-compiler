@@ -13,11 +13,10 @@ This includes:
 - local, static and extern functions
 - int, char, long, double, unsigned, signed
 - pointers, void pointers and arrays
-- struct **[Work in progress]**
+- struct
 
 I also implemented chapter 19 (tacky optimizations) and chapter 20 (register
-allocation) for integer types. After finishing chapters 18 I will add support
-for other types.
+allocation) for integer types.
 
 My first implementation was written in Rust because I had recently learnt it and
 wanted to try it out on something. But then I pivoted to OCaml because I found
@@ -82,4 +81,3 @@ architecture.
 - Case and Default statements are converted to Label statements in semantic
   analysis pass.
 - **TBD**
-
